@@ -2,6 +2,10 @@
 source_dir = "/path/to/portfolio-source-files"
 data_dir = "/path/to/portfolio-private-data"
 cache_dir = "/path/to/portfolio-cache"
+movement_database_file = "movements.sqlite3"
+import_max_bytes = 52428800
+# Explicit opt-in for legacy automatic discovery in ~/Downloads.
+scan_downloads = false
 
 primary_portfolio_id = "primary"
 primary_portfolio_name = "Primary Portfolio"
@@ -17,4 +21,3 @@ intesa_pattern = "cash_exports/*/*account_operations*.xlsx"
 [portfolios.household_a]
 display_name = "Household A"
 snapshot_pattern = "snapshots/*household_a*.csv"
-

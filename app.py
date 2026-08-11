@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import csv
 import email.utils
+import hashlib
 import html
 import io
 import json
 import math
 import os
 import re
+import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -23,12 +26,12 @@ from typing import Any
 
 from flask import Flask, jsonify, request, send_file
 from openpyxl import Workbook, load_workbook
+from werkzeug.utils import secure_filename
 
 from src.portfolio_dashboard import APP_VERSION
-from src.portfolio_dashboard.config import get_settings
 from src.portfolio_dashboard.cache import HistoryStore
+from src.portfolio_dashboard.config import get_settings
 from src.portfolio_dashboard.domain import (
-    EUR,
     ZERO,
     Dividend,
     ExpenseRule,
@@ -38,7 +41,9 @@ from src.portfolio_dashboard.domain import (
     money,
     parse_decimal,
 )
+from src.portfolio_dashboard.imports import SOURCE_LABELS, detect_statement_source, import_destination
 from src.portfolio_dashboard.ingest import BrokerAdapter, FunctionBrokerAdapter
+from src.portfolio_dashboard.movements import MovementStore
 
 try:
     import yfinance as yf
@@ -71,6 +76,7 @@ CRYPTO_WALLETS_CSV = SETTINGS.data_path("crypto_wallets.csv")
 CRYPTO_WALLET_POSITIONS_CSV = SETTINGS.data_path("crypto_wallet_positions.csv")
 CRYPTO_WALLET_TRANSACTIONS_CSV = SETTINGS.data_path("crypto_wallet_transactions.csv")
 EXPENSE_RULES_CSV = SETTINGS.data_path("expense_category_rules.csv")
+MOVEMENT_DATABASE = SETTINGS.data_path(SETTINGS.movement_database_file)
 PROXY_ISSUERS = {
     "IE00BK5BQT80": "Vanguard",
     "LU1681045370": "Amundi",
@@ -134,6 +140,12 @@ FINECO_DIVIDEND_NET_RATE = Decimal("0.74")
 _CACHE_WRITE_LOCK = threading.RLock()
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = SETTINGS.import_max_bytes
+
+
+@app.errorhandler(413)
+def upload_too_large(_error):
+    return jsonify({"error": f"Statement files must be smaller than {SETTINGS.import_max_bytes // (1024 * 1024)} MB"}), 413
 
 
 def parse_trade_date(day_value: str, year_value: str) -> date:
@@ -194,7 +206,7 @@ def configured_path_label(path: Path) -> str:
 
 
 def latest_trade_republic_export() -> Path | None:
-    files = sorted(ROOT_DIR.glob(TRADE_REPUBLIC_PATTERN))
+    files = sorted(set(ROOT_DIR.glob(TRADE_REPUBLIC_PATTERN)) | set((ROOT_DIR / "broker_exports" / "trade_republic").glob("*.csv")))
     family_markers = {
         (profile.trade_republic_name or portfolio_id).lower()
         for portfolio_id, profile in SETTINGS.portfolios.items()
@@ -205,7 +217,7 @@ def latest_trade_republic_export() -> Path | None:
 
 
 def latest_family_trade_republic_export(person: str) -> Path | None:
-    files = sorted(ROOT_DIR.glob(TRADE_REPUBLIC_PATTERN))
+    files = sorted(set(ROOT_DIR.glob(TRADE_REPUBLIC_PATTERN)) | set((ROOT_DIR / "broker_exports" / "trade_republic").glob("*.csv")))
     profile = SETTINGS.portfolios.get(person.lower())
     marker = (profile.trade_republic_name if profile else None) or person
     files = [f for f in files if marker.lower() in f.name.lower()]
@@ -213,17 +225,17 @@ def latest_family_trade_republic_export(person: str) -> Path | None:
 
 
 def latest_fineco_export() -> Path | None:
-    files = sorted(ROOT_DIR.glob(FINECO_PATTERN))
+    files = sorted(set(ROOT_DIR.glob(FINECO_PATTERN)) | set((ROOT_DIR / "broker_exports" / "fineco").glob("*.xlsx")))
     return files[-1] if files else None
 
 
 def latest_ib_export() -> Path | None:
-    files = sorted(ROOT_DIR.glob(IB_PATTERN))
+    files = sorted(set(ROOT_DIR.glob(IB_PATTERN)) | set((ROOT_DIR / "broker_exports" / "interactive_brokers").glob("*.pdf")))
     return files[-1] if files else None
 
 
 def latest_etoro_export() -> Path | None:
-    files = sorted(ROOT_DIR.glob(ETORO_PATTERN))
+    files = sorted(set(ROOT_DIR.glob(ETORO_PATTERN)) | set((ROOT_DIR / "broker_exports" / "etoro").glob("*.xlsx")))
     return files[-1] if files else None
 
 
@@ -246,8 +258,10 @@ def intesa_operations_files() -> list[Path]:
     candidates: dict[Path, Path] = {}
     for path in ROOT_DIR.glob(INTESA_OPERATIONS_PATTERN):
         candidates[path.resolve()] = path
+    for path in (ROOT_DIR / "cash_exports" / "intesa").glob("*.xlsx"):
+        candidates[path.resolve()] = path
     downloads = Path.home() / "Downloads"
-    if downloads.exists():
+    if SETTINGS.scan_downloads and downloads.exists():
         for path in downloads.glob(INTESA_DOWNLOADS_PATTERN):
             candidates[path.resolve()] = path
     return sorted(candidates.values(), key=intesa_operations_sort_key)
@@ -256,6 +270,10 @@ def intesa_operations_files() -> list[Path]:
 def latest_intesa_operations_export() -> Path | None:
     files = intesa_operations_files()
     return files[-1] if files else None
+
+
+def bbva_statement_files() -> list[Path]:
+    return sorted(set(ROOT_DIR.glob(SETTINGS.bbva_pattern)) | set((ROOT_DIR / "cash_exports" / "bbva").glob("*.xls")))
 
 
 def parse_revolut_datetime(value: str | None) -> datetime | None:
@@ -293,8 +311,9 @@ def revolut_statement_profile(path: Path) -> tuple[tuple[str, ...], date, int] |
 def revolut_statement_files() -> list[Path]:
     candidates: list[Path] = []
     candidates.extend(ROOT_DIR.glob(REVOLUT_PATTERN))
+    candidates.extend((ROOT_DIR / "cash_exports" / "revolut").glob("*.csv"))
     downloads = Path.home() / "Downloads"
-    if downloads.exists():
+    if SETTINGS.scan_downloads and downloads.exists():
         candidates.extend(downloads.glob(REVOLUT_DOWNLOADS_PATTERN))
 
     best_by_currency: dict[tuple[str, ...], tuple[date, int, float, Path]] = {}
@@ -349,7 +368,11 @@ def read_trades() -> tuple[list[Trade], dict[str, Any]]:
         }
 
     if not TRADES_CSV.exists():
-        raise FileNotFoundError(f"Missing trades file: {TRADES_CSV}")
+        return [], {
+            "kind": "No imported statements",
+            "relative_path": "",
+            "sources": [],
+        }
     trades = read_manual_trades(TRADES_CSV)
     return trades, {
         "path": TRADES_CSV,
@@ -784,7 +807,7 @@ def read_cash_interests(person: str = PRIMARY_PORTFOLIO_ID) -> list[dict[str, An
                     
     # 2. Load primary-portfolio BBVA interest.
     if person == PRIMARY_PORTFOLIO_ID:
-        bbva_files = sorted(ROOT_DIR.glob(SETTINGS.bbva_pattern))
+        bbva_files = bbva_statement_files()
         if bbva_files:
             bbva_file = bbva_files[-1]
             import shutil
@@ -1471,16 +1494,16 @@ def read_bbva_expense_events(
     refresh: bool = False,
 ) -> list[dict[str, Any]]:
     active_rules = rules if rules is not None else read_expense_category_rules()
-    bbva_files = paths if paths is not None else sorted(ROOT_DIR.glob(SETTINGS.bbva_pattern))
+    bbva_files = paths if paths is not None else bbva_statement_files()
     if not bbva_files:
         return []
 
     raw_events: list[dict[str, Any]] = []
     seen_keys = set()
 
+    import os
     import shutil
     import tempfile
-    import os
     import threading
 
     for bbva_file in bbva_files:
@@ -1493,7 +1516,7 @@ def read_bbva_expense_events(
                 if len(row) < 7:
                     continue
                 # columns B to G (index 1 to 6)
-                data_valuta = row[1]
+                _data_valuta = row[1]
                 op_date_str = row[2]
                 causale = row[3]
                 movimento = row[4]
@@ -2978,6 +3001,8 @@ def parse_binance_time(value: str) -> date:
 
 
 def latest_binance_transaction_history() -> Path | None:
+    if not SETTINGS.scan_downloads:
+        return None
     files = sorted(Path.home().joinpath("Downloads").glob("Binance-Transaction-History-*.csv"))
     return files[-1] if files else None
 
@@ -4907,8 +4932,8 @@ def historical_fx_rate(
 EUROSTAT_CACHE_PATH = SETTINGS.cache_path("eurostat-cpi.json")
 
 def fetch_eurostat_cpi() -> dict[str, float]:
-    import urllib.request
     import json
+    import urllib.request
     now = int(time.time())
     if EUROSTAT_CACHE_PATH.exists():
         try:
@@ -4986,7 +5011,7 @@ def load_cash_histories(person: str) -> tuple[list[tuple[date, Decimal, Decimal]
     bbva_cash_history: list[tuple[date, Decimal, Decimal]] = []
     if person == PRIMARY_PORTFOLIO_ID:
         bbva_cash_history.append((date(2024, 1, 8), Decimal("4800.00"), Decimal("4800.00")))
-        bbva_files = sorted(ROOT_DIR.glob(SETTINGS.bbva_pattern))
+        bbva_files = bbva_statement_files()
         if bbva_files:
             bbva_file = bbva_files[-1]
             import shutil
@@ -6770,6 +6795,222 @@ def export_filename(person: str, period: str, fmt: str) -> str:
     return f"portfolio-{safe_person}-{safe_period}-{date.today().isoformat()}.{fmt}"
 
 
+# ─── Local statement imports and normalized movement ledger ───
+_movement_store: MovementStore | None = None
+
+
+def get_movement_store() -> MovementStore:
+    global _movement_store
+    if _movement_store is None:
+        _movement_store = MovementStore(MOVEMENT_DATABASE)
+    return _movement_store
+
+
+def normalize_trade_movement(trade: Trade) -> dict[str, Any]:
+    return {
+        "occurred_on": trade.date,
+        "event_type": "trade",
+        "broker": trade.broker,
+        "asset": trade.asset,
+        "isin": trade.isin,
+        "description": trade.action,
+        "currency": trade.cash_currency or trade.currency_hint,
+        "amount": trade.grand_total,
+        "quantity": trade.quantity_diff,
+        "price": trade.price,
+        "fees": trade.fees,
+        "tax": trade.tax,
+        "metadata": {"action": trade.action, "source": trade.source},
+    }
+
+
+def normalize_dividend_movement(dividend: Dividend) -> dict[str, Any]:
+    return {
+        "occurred_on": dividend.date,
+        "event_type": "dividend",
+        "broker": dividend.broker,
+        "asset": dividend.asset,
+        "isin": dividend.isin,
+        "description": "Dividend",
+        "currency": "EUR",
+        "amount": dividend.amount_eur,
+        "tax": dividend.tax_eur,
+    }
+
+
+def normalize_friction_movement(event: FrictionEvent) -> dict[str, Any]:
+    return {
+        "occurred_on": event.date,
+        "event_type": event.event_type,
+        "broker": event.broker,
+        "description": event.description,
+        "currency": "EUR",
+        "amount": event.amount_eur,
+    }
+
+
+def normalize_expense_movement(event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "occurred_on": event.get("date"),
+        "event_type": event.get("flow_kind") or "cash_movement",
+        "account": event.get("source"),
+        "description": event.get("description") or event.get("merchant"),
+        "currency": event.get("currency") or "EUR",
+        "amount": event.get("native_amount") or event.get("amount_eur"),
+        "metadata": {
+            "amount_eur": event.get("amount_eur"),
+            "category": event.get("category"),
+            "subcategory": event.get("subcategory"),
+            "merchant": event.get("merchant"),
+        },
+    }
+
+
+def parse_statement_movements(source: str, path: Path) -> list[dict[str, Any]]:
+    trades: list[Trade] = []
+    dividends: list[Dividend] = []
+    frictions: list[FrictionEvent] = []
+    expenses: list[dict[str, Any]] = []
+    if source == "trade_republic":
+        trades = read_trade_republic_trades(path)
+        dividends = read_trade_republic_dividends(path)
+        frictions = read_trade_republic_tax_events(path)
+        expenses = read_trade_republic_expense_events(path)
+    elif source == "fineco":
+        trades = read_fineco_trades(path)
+        dividends = read_fineco_dividends(path)
+        frictions = read_fineco_friction_events(path)
+    elif source == "interactive_brokers":
+        trades = read_interactive_brokers_trades(path)
+    elif source == "etoro":
+        trades = read_etoro_trades(path)
+        dividends = read_etoro_dividends(path)
+        frictions = read_etoro_friction_events(path)
+    elif source == "revolut":
+        expenses = read_revolut_expense_events([path])
+    elif source == "intesa":
+        expenses = read_intesa_expense_events(path)
+    elif source == "bbva":
+        expenses = read_bbva_expense_events([path])
+    elif source == "manual":
+        trades = read_manual_trades(path)
+    else:
+        raise ValueError(f"Unsupported source: {source}")
+
+    return [
+        *(normalize_trade_movement(item) for item in trades),
+        *(normalize_dividend_movement(item) for item in dividends),
+        *(normalize_friction_movement(item) for item in frictions),
+        *(normalize_expense_movement(item) for item in expenses),
+    ]
+
+
+def import_statement_path(path: Path, original_name: str | None = None, requested_source: str = "auto") -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError("The selected statement file does not exist")
+    if path.stat().st_size > SETTINGS.import_max_bytes:
+        raise ValueError(f"Statement files must be smaller than {SETTINGS.import_max_bytes // (1024 * 1024)} MB")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    store = get_movement_store()
+    existing = store.import_by_hash(digest)
+    if existing is not None:
+        return {
+            "status": "duplicate",
+            "duplicate": True,
+            "source": existing.source_kind,
+            "source_label": SOURCE_LABELS.get(existing.source_kind, existing.source_kind),
+            "movements": existing.movement_count,
+            "duplicates": existing.duplicate_count,
+            "stored_path": existing.stored_path,
+        }
+
+    safe_original_name = secure_filename(original_name or path.name) or f"statement{path.suffix.casefold()}"
+    source = detect_statement_source(path, requested_source)
+    movements = parse_statement_movements(source, path)
+    if not movements:
+        raise ValueError(f"No supported movements were found in this {SOURCE_LABELS[source]} statement")
+
+    destination = import_destination(ROOT_DIR, source, digest, safe_original_name)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() and destination.resolve() != path.resolve():
+        raise ValueError(f"The destination already exists: {configured_path_label(destination)}")
+    copied = destination.resolve() != path.resolve()
+    if copied:
+        shutil.copy2(path, destination)
+    try:
+        record = store.record_import(
+            sha256=digest,
+            source_kind=source,
+            original_name=safe_original_name,
+            stored_path=configured_path_label(destination),
+            parser_version=APP_VERSION,
+            movements=movements,
+        )
+    except Exception:
+        if copied:
+            destination.unlink(missing_ok=True)
+        raise
+    return {
+        "status": "imported",
+        "duplicate": False,
+        "source": source,
+        "source_label": SOURCE_LABELS[source],
+        "movements": record.movement_count,
+        "duplicates": record.duplicate_count,
+        "stored_path": record.stored_path,
+    }
+
+
+def import_status_payload() -> dict[str, Any]:
+    ledger = get_movement_store().summary()
+    has_trade_source = bool(
+        latest_trade_republic_export()
+        or latest_fineco_export()
+        or latest_ib_export()
+        or latest_etoro_export()
+        or TRADES_CSV.exists()
+    )
+    return {
+        **ledger,
+        "ready": has_trade_source,
+        "source_dir": "sources",
+        "database": configured_path_label(MOVEMENT_DATABASE),
+        "supported_sources": [{"id": key, "label": value} for key, value in SOURCE_LABELS.items()],
+        "max_upload_mb": SETTINGS.import_max_bytes // (1024 * 1024),
+    }
+
+
+@app.get("/api/imports/status")
+def api_import_status():
+    return jsonify(import_status_payload())
+
+
+@app.post("/api/imports")
+def api_import_statement():
+    uploaded = request.files.get("file")
+    if uploaded is None or not uploaded.filename:
+        return jsonify({"error": "Choose a CSV, XLS, XLSX, or PDF statement"}), 400
+    suffix = Path(uploaded.filename).suffix.casefold()
+    if suffix not in {".csv", ".xls", ".xlsx", ".pdf"}:
+        return jsonify({"error": "Supported statement formats are CSV, XLS, XLSX, and PDF"}), 400
+    requested_source = request.form.get("source", "auto")
+    temp_directory = SETTINGS.cache_dir / "imports"
+    temp_directory.mkdir(parents=True, exist_ok=True)
+    descriptor, temp_name = tempfile.mkstemp(prefix="upload-", suffix=suffix, dir=temp_directory)
+    os.close(descriptor)
+    temporary = Path(temp_name)
+    try:
+        uploaded.save(temporary)
+        result = import_statement_path(temporary, original_name=uploaded.filename, requested_source=requested_source)
+        return jsonify(result), 200
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": f"Import failed: {exc}"}), 500
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 # ─── Watchlist Feature ───
 WATCHLIST_FILE = SETTINGS.data_path("watchlist.json")
 WATCHLIST_CACHE_FILE = SETTINGS.cache_path("watchlist.json")
@@ -7276,6 +7517,71 @@ HTML = r"""<!doctype html>
       gap: 10px;
       margin-left: auto;
     }
+    #import-data {
+      min-height: 42px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 9px 13px;
+      color: var(--ink-secondary);
+      background: rgba(15,23,42,0.46);
+      border-color: rgba(148,163,184,0.18);
+    }
+    #import-data:hover { color: var(--ink); border-color: rgba(96,165,250,0.34); }
+    #import-data svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+    .import-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1200;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(5,8,15,0.82);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .import-modal.open { opacity: 1; pointer-events: auto; }
+    .import-card {
+      width: min(560px, 100%);
+      border: 1px solid rgba(96,165,250,0.24);
+      border-radius: var(--radius);
+      padding: 22px;
+      background: linear-gradient(145deg, rgba(17,24,39,0.98), rgba(15,23,42,0.98));
+      box-shadow: var(--shadow-lg);
+    }
+    .import-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+    .import-card h2 { margin: 0 0 6px; font-size: 19px; }
+    .import-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .import-close { padding: 2px 7px; border: 0; background: transparent; font-size: 22px; line-height: 1; }
+    .import-form { display: grid; gap: 14px; margin-top: 18px; }
+    .import-dropzone {
+      display: grid;
+      place-items: center;
+      min-height: 150px;
+      padding: 22px;
+      border: 1px dashed rgba(96,165,250,0.42);
+      border-radius: var(--radius-sm);
+      background: rgba(96,165,250,0.05);
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .import-dropzone.dragging { border-color: var(--teal); background: rgba(45,212,191,0.08); }
+    .import-dropzone strong { display: block; margin-bottom: 5px; color: var(--ink); }
+    .import-dropzone input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .import-file-name { margin-top: 8px; color: var(--blue); font-size: 12px; }
+    .import-options { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+    .import-options label { color: var(--muted); font-size: 12px; }
+    .import-options select { min-width: 210px; }
+    .import-submit { min-height: 40px; color: var(--ink); background: rgba(96,165,250,0.16); }
+    .import-status { min-height: 18px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .import-status.error { color: var(--red); }
+    .import-status.success { color: var(--green); }
 
     /* ─── Buttons ─── */
     button {
@@ -8879,7 +9185,10 @@ HTML = r"""<!doctype html>
       h1 { font-size: 20px; }
       .meta { max-width: 100%; }
       .topbar-actions { width: 100%; }
-      #refresh { width: 100%; }
+      #refresh { flex: 1; }
+      #import-data { flex: 0 0 auto; }
+      .import-options { align-items: stretch; flex-direction: column; }
+      .import-options select { width: 100%; }
       main { padding: 16px 18px 36px; }
       .control-stack { gap: 8px; }
       .control-row { gap: 8px; }
@@ -9059,6 +9368,10 @@ HTML = r"""<!doctype html>
       </div>
     </div>
     <div class="topbar-actions">
+      <button id="import-data" type="button" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M8 8l4-4 4 4"/><path d="M5 14v5h14v-5"/></svg>
+        <span>Import data</span>
+      </button>
       <button id="refresh" type="button">
         <span class="refresh-button-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.8-4.2L3 9"/><path d="M3 4v5h5"/><path d="M4 13a8 8 0 0 0 14.8 4.2L21 15"/><path d="M21 20v-5h-5"/></svg>
@@ -9920,6 +10233,44 @@ HTML = r"""<!doctype html>
         </button>
       </div>
     </section>
+
+    <div class="import-modal" id="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
+      <div class="import-card">
+        <div class="import-card-head">
+          <div>
+            <h2 id="import-title">Import your statements</h2>
+            <p id="import-intro">Add broker or bank exports. Files stay on this computer and are normalized into the local SQLite movement ledger.</p>
+          </div>
+          <button class="import-close" id="import-close" type="button" aria-label="Close import dialog">&times;</button>
+        </div>
+        <form class="import-form" id="import-form">
+          <label class="import-dropzone" id="import-dropzone">
+            <span>
+              <strong>Drop a statement here or choose a file</strong>
+              CSV, XLS, XLSX, or PDF · maximum 50 MB
+              <span class="import-file-name" id="import-file-name">No file selected</span>
+            </span>
+            <input id="import-file" name="file" type="file" accept=".csv,.xls,.xlsx,.pdf" required>
+          </label>
+          <div class="import-options">
+            <label for="import-source">Statement source</label>
+            <select id="import-source" name="source">
+              <option value="auto">Detect automatically</option>
+              <option value="trade_republic">Trade Republic</option>
+              <option value="fineco">Fineco</option>
+              <option value="interactive_brokers">Interactive Brokers</option>
+              <option value="etoro">eToro</option>
+              <option value="revolut">Revolut</option>
+              <option value="intesa">Intesa Sanpaolo</option>
+              <option value="bbva">BBVA</option>
+              <option value="manual">Manual trade spreadsheet</option>
+            </select>
+          </div>
+          <div class="import-status" id="import-status" role="status" aria-live="polite"></div>
+          <button class="import-submit" id="import-submit" type="submit">Import statement</button>
+        </form>
+      </div>
+    </div>
     
     <!-- Info Modal -->
     <div id="info-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(12, 15, 26, 0.8); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s ease;">
@@ -10122,6 +10473,13 @@ HTML = r"""<!doctype html>
     let selectedExpenseTrendMode = "monthly";
     const PRIMARY_PORTFOLIO_ID = __PRIMARY_PORTFOLIO_ID__;
     const APP_VERSION = __APP_VERSION_JSON__;
+    const importModal = document.getElementById("import-modal");
+    const importForm = document.getElementById("import-form");
+    const importFile = document.getElementById("import-file");
+    const importFileName = document.getElementById("import-file-name");
+    const importDropzone = document.getElementById("import-dropzone");
+    const importStatus = document.getElementById("import-status");
+    const importSubmit = document.getElementById("import-submit");
     let selectedPerson = PRIMARY_PORTFOLIO_ID;
     let selectedPeriod = "since24";
     let selectedBerkshireMode = "stock";
@@ -10138,6 +10496,87 @@ HTML = r"""<!doctype html>
     let selectedDistributionSource = "";
     let loadRequestId = 0;
     let redrawTimer = null;
+
+    function openImportDialog(firstRun = false) {
+      document.getElementById("import-title").textContent = firstRun ? "Welcome — import your first statement" : "Import your statements";
+      document.getElementById("import-intro").textContent = firstRun
+        ? "Start with any supported broker or bank export. It stays on this computer and is normalized into a private SQLite ledger."
+        : "Add broker or bank exports. Files stay on this computer and are normalized into the local SQLite movement ledger.";
+      importStatus.textContent = "";
+      importStatus.className = "import-status";
+      importModal.classList.add("open");
+      window.setTimeout(() => importFile.focus(), 80);
+    }
+
+    function closeImportDialog() {
+      importModal.classList.remove("open");
+    }
+
+    function updateSelectedImportFile() {
+      importFileName.textContent = importFile.files.length ? importFile.files[0].name : "No file selected";
+    }
+
+    async function checkImportOnboarding() {
+      try {
+        const response = await fetch("/api/imports/status");
+        const status = await response.json();
+        if (response.ok && !status.ready && status.imports === 0) openImportDialog(true);
+      } catch (error) {
+        console.warn("Import status unavailable:", error);
+      }
+    }
+
+    document.getElementById("import-data").addEventListener("click", () => openImportDialog(false));
+    document.getElementById("import-close").addEventListener("click", closeImportDialog);
+    importModal.addEventListener("click", event => { if (event.target === importModal) closeImportDialog(); });
+    importFile.addEventListener("change", updateSelectedImportFile);
+    ["dragenter", "dragover"].forEach(name => importDropzone.addEventListener(name, event => {
+      event.preventDefault();
+      importDropzone.classList.add("dragging");
+    }));
+    ["dragleave", "drop"].forEach(name => importDropzone.addEventListener(name, event => {
+      event.preventDefault();
+      importDropzone.classList.remove("dragging");
+    }));
+    importDropzone.addEventListener("drop", event => {
+      if (event.dataTransfer.files.length) {
+        importFile.files = event.dataTransfer.files;
+        updateSelectedImportFile();
+      }
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && importModal.classList.contains("open")) closeImportDialog();
+    });
+    importForm.addEventListener("submit", async event => {
+      event.preventDefault();
+      if (!importFile.files.length) return;
+      const form = new FormData(importForm);
+      importSubmit.disabled = true;
+      importSubmit.textContent = "Importing…";
+      importStatus.className = "import-status";
+      importStatus.textContent = "Validating, archiving, and normalizing the statement…";
+      try {
+        const response = await fetch("/api/imports", { method: "POST", body: form });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "The statement could not be imported.");
+        importStatus.className = "import-status success";
+        importStatus.textContent = result.duplicate
+          ? `Already imported as ${result.source_label}. No duplicate rows were added.`
+          : `${result.source_label}: ${result.movements} new movement${result.movements === 1 ? "" : "s"} stored${result.duplicates ? `, ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} skipped` : ""}.`;
+        importForm.reset();
+        updateSelectedImportFile();
+        window.setTimeout(() => {
+          closeImportDialog();
+          load(false, "Loading imported data");
+        }, 900);
+      } catch (error) {
+        importStatus.className = "import-status error";
+        importStatus.textContent = error.message;
+      } finally {
+        importSubmit.disabled = false;
+        importSubmit.textContent = "Import statement";
+      }
+    });
 
     function setRefreshLabel(label) {
       const status = document.getElementById("refresh-status");
@@ -13081,6 +13520,7 @@ HTML = r"""<!doctype html>
 
     initializeSectionIdentity();
     initializeSectionWrapButtons();
+    checkImportOnboarding();
     load(false, "Loading dashboard");
   </script>
 </body>

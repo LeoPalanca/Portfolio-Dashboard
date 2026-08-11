@@ -88,6 +88,9 @@ class Settings(BaseSettings):
     source_dir: Path = PROJECT_DIR.parent
     data_dir: Path = _xdg_path("XDG_DATA_HOME", Path.home() / ".local" / "share", "portfolio-dashboard")
     cache_dir: Path = _xdg_path("XDG_CACHE_HOME", Path.home() / ".cache", "portfolio-dashboard")
+    movement_database_file: str = "movements.sqlite3"
+    import_max_bytes: int = 50 * 1024 * 1024
+    scan_downloads: bool = False
 
     primary_portfolio_id: str = "primary"
     primary_portfolio_name: str = "Primary Portfolio"

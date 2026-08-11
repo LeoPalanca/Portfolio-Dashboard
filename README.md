@@ -17,6 +17,24 @@ loads local paths and portfolio profiles from environment variables or an ignore
 
 ## Install and run
 
+The guided launcher installs the locked environment, creates private directories
+outside the repository, offers to import statements, starts the server, and opens
+the browser:
+
+```bash
+python run.py
+```
+
+Useful non-interactive variants are:
+
+```bash
+python run.py --setup
+python run.py --import /path/to/statement.csv --setup
+python run.py --port 8051 --no-browser
+```
+
+The manual workflow remains available:
+
 ```bash
 uv sync
 cp config.example.toml config.toml
@@ -44,6 +62,15 @@ boundaries are:
 - `data_dir`: private mappings, wallet snapshots, expense rules, watchlist, and
   portfolio-specific derived data.
 - `cache_dir`: disposable price, history, news, watchlist, and CPI caches.
+
+The top-bar `Import data` action accepts CSV, XLS, XLSX, and PDF statements. It
+detects the institution when possible, preserves the raw file under `source_dir`,
+and writes deduplicated normalized events plus an import manifest to
+`data_dir/movements.sqlite3`. The same pipeline is available from
+`scripts/import_statements.py`; `run.py --import` is the recommended CLI entry.
+
+Automatic discovery in `~/Downloads` is disabled by default. Existing installations
+that rely on it can explicitly set `scan_downloads = true` in private configuration.
 
 Historical prices are stored as one compact merged JSON file per symbol under
 `cache_dir/history/`. On first use, installations with the former monolithic
