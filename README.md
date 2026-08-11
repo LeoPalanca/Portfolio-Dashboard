@@ -72,6 +72,10 @@ and writes deduplicated normalized events plus an import manifest to
 Automatic discovery in `~/Downloads` is disabled by default. Existing installations
 that rely on it can explicitly set `scan_downloads = true` in private configuration.
 
+The optional `Since Jan 2024` (`'24`) window is portfolio-specific and disabled on
+fresh installations. Enable it only for the relevant portfolio ids, for example
+`since_2024_portfolio_ids = ["primary"]`.
+
 Historical prices are stored as one compact merged JSON file per symbol under
 `cache_dir/history/`. On first use, installations with the former monolithic
 `history.json` cache migrate it automatically and archive the original under

@@ -62,6 +62,7 @@ APP_DIR = SETTINGS.project_dir
 ROOT_DIR = SETTINGS.source_dir
 PRIMARY_PORTFOLIO_ID = SETTINGS.primary_portfolio_id.lower()
 PRIMARY_PORTFOLIO_NAME = SETTINGS.primary_portfolio_name
+SINCE_2024_PORTFOLIO_IDS = {portfolio_id.strip().lower() for portfolio_id in SETTINGS.since_2024_portfolio_ids}
 TRADES_CSV = ROOT_DIR / SETTINGS.manual_trades_file
 PERSONAL_TRADE_COLUMNS = (
     "date",
@@ -7572,9 +7573,19 @@ def index():
             f'<span class="user-avatar" aria-hidden="true">{icon}</span>'
             f'<span class="selector-label">{safe_name}</span></button>'
         )
+    since_2024_button = ""
+    if SINCE_2024_PORTFOLIO_IDS:
+        active = ' class="active"' if PRIMARY_PORTFOLIO_ID in SINCE_2024_PORTFOLIO_IDS else ""
+        since_2024_button = f"""
+          <button type="button" data-period="since24"{active} style="--time-fill:.76;--time-width:82px" title="Since January 2024">
+            <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="selector-label">'24</span></span>
+            <span class="time-scale" aria-hidden="true"><span></span></span>
+          </button>"""
     return (
         HTML.replace("<!-- PORTFOLIO_BUTTONS -->", "".join(buttons))
+        .replace("<!-- SINCE_2024_BUTTON -->", since_2024_button)
         .replace("__PRIMARY_PORTFOLIO_ID__", json.dumps(PRIMARY_PORTFOLIO_ID))
+        .replace("__SINCE_2024_PORTFOLIO_IDS__", json.dumps(sorted(SINCE_2024_PORTFOLIO_IDS)))
         .replace("__APP_VERSION_TEXT__", html.escape(APP_VERSION))
         .replace("__APP_VERSION_JSON__", json.dumps(APP_VERSION))
     )
@@ -9637,10 +9648,7 @@ HTML = r"""<!doctype html>
             <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="selector-label">1Y</span></span>
             <span class="time-scale" aria-hidden="true"><span></span></span>
           </button>
-          <button type="button" data-period="since24" class="active" style="--time-fill:.76;--time-width:82px" title="Since January 2024">
-            <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="selector-label">'24</span></span>
-            <span class="time-scale" aria-hidden="true"><span></span></span>
-          </button>
+          <!-- SINCE_2024_BUTTON -->
           <button type="button" data-period="all" style="--time-fill:1;--time-width:88px" title="All time">
             <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="selector-label">All</span></span>
             <span class="time-scale" aria-hidden="true"><span></span></span>
@@ -10704,6 +10712,7 @@ HTML = r"""<!doctype html>
     let rankingsSort = { key: "common", direction: "desc" };
     let selectedExpenseTrendMode = "monthly";
     const PRIMARY_PORTFOLIO_ID = __PRIMARY_PORTFOLIO_ID__;
+    const SINCE_2024_PORTFOLIO_IDS = new Set(__SINCE_2024_PORTFOLIO_IDS__);
     const APP_VERSION = __APP_VERSION_JSON__;
     const importModal = document.getElementById("import-modal");
     const importForm = document.getElementById("import-form");
@@ -10713,7 +10722,7 @@ HTML = r"""<!doctype html>
     const importStatus = document.getElementById("import-status");
     const importSubmit = document.getElementById("import-submit");
     let selectedPerson = PRIMARY_PORTFOLIO_ID;
-    let selectedPeriod = "since24";
+    let selectedPeriod = SINCE_2024_PORTFOLIO_IDS.has(PRIMARY_PORTFOLIO_ID) ? "since24" : "all";
     let selectedBerkshireMode = "stock";
     let selectedProxyMode = "on";
     let selectedLiveMode = "all";
@@ -11074,7 +11083,7 @@ HTML = r"""<!doctype html>
       return "All time";
     }
     function canUseSince24Window() {
-      return selectedPerson === PRIMARY_PORTFOLIO_ID && selectedBroker === "all";
+      return SINCE_2024_PORTFOLIO_IDS.has(selectedPerson) && selectedBroker === "all";
     }
     function defaultPeriodForSelection() {
       return canUseSince24Window() ? "since24" : "all";

@@ -16,7 +16,6 @@ from pydantic_settings import (
     TomlConfigSettingsSource,
 )
 
-
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 
 
@@ -52,8 +51,8 @@ class ConfiguredTrade(BaseModel):
     price: Decimal
     quantity: Decimal
     total: Decimal | None = None
-    fees: Decimal = Decimal("0")
-    tax: Decimal = Decimal("0")
+    fees: Decimal = Decimal(0)
+    tax: Decimal = Decimal(0)
     currency: str = "EUR"
     source: str = "configured_adjustment"
 
@@ -96,6 +95,7 @@ class Settings(BaseSettings):
     primary_portfolio_name: str = "Primary Portfolio"
     portfolios: dict[str, PortfolioProfile] = Field(default_factory=dict)
     self_transfer_names: tuple[str, ...] = ()
+    since_2024_portfolio_ids: tuple[str, ...] = ()
 
     manual_trades_file: str = "Spreadsheet - Trades.csv"
     trade_republic_pattern: str = "broker_exports/*/*trade_republic*.csv"
