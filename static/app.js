@@ -1553,7 +1553,7 @@
           display: flex; 
           flex-direction: column; 
           justify-content: space-between; 
-          border-radius: var(--radius-sm);
+          border-radius: var(--radius-md);
           position: relative;
           transition: transform 0.2s ease, box-shadow 0.2s ease;
         " onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';">
@@ -1632,7 +1632,7 @@
       if (!grid) return;
       
       if (!list.length) {
-        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--muted); padding: 30px; border: 1px dashed var(--line); border-radius: var(--radius-sm); font-size: 13px;">Watchlist is empty. Enter a ticker to start tracking.</div>`;
+        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--muted); padding: 30px; border: 1px dashed var(--line); border-radius: var(--radius-md); font-size: 13px;">Watchlist is empty. Enter a ticker to start tracking.</div>`;
         return;
       }
       
