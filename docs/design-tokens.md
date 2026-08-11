@@ -152,10 +152,24 @@ automatically.
 
 ### Colour-blindness
 
-Gain/loss is the primary semantic pair and red/green is the worst possible choice for the
-~8% of men with deuteranopia. Colour must never be the only signal: keep the explicit `+`/`−`
-sign and the arrow glyph on every figure. Worth adding later as a config flag — a
-blue/amber alternative pair reusing `--accent` and `--warning`.
+Gain/loss is the primary semantic pair, and red/green is the worst possible choice for the
+~8% of men with deuteranopia. Two mitigations ship:
+
+1. **Colour is never the only signal.** Every figure keeps its `+`/`−` sign and arrow glyph.
+   This is load-bearing and must not be traded away for a cleaner look — a test documents that
+   both palettes pair near-equiluminant colours, so in greyscale the sign is all there is.
+2. **An opt-in palette** via `data-palette="cb"` on `<html>`, toggled from the header and
+   persisted in `localStorage`. It swaps the red/green axis for blue/orange, 171° apart on the
+   hue wheel — the axis deuteranopia preserves.
+
+| | dark | light |
+| --- | --- | --- |
+| `--positive` | `#38bdf8` (8.92) | `#0369a1` (5.93) |
+| `--negative` | `#fb923c` (8.44) | `#c2410c` (5.18) |
+
+`test_theme_contrast.py` checks all 11 foreground tokens against both surfaces across all four
+theme × palette combinations. Worst case is 4.54:1, above the 4.5 bar.
+
 
 ### Migration map — every off-system colour
 
@@ -339,12 +353,12 @@ it is enforced even outside CI.
 
 ## Still open
 
-- **Contrast is verified by calculation, not by eye.** Someone should look at light mode on a
-  real screen — chart tooltips, table hover states and the refresh overlay are the likely misses.
-- **34 inline `style=` attributes remain in the markup and 93 in JS templates.** They no longer
-  contain colour, so they do not block theming, but they are still presentation in the wrong
-  place. Mostly one-off layout blocks that deserve named classes.
-- **`color-mix()` needs Safari 16.2+ / Chrome 111+ / Firefox 113+.** Fine for a local dashboard;
-  worth noting if this is ever embedded somewhere older.
-- **The colour-blind alternative is not built.** Gain/loss still relies on red/green plus the
-  `+`/`−` sign. A blue/amber pair reusing `--accent` and `--warning` would be the fix.
+- **Nobody has looked at light mode.** Contrast is verified by calculation across all four
+  theme × palette combinations, which proves nothing is *unreadable* — it does not prove
+  anything looks *right*. Chart tooltips, table hover states and the refresh overlay are the
+  likely misses.
+- **114 inline `style=` attributes remain** — 34 in the template, 80 in JS templates. None
+  contain colour any more, so they do not block theming; they are one-off layout blocks that
+  each deserve a named class. The repeated clusters have all been extracted.
+- **`color-mix()` needs Safari 16.2+ / Chrome 111+ / Firefox 113+.** Fine for a local
+  dashboard; worth noting if this is ever embedded somewhere older.

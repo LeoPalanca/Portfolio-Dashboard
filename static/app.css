@@ -2184,6 +2184,34 @@ body.dashboard-redrawing .dashboard-refresh-overlay {
 .mb-3 { margin-bottom: var(--space-3); }
 .mb-0 { margin-bottom: 0; }
 
+/* ─── Colour-blind-safe palette (opt-in) ───────────────────────────────
+   Gain/loss must not rely on a red/green distinction. Blue vs orange is
+   171 degrees apart and stays legible with deuteranopia. Specificity and
+   source order are load-bearing here: the light overrides below must come
+   after the dark one so they win when both attributes are present. */
+:root[data-palette="cb"] {
+  --positive: #38bdf8;
+  --negative: #fb923c;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-palette="cb"]:not([data-theme="dark"]) {
+    --positive: #0369a1;
+    --negative: #c2410c;
+  }
+}
+:root[data-palette="cb"][data-theme="light"] {
+  --positive: #0369a1;
+  --negative: #c2410c;
+}
+
+/* ─── Palette toggle ─── */
+#palette-toggle svg { width: 16px; height: 16px; }
+:root[data-palette="cb"] #palette-toggle {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ─── Theme toggle ─── */
 #theme-toggle {
   display: inline-flex;
@@ -2220,4 +2248,47 @@ body.dashboard-redrawing .dashboard-refresh-overlay {
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) .theme-icon--light { display: inline-flex; }
   :root:not([data-theme="dark"]) .theme-icon--dark { display: none; }
+}
+
+/* ─── Repeated component bits (were duplicated inline styles) ─── */
+.sym-logo {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-pill);
+  vertical-align: middle;
+  margin-right: var(--space-2);
+  background: var(--tint-hover);
+  flex-shrink: 0;
+}
+.info-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  font-family: serif;
+  font-style: italic;
+  margin-left: var(--space-2);
+  cursor: pointer;
+  border: 1px solid var(--text-muted);
+  vertical-align: middle;
+}
+.sub-cell {
+  text-align: right;
+  padding: 2px 0;
+  font-size: 0.82em;
+  color: var(--text-muted);
+}
+.is-clickable { cursor: pointer; }
+.sort-cell {
+  text-align: left;
+  padding: var(--space-2);
+  width: 85px;
+  cursor: pointer;
+  user-select: none;
 }

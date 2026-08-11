@@ -1221,46 +1221,12 @@
         if (p.asset.toLowerCase().includes("europension taxbenefit")) {
           assetNameHtml = `
             <span>${p.asset}</span>
-            <span class="info-icon" onclick="showAssetInfoPopup('europension', event)" style="
-              display: inline-flex;
-              align-items: center;
-              justify-content: center;
-              width: 14px;
-              height: 14px;
-              border-radius: 50%;
-              background: var(--border-strong);
-              color: var(--text-secondary);
-              font-size: 10px;
-              font-weight: bold;
-              font-family: serif;
-              font-style: italic;
-              margin-left: 6px;
-              cursor: pointer;
-              border: 1px solid var(--text-muted);
-              vertical-align: middle;
-            " title="Click for details">i</span>
+            <span class="info-icon" onclick="showAssetInfoPopup('europension', event)" class="info-dot" title="Click for details">i</span>
           `;
         } else if (p.asset.toLowerCase().includes("mystyle")) {
           assetNameHtml = `
             <span>${p.asset}</span>
-            <span class="info-icon" onclick="showAssetInfoPopup('mystyle', event)" style="
-              display: inline-flex;
-              align-items: center;
-              justify-content: center;
-              width: 14px;
-              height: 14px;
-              border-radius: 50%;
-              background: var(--border-strong);
-              color: var(--text-secondary);
-              font-size: 10px;
-              font-weight: bold;
-              font-family: serif;
-              font-style: italic;
-              margin-left: 6px;
-              cursor: pointer;
-              border: 1px solid var(--text-muted);
-              vertical-align: middle;
-            " title="Click for details">i</span>
+            <span class="info-icon" onclick="showAssetInfoPopup('mystyle', event)" class="info-dot" title="Click for details">i</span>
           `;
         }
         
@@ -1315,8 +1281,8 @@
                         return `
                           <tr style="border-bottom: 1px solid var(--tint-faint); line-height: 24px;">
                             <td style="text-align: left; padding: 2px 0; font-size: 0.82em; display: flex; align-items: center; color: var(--text-muted);">${logoImg}<span>${escapeHtml(h.holding)}</span></td>
-                            <td style="text-align: right; padding: 2px 0; font-size: 0.82em; color: var(--text-muted);">${money(h.market_value_eur)}</td>
-                            <td style="text-align: right; padding: 2px 0; font-size: 0.82em; color: var(--text-muted);">${percent(h.weight_pct)}</td>
+                            <td class="sub-cell">${money(h.market_value_eur)}</td>
+                            <td class="sub-cell">${percent(h.weight_pct)}</td>
                           </tr>
                         `;
                       }).join("")}
@@ -1345,7 +1311,7 @@
       return rows.map(row => {
         const ticker = row.holding_ticker;
         const logoUrl = (key === "holding" && ticker) ? `https://assets.parqet.com/logos/symbol/${ticker}?format=png` : '';
-        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="this.style.display='none';" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
+        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="this.style.display='none';" class="sym-logo">` : '';
         return `
           <tr>
             <td class="cell-flex">${logoImg}${distributionNameCell(row, key)}</td>
@@ -1408,7 +1374,7 @@
             const isSelected = sourceKey(row) === selectedDistributionSource;
             const symbol = window.assetToSymbolMap ? window.assetToSymbolMap[row.asset] : '';
             const logoUrl = row.isin ? `https://assets.parqet.com/logos/isin/${row.isin}?format=png` : (symbol ? `https://assets.parqet.com/logos/symbol/${symbol}?format=png` : '');
-            const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
+            const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" class="sym-logo">` : '';
             return `
               <tr class="composition-source-row ${isSelected ? "selected" : ""}" data-source-key="${escapeHtml(sourceKey(row))}">
                 <td class="cell-flex">${logoImg}<div><div style="display:flex; align-items:center; gap:4px;"><span>${row.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}${isSelected ? '<span class="selected-flag">Selected</span>' : ''}</div><div class="subtle">${row.isin || ""}</div></div></td>
@@ -1435,7 +1401,7 @@
         ? data.missing.map(row => {
             const symbol = window.assetToSymbolMap ? window.assetToSymbolMap[row.asset] : '';
             const logoUrl = row.isin ? `https://assets.parqet.com/logos/isin/${row.isin}?format=png` : (symbol ? `https://assets.parqet.com/logos/symbol/${symbol}?format=png` : '');
-            const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
+            const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" class="sym-logo">` : '';
             return `
               <tr>
                 <td class="cell-flex">${logoImg}<span>${row.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}</td>
@@ -1489,7 +1455,7 @@
         ? symbols.map(symbol => {
             const upperSymbol = symbol.toUpperCase();
             const activeClass = (window.activeNewsFilter === upperSymbol) ? 'active' : '';
-            return `<span class="source-pill ${activeClass}" style="cursor:pointer;" onclick="toggleNewsFilter('${escapeHtml(symbol)}')">${symbolLogoHtml(symbol)}${escapeHtml(symbol)}</span>`;
+            return `<span class="source-pill ${activeClass}" class="is-clickable" onclick="toggleNewsFilter('${escapeHtml(symbol)}')">${symbolLogoHtml(symbol)}${escapeHtml(symbol)}</span>`;
           }).join("")
         : `<span class="empty-state">No stock tickers detected from current holdings.</span>`;
         
@@ -1500,7 +1466,7 @@
             return `
               <article class="news-card">
                 <div class="news-meta">
-                  <span class="source-pill ${cardActive}" style="cursor:pointer;" onclick="toggleNewsFilter('${escapeHtml(item.symbol || '')}')">${symbolLogoHtml(item.symbol)}${escapeHtml(item.symbol || "")}</span>
+                  <span class="source-pill ${cardActive}" class="is-clickable" onclick="toggleNewsFilter('${escapeHtml(item.symbol || '')}')">${symbolLogoHtml(item.symbol)}${escapeHtml(item.symbol || "")}</span>
                   <span>${escapeHtml(item.source || "")}</span>
                   <span>${escapeHtml(item.published || "")}</span>
                 </div>
@@ -1736,7 +1702,7 @@
       document.getElementById("dividends-aggregate").innerHTML = sortedAgg.map(r => {
         const symbol = window.assetToSymbolMap ? window.assetToSymbolMap[r.asset] : '';
         const logoUrl = r.isin ? `https://assets.parqet.com/logos/isin/${r.isin}?format=png` : (symbol ? `https://assets.parqet.com/logos/symbol/${symbol}?format=png` : '');
-        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
+        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" class="sym-logo">` : '';
         return `
           <tr>
             <td class="cell-flex">${logoImg}<span>${r.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[r.asset] : '')}</td>
@@ -1803,7 +1769,7 @@
       document.getElementById("dividends").innerHTML = (dividends.rows || []).map(row => {
         const symbol = window.assetToSymbolMap ? window.assetToSymbolMap[row.asset] : '';
         const logoUrl = row.isin ? `https://assets.parqet.com/logos/isin/${row.isin}?format=png` : (symbol ? `https://assets.parqet.com/logos/symbol/${symbol}?format=png` : '');
-        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
+        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" class="sym-logo">` : '';
         return `
           <tr>
             <td>${row.date}</td>
@@ -2327,8 +2293,8 @@
           <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
             <thead>
               <tr style="border-bottom: 1px solid var(--border-strong); color: var(--text-secondary); font-weight: 500;">
-                <th style="text-align: left; padding: 6px 8px; width: 85px; cursor: pointer; user-select: none;" onclick="window.sortSubcategoryDetails('date')">Date${indicator('date')}</th>
-                <th style="text-align: left; padding: 6px 8px; width: 85px; cursor: pointer; user-select: none;" onclick="window.sortSubcategoryDetails('source')">Source${indicator('source')}</th>
+                <th class="sort-cell" onclick="window.sortSubcategoryDetails('date')">Date${indicator('date')}</th>
+                <th class="sort-cell" onclick="window.sortSubcategoryDetails('source')">Source${indicator('source')}</th>
                 <th style="text-align: left; padding: 6px 8px; width: 120px; cursor: pointer; user-select: none;" onclick="window.sortSubcategoryDetails('merchant')">Merchant${indicator('merchant')}</th>
                 <th style="text-align: left; padding: 6px 8px; cursor: pointer; user-select: none;" onclick="window.sortSubcategoryDetails('description')">Description${indicator('description')}</th>
                 <th style="text-align: right; padding: 6px 8px; width: 95px; cursor: pointer; user-select: none;" onclick="window.sortSubcategoryDetails('amount')">Amount${indicator('amount')}</th>
@@ -3233,6 +3199,33 @@
       const el = document.getElementById(id);
       if (el) el.addEventListener("input", updateCalculator);
     });
+
+    /* ─── Colour-blind palette ─── */
+    const PALETTE_KEY = "palette";
+
+    function applyPalette(useCb) {
+      const root = document.documentElement;
+      if (useCb) {
+        root.setAttribute("data-palette", "cb");
+      } else {
+        root.removeAttribute("data-palette");
+      }
+      const btn = document.getElementById("palette-toggle");
+      if (btn) btn.setAttribute("aria-pressed", useCb ? "true" : "false");
+      try { localStorage.setItem(PALETTE_KEY, useCb ? "cb" : "default"); } catch (e) { /* ignore */ }
+      renderChartsOnly();
+    }
+
+    const paletteToggle = document.getElementById("palette-toggle");
+    if (paletteToggle) {
+      paletteToggle.addEventListener("click", () => {
+        applyPalette(document.documentElement.getAttribute("data-palette") !== "cb");
+      });
+      paletteToggle.setAttribute(
+        "aria-pressed",
+        document.documentElement.getAttribute("data-palette") === "cb" ? "true" : "false"
+      );
+    }
 
     /* ─── Theme ─── */
     const THEME_KEY = "theme";

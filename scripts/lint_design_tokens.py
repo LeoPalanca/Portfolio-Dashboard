@@ -30,6 +30,7 @@ SPACING_PROPS = r"(?:padding|margin|gap|row-gap|column-gap)(?:-(?:top|right|bott
 # (?<!&) keeps numeric HTML entities such as &#9650; from reading as colours
 HEX_RE = re.compile(r"(?<![&\w])#[0-9a-fA-F]{3,8}\b")
 RGB_RE = re.compile(r"\brgba?\(")
+RGBA_LITERAL_RE = re.compile(r"rgba?\([\d.,\s]+\)")
 VAR_USE_RE = re.compile(r"var\(\s*(--[\w-]+)")
 VAR_DEF_RE = re.compile(r"^\s*(--[\w-]+)\s*:", re.MULTILINE)
 # hairlines and full-bleed values are not spacing-scale concerns
@@ -39,7 +40,9 @@ SPACING_EXEMPT = {"0", "0px", "1px", "auto", "-1px", "2px"}
 def theme_blocks(css: str) -> list[tuple[str, str]]:
     """Return (label, body) for :root and each [data-theme] block."""
     blocks = []
-    for m in re.finditer(r"(:root(?:\[data-theme=\"\w+\"\])?|:root:not\(\[data-theme=\"\w+\"\]\))\s*\{", css):
+    # a theme block is :root plus only attribute/:not() qualifiers, then the brace.
+    # a descendant selector such as :root[data-theme="light"] .icon is NOT one.
+    for m in re.finditer(r"(:root(?:\[[^\]]+\]|:not\([^)]+\))*)\s*\{", css):
         start = m.end()
         depth, i = 1, start
         while i < len(css) and depth:
@@ -88,10 +91,13 @@ def main() -> int:
     if stray:
         findings.append(("colour literals outside the theme blocks", sorted(set(stray))))
 
-    # 3. colour literals in JS
-    js_colours = sorted(set(HEX_RE.findall(js)))
+    # 3. colour literals in JS and in the template
+    js_colours = sorted(set(HEX_RE.findall(js)) | set(RGBA_LITERAL_RE.findall(js)))
     if js_colours:
         findings.append(("colour literals in app.js (cannot follow a theme)", js_colours))
+    html_colours = sorted(set(HEX_RE.findall(html)) | set(RGBA_LITERAL_RE.findall(html)))
+    if html_colours:
+        findings.append(("colour literals in index.html (cannot follow a theme)", html_colours))
 
     # 4. off-scale spacing
     scale = {v for k, v in re.findall(r"(--space-\d)\s*:\s*([^;]+);", theme_src)}
