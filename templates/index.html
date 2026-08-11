@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portfolio Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v={{ app_version }}">
+</head>
+<body>
+  <header>
+    <div class="topbar-brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M4 18V6"/>
+          <path d="M4 16l5-5 4 3 7-8"/>
+          <path d="M15 6h5v5"/>
+        </svg>
+      </span>
+      <div class="topbar-copy">
+        <h1>Portfolio Dashboard</h1>
+        <div class="meta" id="meta">Portfolio Dashboard v{{ app_version }}</div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="import-data" type="button" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M8 8l4-4 4 4"/><path d="M5 14v5h14v-5"/></svg>
+        <span>Import data</span>
+      </button>
+      <button id="refresh" type="button">
+        <span class="refresh-button-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.8-4.2L3 9"/><path d="M3 4v5h5"/><path d="M4 13a8 8 0 0 0 14.8 4.2L21 15"/><path d="M21 20v-5h-5"/></svg>
+        </span>
+        <span>Refresh Prices</span>
+      </button>
+    </div>
+  </header>
+  <main>
+    <div class="dashboard-refresh-overlay" aria-live="polite" aria-busy="true">
+      <div class="refresh-card">
+        <div class="refresh-ring" aria-hidden="true"></div>
+        <div class="refresh-title" id="refresh-status">Updating dashboard</div>
+        <div class="refresh-bar" aria-hidden="true"><span></span></div>
+      </div>
+    </div>
+    <div class="error" id="error"></div>
+    <div class="control-stack">
+      <div class="control-row primary-controls">
+        <div class="periods selector-fancy person-selector" id="persons" aria-label="Portfolio person">
+          {{ portfolio_buttons|safe }}
+        </div>
+        <div class="periods selector-fancy time-selector" id="periods" aria-label="Performance window">
+          <button type="button" data-period="1w" style="--time-fill:.16;--time-width:60px" title="Last 1 week">
+            <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="selector-label">1W</span></span>
+            <span class="time-scale" aria-hidden="true"><span></span></span>
+          </button>
+          <button type="button" data-period="1m" style="--time-fill:.28;--time-width:64px" title="Last 1 month">
+            <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="selector-label">1M</span></span>
+            <span class="time-scale" aria-hidden="true"><span></span></span>
+          </button>
+          <button type="button" data-period="ytd" style="--time-fill:.44;--time-width:70px" title="Year to date">
+            <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="selector-label">YTD</span></span>
+            <span class="time-scale" aria-hidden="true"><span></span></span>
+          </button>
+          <button type="button" data-period="1y" style="--time-fill:.58;--time-width:76px" title="Last 1 year">
+            <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="selector-label">1Y</span></span>
+            <span class="time-scale" aria-hidden="true"><span></span></span>
+          </button>
+          {{ since_2024_button|safe }}
+          <button type="button" data-period="all" style="--time-fill:1;--time-width:88px" title="All time">
+            <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="selector-label">All</span></span>
+            <span class="time-scale" aria-hidden="true"><span></span></span>
+          </button>
+        </div>
+        <div class="periods selector-fancy broker-selector" id="brokers" aria-label="Broker filter" style="display:none;"></div>
+      </div>
+      <div class="control-row secondary-controls" aria-label="Secondary dashboard options">
+        <span class="secondary-label">Options</span>
+        <div class="periods secondary-selector" id="berkshire-mode" aria-label="Berkshire exposure mode">
+          <button type="button" data-berkshire="stock" class="active">BRK stock</button>
+          <button type="button" data-berkshire="lookthrough">BRK 13F</button>
+        </div>
+        <div class="periods secondary-selector" id="proxy-mode" aria-label="Proxy composition mode">
+          <button type="button" data-proxy="on" class="active">Proxy gaps</button>
+          <button type="button" data-proxy="off">Official only</button>
+        </div>
+        <div class="periods secondary-selector" id="live-mode" aria-label="Live price filter">
+          <button type="button" data-live="all" class="active">All assets</button>
+          <button type="button" data-live="live">Live only</button>
+        </div>
+        <div class="periods secondary-selector" id="return-mode" aria-label="Return calculation mode">
+          <button type="button" data-return-mode="price" class="active">Price Return</button>
+          <button type="button" data-return-mode="total">Total Return</button>
+        </div>
+      </div>
+    </div>
+    <div class="metrics" id="metrics"></div>
+    <div class="movers-panel" id="movers-panel" hidden></div>
+
+    <!-- User Rankings -->
+    <section>
+      <div class="section-head expanded" data-collapse="rankings-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Family Rankings</h2>
+        </div>
+        <span class="subtle" id="rankings-window-label">Common alignment: loading…</span>
+      </div>
+      <div class="section-content expanded" id="rankings-content">
+        <div class="table-wrap">
+          <table class="positions-table" id="rankings-table">
+            <thead>
+              <tr>
+                <th style="text-align: left; cursor: default;">User</th>
+                <th class="sortable" onclick="sortRankings('start')" id="rank-header-start">Return (Start of Portfolio)</th>
+                <th class="sortable" onclick="sortRankings('common')" id="rank-header-common">Return (Common Alignment) ↓</th>
+                <th class="sortable" onclick="sortRankings('ytd')" id="rank-header-ytd">Return (YTD)</th>
+              </tr>
+            </thead>
+            <tbody id="rankings-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Portfolio Value -->
+    <section>
+      <div class="section-head expanded" data-collapse="value-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Portfolio Value</h2>
+        </div>
+        <span class="subtle" id="value-window"></span>
+      </div>
+      <div class="section-content expanded" id="value-content">
+        <div class="chart-wrap"><svg id="value-chart" role="img" aria-label="Portfolio value chart"></svg></div>
+        <div class="chart-wrap compact"><svg id="return-chart" role="img" aria-label="Portfolio return percentage chart"></svg></div>
+        <div id="score-pills" hidden></div>
+        <div class="legend" id="value-legend"></div>
+      </div>
+    </section>
+
+    <!-- Cash Flow Evolution -->
+    <section>
+      <div class="section-head expanded" data-collapse="cashflow-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Cash Flow Evolution</h2>
+        </div>
+        <span class="subtle" id="range"></span>
+      </div>
+      <div class="section-content expanded" id="cashflow-content">
+        <div class="chart-wrap"><svg id="chart" role="img" aria-label="Portfolio evolution chart"></svg></div>
+        <div class="legend" id="legend"></div>
+      </div>
+    </section>
+
+    <!-- Current Holdings -->
+    <section>
+      <div class="section-head expanded" data-collapse="holdings-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Current Holdings</h2>
+        </div>
+        <span class="subtle" id="holdings-count"></span>
+      </div>
+      <div class="section-content expanded" id="holdings-content">
+        <div class="holdings-toolbar">
+          <div class="holdings-focus-copy">
+            <strong id="holdings-view-title">Top holdings</strong>
+            <span id="holdings-view-detail">Showing the largest open positions by current value.</span>
+          </div>
+          <div class="holdings-actions">
+            <button type="button" id="btn-show-all-holdings" class="holdings-action focus">
+              <span class="holdings-action-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><path d="M8 7v10"/></svg>
+              </span>
+              <span class="holdings-action-copy">
+                <strong id="btn-show-all-label">Show all holdings</strong>
+                <small id="btn-show-all-sub">Expand open rows</small>
+              </span>
+            </button>
+            <button type="button" id="btn-toggle-closed" class="holdings-action closed">
+              <span class="holdings-action-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M7 7V5h10v2"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v5"/><path d="M14 11v5"/></svg>
+              </span>
+              <span class="holdings-action-copy">
+                <strong id="btn-closed-label">Show closed positions</strong>
+                <small id="btn-closed-sub">Add exited rows</small>
+              </span>
+            </button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="sortable" data-sort="asset">Asset</th>
+                <th class="sortable" data-sort="quantity">Qty</th>
+                <th class="sortable" data-sort="isin">ISIN</th>
+                <th class="sortable" data-sort="symbol">Symbol</th>
+                <th class="sortable" data-sort="price">Price</th>
+                <th class="sortable" data-sort="market_value_eur">Value EUR</th>
+                <th class="sortable" data-sort="cost_basis_eur">Cost EUR</th>
+                <th class="sortable" data-sort="display_pl_eur">P/L EUR</th>
+                <th class="sortable" data-sort="display_pl_pct">P/L %</th>
+                <th class="sortable" data-sort="pricing_status">Status</th>
+              </tr>
+            </thead>
+            <tbody id="positions"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- MyStyle Fee Compounding Calculator -->
+    <section id="mystyle-calc-section" style="display: none;">
+      <div class="section-head expanded" data-collapse="mystyle-calc-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>MyStyle Fee Drag Calculator</h2>
+        </div>
+        <span class="subtle">Compounding Cost Projections</span>
+      </div>
+      <div class="section-content expanded" id="mystyle-calc-content" style="padding: 16px 20px;">
+        <div class="calculator-layout">
+          <div class="calculator-inputs">
+            <div class="calculator-input-group">
+              <label>Starting Capital: <span id="lbl-start-cap">€0</span></label>
+              <input type="range" id="input-start-cap" min="10000" max="1000000" step="5000" value="100000">
+            </div>
+            <div class="calculator-input-group">
+              <label>Years Horizon: <span id="lbl-horizon">20 years</span></label>
+              <input type="range" id="input-horizon" min="1" max="40" step="1" value="20">
+            </div>
+            <div class="calculator-input-group">
+              <label>Assumed Gross Annual Return: <span id="lbl-gross-ret">7.0%</span></label>
+              <input type="range" id="input-gross-ret" min="1" max="15" step="0.1" value="7.0">
+            </div>
+            <div class="calculator-input-group">
+              <label>Current Product Annual Fee: <span id="lbl-mystyle-fee">2.30%</span></label>
+              <input type="range" id="input-mystyle-fee" min="0.5" max="5.0" step="0.05" value="2.30">
+            </div>
+            <div class="calculator-input-group">
+              <label>Alternative ETF Annual Cost (TER): <span id="lbl-etf-fee">0.22%</span></label>
+              <input type="range" id="input-etf-fee" min="0.05" max="2.0" step="0.05" value="0.22">
+            </div>
+          </div>
+          <div class="calculator-results">
+            <div class="calc-row">
+              <span class="calc-label">Current Product Net Return:</span>
+              <span class="calc-val red" id="val-mystyle-net-ret">4.70%</span>
+            </div>
+            <div class="calc-row">
+              <span class="calc-label">ETF Net Return:</span>
+              <span class="calc-val green" id="val-etf-net-ret">6.78%</span>
+            </div>
+            <div class="calc-row">
+              <span class="calc-label">Projected Value (Current Product):</span>
+              <span class="calc-val red" id="val-proj-mystyle">€0</span>
+            </div>
+            <div class="calc-row">
+              <span class="calc-label">Projected Value (ETF):</span>
+              <span class="calc-val green" id="val-proj-etf">€0</span>
+            </div>
+            <div class="calc-row" style="margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line-strong);">
+              <span class="calc-label" style="font-weight: 600;">Estimated Fee Difference:</span>
+              <span class="calc-val amber" id="val-lost-fees">€0</span>
+            </div>
+            <div class="calc-progress">
+              <div class="calc-bar-label">
+                <span>Current Product</span>
+                <span id="bar-pct-mystyle">67.5%</span>
+              </div>
+              <div class="calc-bar-outer">
+                <div class="calc-bar-inner mystyle" id="bar-mystyle" style="width: 67.5%;"></div>
+              </div>
+              <div class="calc-bar-label" style="margin-top: 4px;">
+                <span>ETF Alternative</span>
+                <span>100%</span>
+              </div>
+              <div class="calc-bar-outer">
+                <div class="calc-bar-inner etf" style="width: 100%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Product-specific breakdowns belong in private configuration. -->
+    <!-- Watchlist -->
+    <section>
+      <div class="section-head expanded" data-collapse="watchlist-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Watchlist</h2>
+        </div>
+        <span class="subtle" id="watchlist-summary">Loading watchlist…</span>
+      </div>
+      <div class="section-content expanded" id="watchlist-content">
+        <div id="watchlist-grid" style="
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 15px;
+          margin-bottom: 15px;
+        ">
+        </div>
+        <!-- Add Ticker Control -->
+        <div style="
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          max-width: 400px;
+          margin: 15px auto 0;
+          background: rgba(15, 23, 42, 0.4);
+          padding: 8px 12px;
+          border-radius: var(--radius-sm);
+          border: 1px solid var(--line);
+        ">
+          <input type="text" id="watchlist-add-input" placeholder="Enter Ticker (e.g. FUSD.L)" style="
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--ink);
+            font-size: 13px;
+            outline: none;
+            padding: 4px 0;
+          ">
+          <button type="button" id="watchlist-add-btn" style="
+            background: var(--blue-dim);
+            border: 1px solid var(--blue);
+            color: var(--blue);
+            border-radius: 6px;
+            padding: 4px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          ">Add Ticker</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stock News -->
+    <section>
+      <div class="section-head" data-collapse="news-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Stock News</h2>
+        </div>
+        <span class="subtle" id="news-summary">Loading feeds…</span>
+      </div>
+      <div class="section-content" id="news-content">
+        <div class="section-body">
+          <div class="news-symbols" id="news-symbols"></div>
+          <div class="news-list" id="news-list">
+            <div class="empty-state">Loading stock news…</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Portfolio Distribution -->
+    <section>
+      <div class="section-head" data-collapse="distribution-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Portfolio Distribution</h2>
+        </div>
+        <span class="subtle" id="distribution-summary"></span>
+      </div>
+      <div class="section-content" id="distribution-content">
+        <div class="section-body">
+          <div class="info-box">
+            <strong>How distribution is calculated:</strong>
+            Direct shares use their full market value. ETFs and funds are split by rows in <code>asset_exposures.csv</code>; source metadata is in <code>data/etf_documents.json</code> and <code>data/proxy_exposures.csv</code>.
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Composition Source</th>
+                  <th>Fund</th>
+                  <th>Issuer</th>
+                  <th>Status</th>
+                  <th>Rows</th>
+                  <th>Fetched</th>
+                </tr>
+              </thead>
+              <tbody id="distribution-sources"></tbody>
+            </table>
+          </div>
+          <div class="allocation-grid">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Underlying</th><th>Value EUR</th><th>Weight</th></tr></thead>
+                <tbody id="distribution-underlying"></tbody>
+              </table>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Sector</th><th>Value EUR</th><th>Weight</th></tr></thead>
+                <tbody id="distribution-sectors"></tbody>
+              </table>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Geo Area</th><th>Value EUR</th><th>Weight</th></tr></thead>
+                <tbody id="distribution-geographies"></tbody>
+              </table>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Asset Class</th><th>Value EUR</th><th>Weight</th></tr></thead>
+                <tbody id="distribution-classes"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Missing Composition</th><th>ISIN</th><th>Value EUR</th><th>Status</th></tr></thead>
+              <tbody id="distribution-missing"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dividends -->
+    <section>
+      <div class="section-head" data-collapse="dividends-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Dividends</h2>
+        </div>
+        <span class="subtle" id="dividends-summary"></span>
+      </div>
+      <div class="section-content" id="dividends-content">
+        <div class="section-body">
+          <div class="table-wrap">
+            <h3>Yearly Summary</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Year</th>
+                <th>Net Dividends EUR</th>
+                <th>Avg Portfolio Value EUR</th>
+                <th>Dividend Yield %</th>
+                <th>Avg Invested Capital EUR</th>
+                <th>Yield on Cost %</th>
+              </tr>
+            </thead>
+            <tbody id="dividends-yearly"></tbody>
+          </table>
+        </div>
+        <div class="table-wrap">
+          <h3>Aggregate by Asset</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Asset</th>
+                <th>ISIN</th>
+                <th>Payments</th>
+                <th>Total Net EUR</th>
+                <th>Total Tax EUR</th>
+                <th>Total Gross EUR</th>
+              </tr>
+            </thead>
+            <tbody id="dividends-aggregate"></tbody>
+          </table>
+        </div>
+        <div class="table-wrap">
+          <h3>All Payments</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Broker</th>
+                <th>Asset</th>
+                <th>ISIN</th>
+                <th>Net EUR</th>
+                <th>Tax EUR</th>
+                <th>Gross EUR</th>
+              </tr>
+            </thead>
+            <tbody id="dividends"></tbody>
+          </table>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <!-- Cash Account Interest -->
+    <section>
+      <div class="section-head" data-collapse="cash-interest-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Cash Account Interest</h2>
+        </div>
+        <span class="subtle" id="cash-interest-summary"></span>
+      </div>
+      <div class="section-content" id="cash-interest-content">
+        <div class="section-body">
+          <div class="table-wrap">
+            <h3>Summary by Broker</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Broker</th>
+                  <th>Payments</th>
+                  <th>Net EUR</th>
+                  <th>Tax EUR</th>
+                  <th>Gross EUR</th>
+                </tr>
+              </thead>
+              <tbody id="cash-interest-broker"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <h3>All Payments</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Broker</th>
+                  <th>Net EUR</th>
+                  <th>Tax EUR</th>
+                  <th>Gross EUR</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody id="cash-interest-payments"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Expenses -->
+    <section class="section-support" id="expenses-section">
+      <div class="section-head" data-collapse="expenses-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Expenses</h2>
+        </div>
+        <span class="subtle" id="expenses-summary"></span>
+      </div>
+      <div class="section-content" id="expenses-content">
+        <div class="section-body">
+          <div class="expense-summary" id="expense-metrics"></div>
+          <div class="expense-grid">
+            <div class="table-wrap">
+              <h3>Top Categories</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th>Rows</th>
+                    <th>Amount EUR</th>
+                    <th>Share</th>
+                  </tr>
+                </thead>
+                <tbody id="expense-categories"></tbody>
+              </table>
+            </div>
+            <div class="expense-chart-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin: 0;">Expense Trend</h3>
+                <div class="periods secondary-selector" id="expense-trend-mode" aria-label="Expense trend mode" style="padding: 2px; border-radius: 7px; background: rgba(15,23,42,0.34); display: flex;">
+                  <button type="button" id="expense-toggle-monthly" class="active" style="min-height: 22px; padding: 2px 8px; font-size: 11px; font-weight: 500; border-radius: 5px; background: var(--blue); color: white; border: none; cursor: pointer;">Monthly</button>
+                  <button type="button" id="expense-toggle-cumulative" style="min-height: 22px; padding: 2px 8px; font-size: 11px; font-weight: 500; border-radius: 5px; background: transparent; color: var(--text-sub, #94a3b8); border: none; cursor: pointer;">Cumulative</button>
+                </div>
+              </div>
+              <div id="expense-trend-legend" style="display: flex; gap: 12px; font-size: 11px; margin-bottom: 8px; align-items: center;"></div>
+              <svg class="expense-chart" id="expense-trend" role="img" aria-label="Monthly expense trend"></svg>
+            </div>
+            <div class="table-wrap">
+              <h3>Source Breakdown</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    <th>Rows</th>
+                    <th>Outflow</th>
+                    <th>Income</th>
+                    <th>Credits</th>
+                    <th>Net Outflow</th>
+                  </tr>
+                </thead>
+                <tbody id="expense-sources"></tbody>
+              </table>
+            </div>
+            <div class="table-wrap">
+              <h3>Top Merchants</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Merchant</th>
+                    <th>Category</th>
+                    <th>Rows</th>
+                    <th>Amount EUR</th>
+                  </tr>
+                </thead>
+                <tbody id="expense-merchants"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <h3>Credits</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Source</th>
+                  <th>Subcategory</th>
+                  <th>Merchant</th>
+                  <th>Amount EUR</th>
+                </tr>
+              </thead>
+              <tbody id="expense-credits"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <h3>Recent Rows</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Source</th>
+                  <th>Category</th>
+                  <th>Merchant</th>
+                  <th>Description</th>
+                  <th>Amount EUR</th>
+                </tr>
+              </thead>
+              <tbody id="expense-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Net Contributions -->
+    <section>
+      <div class="section-head" data-collapse="contributions-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Net Contributions</h2>
+        </div>
+        <span class="subtle" id="contributions-summary"></span>
+      </div>
+      <div class="section-content" id="contributions-content">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Broker</th>
+                <th>Buys EUR</th>
+                <th>Sells EUR</th>
+                <th>Net EUR</th>
+                <th>Share</th>
+              </tr>
+            </thead>
+            <tbody id="contributions-broker"></tbody>
+          </table>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Buys EUR</th>
+                <th>Sells EUR</th>
+                <th>Net EUR</th>
+              </tr>
+            </thead>
+            <tbody id="contributions-date"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Taxes & Costs -->
+    <section>
+      <div class="section-head" data-collapse="frictions-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Taxes &amp; Costs</h2>
+        </div>
+        <span class="subtle" id="frictions-summary"></span>
+      </div>
+      <div class="section-content" id="frictions-content">
+        <div class="section-body">
+          <div class="friction-summary" id="friction-metrics"></div>
+          <div class="info-box">
+            <strong>How liquidation is calculated:</strong>
+            Taxes paid include trade taxes, portfolio/stamp taxes, and dividend withholding. Costs paid include parsed investment broker commissions and spread/overnight costs. Total drag is taxes plus costs. Net liquidation is current market value minus total drag for the selected window.
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Broker</th>
+                  <th>Costs EUR</th>
+                  <th>Taxes EUR</th>
+                  <th>Dividend Tax EUR</th>
+                  <th>Total EUR</th>
+                </tr>
+              </thead>
+              <tbody id="frictions-broker"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Broker</th>
+                  <th>Type</th>
+                  <th>Description</th>
+                  <th>Amount EUR</th>
+                </tr>
+              </thead>
+              <tbody id="frictions-events"></tbody>
+            </table>
+          </div>
+          <div id="tax-losses-wrap" style="display:none; margin-top: 20px; border-top: 1px solid var(--line); padding-top: 20px;">
+            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--ink);">Tax Loss Carry-forwards (Minusvalenze)</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Year Formed</th>
+                    <th>Broker</th>
+                    <th>Available Carry-forward</th>
+                    <th>Expiration Date</th>
+                  </tr>
+                </thead>
+                <tbody id="tax-losses-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Portfolio Statistics -->
+    <section id="stats-section" style="display:none;">
+      <div class="section-head" data-collapse="stats-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Portfolio Statistics</h2>
+        </div>
+        <span class="subtle" id="stats-summary"></span>
+      </div>
+      <div class="section-content" id="stats-content">
+        <div class="section-body">
+          <div class="info-box" style="margin-bottom:15px;" id="stats-info">
+            <strong>Volatility & Risk Summary:</strong>
+            Daily variance, standard deviation (volatility), and annualized volatility are calculated using the strictly daily business-day return series of the portfolio and the MSCI World index. Sharpe ratio is annualized assuming a 3.0% risk-free rate.
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:15px;">
+            <div class="table-wrap">
+              <h3>Your Portfolio</h3>
+              <table>
+                <tbody>
+                  <tr><td style="text-align:left; font-weight:600;">Mean Daily Return</td><td id="stats-port-mean" style="text-align:right; font-weight:600;">-</td></tr>
+                  <tr><td style="text-align:left;">Daily Return Variance</td><td id="stats-port-var" style="text-align:right;">-</td></tr>
+                  <tr><td style="text-align:left;">Daily Volatility (Std Dev)</td><td id="stats-port-daily-vol" style="text-align:right;">-</td></tr>
+                  <tr><td style="text-align:left; font-weight:600; color:var(--blue);">Annualized Volatility</td><td id="stats-port-ann-vol" style="text-align:right; font-weight:600; color:var(--blue);">-</td></tr>
+                  <tr><td style="text-align:left; font-weight:600; color:var(--green);">Annualized Sharpe Ratio</td><td id="stats-port-sharpe" style="text-align:right; font-weight:600; color:var(--green);">-</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-wrap">
+              <h3>Benchmark: MSCI World</h3>
+              <table>
+                <tbody>
+                  <tr><td style="text-align:left; font-weight:600;">Mean Daily Return</td><td id="stats-msci-mean" style="text-align:right; font-weight:600;">-</td></tr>
+                  <tr><td style="text-align:left;">Daily Return Variance</td><td id="stats-msci-var" style="text-align:right;">-</td></tr>
+                  <tr><td style="text-align:left;">Daily Volatility (Std Dev)</td><td id="stats-msci-daily-vol" style="text-align:right;">-</td></tr>
+                  <tr><td style="text-align:left; font-weight:600; color:var(--blue);">Annualized Volatility</td><td id="stats-msci-ann-vol" style="text-align:right; font-weight:600; color:var(--blue);">-</td></tr>
+                  <tr><td style="text-align:left; font-weight:600; color:var(--green);">Annualized Sharpe Ratio</td><td id="stats-msci-sharpe" style="text-align:right; font-weight:600; color:var(--green);">-</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-wrap">
+              <h3>Benchmark: XEON (Cash)</h3>
+              <table>
+                <tbody>
+                  <tr><td style="text-align:left; font-weight:600;">Mean Daily Return</td><td id="stats-xeon-mean" style="text-align:right; font-weight:600;">-</td></tr>
+                  <tr><td style="text-align:left;">Daily Return Variance</td><td id="stats-xeon-var" style="text-align:right;">-</td></tr>
+                  <tr><td style="text-align:left;">Daily Volatility (Std Dev)</td><td id="stats-xeon-daily-vol" style="text-align:right;">-</td></tr>
+                  <tr><td style="text-align:left; font-weight:600; color:var(--blue);">Annualized Volatility</td><td id="stats-xeon-ann-vol" style="text-align:right; font-weight:600; color:var(--blue);">-</td></tr>
+                  <tr><td style="text-align:left; font-weight:600; color:var(--green);">Annualized Sharpe Ratio</td><td id="stats-xeon-sharpe" style="text-align:right; font-weight:600; color:var(--green);">-</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="stats-distribution">
+            <div class="stats-distribution-head">
+              <div>
+                <h3>Daily Return Distributions</h3>
+                <span class="subtle" id="stats-dist-summary"></span>
+              </div>
+              <div class="distribution-legend" aria-hidden="true">
+                <span><span class="legend-dot portfolio"></span>Portfolio</span>
+                <span><span class="legend-dot msci"></span>MSCI World</span>
+              </div>
+            </div>
+            <div class="return-distribution-grid">
+              <div class="return-distribution-card">
+                <div class="return-distribution-card-head">
+                  <strong>Portfolio Daily Returns</strong>
+                  <span class="return-distribution-meta" id="stats-port-dist-meta"></span>
+                </div>
+                <svg id="stats-port-dist" role="img" aria-label="Portfolio daily return distribution"></svg>
+              </div>
+              <div class="return-distribution-card">
+                <div class="return-distribution-card-head">
+                  <strong>MSCI World Daily Returns</strong>
+                  <span class="return-distribution-meta" id="stats-msci-dist-meta"></span>
+                </div>
+                <svg id="stats-msci-dist" role="img" aria-label="MSCI World daily return distribution"></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing Coverage -->
+    <section>
+      <div class="section-head" data-collapse="coverage-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Pricing Coverage</h2>
+        </div>
+        <span class="subtle" id="coverage-text"></span>
+      </div>
+      <div class="section-content" id="coverage-content">
+        <div class="mapping">
+          <div class="bar"><span id="coverage-bar" style="width:0%"></span></div>
+          <div id="mapping-status"></div>
+        </div>
+      </div>
+    </section>
+    <!-- Optional per-portfolio actions loaded from private configuration. -->
+    <section id="todos-section" style="display:none;">
+      <div class="section-head expanded" data-collapse="todos-content" onclick="toggleSection(this)">
+        <div class="section-head-left">
+          <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          <h2>Suggested Actions &amp; To-Dos</h2>
+        </div>
+      </div>
+      <div class="section-content expanded" id="todos-content">
+        <div class="section-body">
+          <ul id="todos-list" style="margin: 0; padding-left: 20px; line-height: 1.6; color: var(--ink-secondary);">
+            <!-- Populated via JS -->
+          </ul>
+        </div>
+      </div>
+    </section>
+    <section class="export-panel" aria-label="Export dashboard">
+      <div class="export-copy">
+        <span class="section-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>
+        </span>
+        <div class="export-copy-text">
+          <strong>Export current view</strong>
+          <span class="subtle" id="export-summary">Uses the selected person, window, broker, Berkshire mode, proxy mode, and live filter.</span>
+        </div>
+      </div>
+      <div class="export-actions">
+        <select id="export-format" aria-label="Export format">
+          <option value="pdf">PDF</option>
+          <option value="xlsx">XLSX</option>
+        </select>
+        <button type="button" id="export-button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg>
+          <span>Export</span>
+        </button>
+      </div>
+    </section>
+
+    <div class="import-modal" id="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
+      <div class="import-card">
+        <div class="import-card-head">
+          <div>
+            <h2 id="import-title">Import your statements</h2>
+            <p id="import-intro">Upload the platform’s native export format. Files stay on this computer and are normalized into the local SQLite movement ledger.</p>
+          </div>
+          <button class="import-close" id="import-close" type="button" aria-label="Close import dialog">&times;</button>
+        </div>
+        <form class="import-form" id="import-form">
+          <label class="import-dropzone" id="import-dropzone">
+            <span>
+              <strong>Drop a statement here or choose a file</strong>
+              CSV, XLS, XLSX, or PDF · maximum 50 MB
+              <span class="import-file-name" id="import-file-name">No file selected</span>
+            </span>
+            <input id="import-file" name="file" type="file" accept=".csv,.xls,.xlsx,.pdf" required>
+          </label>
+          <p class="import-supported"><strong>Supported:</strong> Trade Republic CSV · Fineco XLSX · Interactive Brokers PDF · eToro XLSX · Revolut CSV · Intesa XLSX · BBVA XLS · Personal trades CSV/XLSX</p>
+          <div class="import-templates">
+            <span>Personal trade template:</span>
+            <a href="/api/imports/template?format=csv" download>CSV</a>
+            <a href="/api/imports/template?format=xlsx" download>XLSX</a>
+          </div>
+          <div class="import-options">
+            <label for="import-source">Statement source</label>
+            <select id="import-source" name="source">
+              <option value="auto">Detect automatically</option>
+              <option value="trade_republic">Trade Republic — CSV</option>
+              <option value="fineco">Fineco — XLSX</option>
+              <option value="interactive_brokers">Interactive Brokers — PDF</option>
+              <option value="etoro">eToro — XLSX</option>
+              <option value="revolut">Revolut — CSV</option>
+              <option value="intesa">Intesa Sanpaolo — XLSX</option>
+              <option value="bbva">BBVA — XLS</option>
+              <option value="manual">Personal trades — CSV/XLSX</option>
+            </select>
+          </div>
+          <div class="import-status" id="import-status" role="status" aria-live="polite"></div>
+          <button class="import-submit" id="import-submit" type="submit">Import statement</button>
+        </form>
+      </div>
+    </div>
+    
+    <!-- Info Modal -->
+    <div id="info-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(12, 15, 26, 0.8); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s ease;">
+      <div style="background: var(--bg-secondary); border: 1px solid var(--line-strong); border-radius: var(--radius); max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto; padding: 24px; box-shadow: var(--shadow-lg); position: relative; color: var(--ink);">
+        <button type="button" onclick="closeInfoModal()" style="position: absolute; right: 16px; top: 16px; background: transparent; border: none; font-size: 20px; cursor: pointer; color: var(--muted); line-height: 1;">&times;</button>
+        <h3 id="modal-title" style="font-size: 18px; font-weight: 700; margin-bottom: 16px; color: var(--ink); border-bottom: 1px solid var(--line); padding-bottom: 10px;"></h3>
+        <div id="modal-content" style="line-height: 1.6; font-size: 13.5px; color: var(--ink-secondary);"></div>
+        <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
+          <button type="button" onclick="closeInfoModal()" style="background: var(--panel-hover); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 8px 16px; color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 500;">Close</button>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script id="app-config" type="application/json">{{ app_config|safe }}</script>
+  <script src="{{ url_for('static', filename='app.js') }}?v={{ app_version }}"></script>
+</body>
+</html>
