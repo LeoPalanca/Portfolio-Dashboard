@@ -41,7 +41,13 @@ from src.portfolio_dashboard.domain import (
     money,
     parse_decimal,
 )
-from src.portfolio_dashboard.imports import SOURCE_LABELS, detect_statement_source, import_destination
+from src.portfolio_dashboard.imports import (
+    SOURCE_EXTENSIONS,
+    SOURCE_LABELS,
+    detect_statement_source,
+    import_destination,
+    source_format_label,
+)
 from src.portfolio_dashboard.ingest import BrokerAdapter, FunctionBrokerAdapter
 from src.portfolio_dashboard.movements import MovementStore
 
@@ -6910,6 +6916,7 @@ def import_statement_path(path: Path, original_name: str | None = None, requeste
         raise ValueError("The selected statement file does not exist")
     if path.stat().st_size > SETTINGS.import_max_bytes:
         raise ValueError(f"Statement files must be smaller than {SETTINGS.import_max_bytes // (1024 * 1024)} MB")
+    source = detect_statement_source(path, requested_source)
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     store = get_movement_store()
     existing = store.import_by_hash(digest)
@@ -6925,7 +6932,6 @@ def import_statement_path(path: Path, original_name: str | None = None, requeste
         }
 
     safe_original_name = secure_filename(original_name or path.name) or f"statement{path.suffix.casefold()}"
-    source = detect_statement_source(path, requested_source)
     movements = parse_statement_movements(source, path)
     if not movements:
         raise ValueError(f"No supported movements were found in this {SOURCE_LABELS[source]} statement")
@@ -6975,7 +6981,15 @@ def import_status_payload() -> dict[str, Any]:
         "ready": has_trade_source,
         "source_dir": "sources",
         "database": configured_path_label(MOVEMENT_DATABASE),
-        "supported_sources": [{"id": key, "label": value} for key, value in SOURCE_LABELS.items()],
+        "supported_sources": [
+            {
+                "id": key,
+                "label": value,
+                "format": source_format_label(key),
+                "extensions": list(SOURCE_EXTENSIONS[key]),
+            }
+            for key, value in SOURCE_LABELS.items()
+        ],
         "max_upload_mb": SETTINGS.import_max_bytes // (1024 * 1024),
     }
 
@@ -7575,6 +7589,8 @@ HTML = r"""<!doctype html>
     .import-dropzone strong { display: block; margin-bottom: 5px; color: var(--ink); }
     .import-dropzone input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .import-file-name { margin-top: 8px; color: var(--blue); font-size: 12px; }
+    .import-supported { padding: 10px 12px; border-radius: 8px; background: rgba(148,163,184,0.06); }
+    .import-supported strong { color: var(--ink-secondary); }
     .import-options { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
     .import-options label { color: var(--muted); font-size: 12px; }
     .import-options select { min-width: 210px; }
@@ -10239,7 +10255,7 @@ HTML = r"""<!doctype html>
         <div class="import-card-head">
           <div>
             <h2 id="import-title">Import your statements</h2>
-            <p id="import-intro">Add broker or bank exports. Files stay on this computer and are normalized into the local SQLite movement ledger.</p>
+            <p id="import-intro">Upload the platform’s native export format. Files stay on this computer and are normalized into the local SQLite movement ledger.</p>
           </div>
           <button class="import-close" id="import-close" type="button" aria-label="Close import dialog">&times;</button>
         </div>
@@ -10252,18 +10268,19 @@ HTML = r"""<!doctype html>
             </span>
             <input id="import-file" name="file" type="file" accept=".csv,.xls,.xlsx,.pdf" required>
           </label>
+          <p class="import-supported"><strong>Supported:</strong> Trade Republic CSV · Fineco XLSX · Interactive Brokers PDF · eToro XLSX · Revolut CSV · Intesa XLSX · BBVA XLS · Manual trades CSV</p>
           <div class="import-options">
             <label for="import-source">Statement source</label>
             <select id="import-source" name="source">
               <option value="auto">Detect automatically</option>
-              <option value="trade_republic">Trade Republic</option>
-              <option value="fineco">Fineco</option>
-              <option value="interactive_brokers">Interactive Brokers</option>
-              <option value="etoro">eToro</option>
-              <option value="revolut">Revolut</option>
-              <option value="intesa">Intesa Sanpaolo</option>
-              <option value="bbva">BBVA</option>
-              <option value="manual">Manual trade spreadsheet</option>
+              <option value="trade_republic">Trade Republic — CSV</option>
+              <option value="fineco">Fineco — XLSX</option>
+              <option value="interactive_brokers">Interactive Brokers — PDF</option>
+              <option value="etoro">eToro — XLSX</option>
+              <option value="revolut">Revolut — CSV</option>
+              <option value="intesa">Intesa Sanpaolo — XLSX</option>
+              <option value="bbva">BBVA — XLS</option>
+              <option value="manual">Manual trade spreadsheet — CSV</option>
             </select>
           </div>
           <div class="import-status" id="import-status" role="status" aria-live="polite"></div>
@@ -10501,7 +10518,7 @@ HTML = r"""<!doctype html>
       document.getElementById("import-title").textContent = firstRun ? "Welcome — import your first statement" : "Import your statements";
       document.getElementById("import-intro").textContent = firstRun
         ? "Start with any supported broker or bank export. It stays on this computer and is normalized into a private SQLite ledger."
-        : "Add broker or bank exports. Files stay on this computer and are normalized into the local SQLite movement ledger.";
+        : "Upload the platform’s native export format. Files stay on this computer and are normalized into the local SQLite movement ledger.";
       importStatus.textContent = "";
       importStatus.className = "import-status";
       importModal.classList.add("open");

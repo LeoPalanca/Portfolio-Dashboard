@@ -40,6 +40,14 @@ class ImportDetectionTest(unittest.TestCase):
         self.assertEqual(destination.parent, Path("/private/source/broker_exports/fineco"))
         self.assertIn("fineco-", destination.name)
 
+    def test_manual_source_selection_rejects_the_wrong_format(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "trade-republic.xlsx"
+            path.write_bytes(b"not needed because the extension is rejected first")
+
+            with self.assertRaisesRegex(ValueError, "Trade Republic imports require CSV; this file is XLSX"):
+                detect_statement_source(path, "trade_republic")
+
 
 if __name__ == "__main__":
     unittest.main()

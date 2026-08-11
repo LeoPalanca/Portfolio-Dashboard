@@ -20,6 +20,20 @@ SOURCE_LABELS = {
     "bbva": "BBVA",
     "manual": "Manual trade spreadsheet",
 }
+SOURCE_EXTENSIONS = {
+    "trade_republic": (".csv",),
+    "fineco": (".xlsx",),
+    "interactive_brokers": (".pdf",),
+    "etoro": (".xlsx",),
+    "revolut": (".csv",),
+    "intesa": (".xlsx",),
+    "bbva": (".xls",),
+    "manual": (".csv",),
+}
+
+
+def source_format_label(source: str) -> str:
+    return "/".join(extension.removeprefix(".").upper() for extension in SOURCE_EXTENSIONS[source])
 
 
 def _normalized_headers(path: Path) -> set[str]:
@@ -37,14 +51,17 @@ def detect_statement_source(path: Path, requested_source: str = "auto") -> str:
     """Return the configured source id or raise a user-facing validation error."""
 
     requested = requested_source.strip().casefold().replace("-", "_").replace(" ", "_")
-    if requested and requested != "auto":
-        if requested not in SOURCE_LABELS:
-            raise ValueError(f"Unsupported source: {requested_source}")
-        return requested
-
     suffix = path.suffix.casefold()
     if suffix not in ALLOWED_EXTENSIONS:
         raise ValueError("Supported statement formats are CSV, XLS, XLSX, and PDF")
+    if requested and requested != "auto":
+        if requested not in SOURCE_LABELS:
+            raise ValueError(f"Unsupported source: {requested_source}")
+        if suffix not in SOURCE_EXTENSIONS[requested]:
+            required = source_format_label(requested)
+            raise ValueError(f"{SOURCE_LABELS[requested]} imports require {required}; this file is {suffix[1:].upper()}")
+        return requested
+
     if suffix == ".pdf":
         return "interactive_brokers"
     if suffix == ".xls":

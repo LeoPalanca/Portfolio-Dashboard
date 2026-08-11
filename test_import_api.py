@@ -43,6 +43,9 @@ class ImportApiTest(unittest.TestCase):
         self.assertEqual(first.get_json()["movements"], 1)
         self.assertEqual(second.get_json()["status"], "duplicate")
         self.assertEqual(status.get_json()["movements"], 1)
+        supported = {item["id"]: item["format"] for item in status.get_json()["supported_sources"]}
+        self.assertEqual(supported["trade_republic"], "CSV")
+        self.assertEqual(supported["interactive_brokers"], "PDF")
         self.assertEqual(len(imported_files), 1)
 
     def test_rejects_unsupported_extension(self) -> None:
@@ -55,6 +58,17 @@ class ImportApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("Supported statement formats", response.get_json()["error"])
+
+    def test_rejects_source_and_format_mismatch(self) -> None:
+        with app.app.test_client() as client:
+            response = client.post(
+                "/api/imports",
+                data={"source": "fineco", "file": (io.BytesIO(TRADE_REPUBLIC_EXPORT), "export.csv")},
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Fineco imports require XLSX; this file is CSV", response.get_json()["error"])
 
 
 if __name__ == "__main__":

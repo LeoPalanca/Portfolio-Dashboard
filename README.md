@@ -119,6 +119,11 @@ Broker discovery patterns are configurable. The parsers currently support:
 - Manual trade CSV fallback
 - Configured snapshot portfolios
 
+These formats are platform-specific, not interchangeable. A Trade Republic import,
+for example, must be its supported CSV export; renaming or converting it to XLSX does
+not make it compatible. The browser and CLI validate the selected platform against
+the extension and then validate the file's expected headers or workbook sheets.
+
 Each non-primary portfolio is declared under a `[portfolios.<id>]` TOML table. A
 profile can specify its display name, snapshot pattern, history start, transaction
 adjustments, friction events, tax-loss metadata, and private action items. These
