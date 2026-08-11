@@ -3200,66 +3200,85 @@
       if (el) el.addEventListener("input", updateCalculator);
     });
 
-    /* ─── Colour-blind palette ─── */
+    /* ─── Display settings ─── */
+    const THEME_KEY = "theme";
     const PALETTE_KEY = "palette";
+    const root = document.documentElement;
+    const settingsToggle = document.getElementById("settings-toggle");
+    const settingsMenu = document.getElementById("settings-menu");
+    const themeChoices = Array.from(document.querySelectorAll("[data-theme-choice]"));
+    const colourblindInput = document.getElementById("setting-colourblind");
+
+    function storedValue(key) {
+      try { return localStorage.getItem(key); } catch (e) { return null; }
+    }
+
+    function storeValue(key, value) {
+      try {
+        if (value === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+      } catch (e) { /* private mode: setting applies for this page only */ }
+    }
+
+    // "system" is the absence of an override, which is why it has to clear the
+    // attribute rather than write one - otherwise there is no way back to it.
+    function applyTheme(choice) {
+      if (choice === "system") {
+        root.removeAttribute("data-theme");
+        storeValue(THEME_KEY, null);
+      } else {
+        root.setAttribute("data-theme", choice);
+        storeValue(THEME_KEY, choice);
+      }
+      themeChoices.forEach((btn) => {
+        btn.setAttribute("aria-checked", btn.dataset.themeChoice === choice ? "true" : "false");
+      });
+      renderChartsOnly();
+    }
 
     function applyPalette(useCb) {
-      const root = document.documentElement;
-      if (useCb) {
-        root.setAttribute("data-palette", "cb");
-      } else {
-        root.removeAttribute("data-palette");
-      }
-      const btn = document.getElementById("palette-toggle");
-      if (btn) btn.setAttribute("aria-pressed", useCb ? "true" : "false");
-      try { localStorage.setItem(PALETTE_KEY, useCb ? "cb" : "default"); } catch (e) { /* ignore */ }
+      if (useCb) root.setAttribute("data-palette", "cb");
+      else root.removeAttribute("data-palette");
+      storeValue(PALETTE_KEY, useCb ? "cb" : null);
+      if (colourblindInput) colourblindInput.checked = useCb;
       renderChartsOnly();
     }
 
-    const paletteToggle = document.getElementById("palette-toggle");
-    if (paletteToggle) {
-      paletteToggle.addEventListener("click", () => {
-        applyPalette(document.documentElement.getAttribute("data-palette") !== "cb");
+    function setSettingsOpen(open) {
+      if (!settingsMenu || !settingsToggle) return;
+      settingsMenu.hidden = !open;
+      settingsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    if (settingsToggle && settingsMenu) {
+      settingsToggle.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setSettingsOpen(settingsMenu.hidden);
       });
-      paletteToggle.setAttribute(
-        "aria-pressed",
-        document.documentElement.getAttribute("data-palette") === "cb" ? "true" : "false"
-      );
-    }
-
-    /* ─── Theme ─── */
-    const THEME_KEY = "theme";
-
-    function storedTheme() {
-      try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; }
-    }
-
-    function systemTheme() {
-      return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-    }
-
-    function activeTheme() {
-      return document.documentElement.getAttribute("data-theme") || systemTheme();
-    }
-
-    function applyTheme(theme) {
-      document.documentElement.setAttribute("data-theme", theme);
-      try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* ignore */ }
-      // Charts read their colours from computed tokens at draw time, so they
-      // need a repaint; CSS-driven parts re-theme on their own.
-      renderChartsOnly();
-    }
-
-    const themeToggle = document.getElementById("theme-toggle");
-    if (themeToggle) {
-      themeToggle.addEventListener("click", () => {
-        applyTheme(activeTheme() === "light" ? "dark" : "light");
+      settingsMenu.addEventListener("click", (event) => event.stopPropagation());
+      document.addEventListener("click", () => setSettingsOpen(false));
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !settingsMenu.hidden) {
+          setSettingsOpen(false);
+          settingsToggle.focus();
+        }
       });
     }
 
-    // Follow the OS while the user has not made an explicit choice.
+    themeChoices.forEach((btn) => {
+      btn.addEventListener("click", () => applyTheme(btn.dataset.themeChoice));
+    });
+    if (colourblindInput) {
+      colourblindInput.addEventListener("change", () => applyPalette(colourblindInput.checked));
+    }
+
+    // reflect whatever the pre-paint boot script already applied
+    applyTheme(storedValue(THEME_KEY) || "system");
+    applyPalette(storedValue(PALETTE_KEY) === "cb");
+
+    // follow the OS while no explicit choice is stored
     window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
-      if (!storedTheme()) renderChartsOnly();
+      if (!storedValue(THEME_KEY)) renderChartsOnly();
     });
 
     initializeSectionIdentity();

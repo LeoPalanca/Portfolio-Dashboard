@@ -93,6 +93,38 @@ class FrontendAssetTest(unittest.TestCase):
         self.assertIsNone(PLACEHOLDER_RE.search(html))
         self.assertIsNone(PLACEHOLDER_RE.search(js))
 
+    def test_display_settings_menu_is_present_and_labelled(self) -> None:
+        html = render()
+        self.assertIn('id="settings-toggle"', html)
+        self.assertIn('id="settings-menu"', html)
+        # the control must say what it does; an unlabelled icon does not
+        self.assertIn('aria-label="Display settings"', html)
+        self.assertIn('aria-haspopup="true"', html)
+        self.assertIn('role="radiogroup"', html)
+        for choice in ("light", "dark", "system"):
+            self.assertIn(f'data-theme-choice="{choice}"', html)
+        self.assertIn('id="setting-colourblind"', html)
+
+    def test_system_theme_is_reachable(self) -> None:
+        """The two-state toggle this replaced had no way back to 'follow the OS'.
+
+        'System' is the absence of an override, so choosing it must clear both the
+        attribute and the stored value rather than writing a third one.
+        """
+        with app.app.test_client() as client:
+            js = client.get("/static/app.js").get_data(as_text=True)
+
+        self.assertIn('if (choice === "system")', js)
+        self.assertIn('root.removeAttribute("data-theme")', js)
+        self.assertIn("storeValue(THEME_KEY, null)", js)
+
+    def test_settings_menu_closes_on_escape_and_outside_click(self) -> None:
+        with app.app.test_client() as client:
+            js = client.get("/static/app.js").get_data(as_text=True)
+
+        self.assertIn('event.key === "Escape"', js)
+        self.assertIn('document.addEventListener("click", () => setSettingsOpen(false))', js)
+
     def test_design_tokens_lint_clean(self) -> None:
         """Run the drift guard in-process so it is enforced without CI."""
         result = subprocess.run(
