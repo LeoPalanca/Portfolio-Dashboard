@@ -1,0 +1,20 @@
+# Copy this file to config.toml and point it at directories outside the repository.
+source_dir = "/path/to/portfolio-source-files"
+data_dir = "/path/to/portfolio-private-data"
+cache_dir = "/path/to/portfolio-cache"
+
+primary_portfolio_id = "primary"
+primary_portfolio_name = "Primary Portfolio"
+self_transfer_names = ["Your Name"]
+
+trade_republic_pattern = "broker_exports/*/*trade_republic*.csv"
+fineco_pattern = "broker_exports/*/*fineco*.xlsx"
+interactive_brokers_pattern = "broker_exports/*/*interactive_brokers*.pdf"
+etoro_pattern = "broker_exports/*/*etoro*.xlsx"
+revolut_pattern = "cash_exports/*/*account-statement*.csv"
+intesa_pattern = "cash_exports/*/*account_operations*.xlsx"
+
+[portfolios.household_a]
+display_name = "Household A"
+snapshot_pattern = "snapshots/*household_a*.csv"
+

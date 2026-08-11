@@ -1,0 +1,7 @@
+priority,enabled,source,match_field,match_type,pattern,category,subcategory,merchant
+10,1,all,merchant,contains,city market,Groceries,Supermarket,
+20,1,all,merchant,contains,metro transit,Transport & Fuel,Public transport,
+30,1,all,merchant,contains,example cloud,Subscriptions & Digital,Software,
+40,1,all,description,contains,monthly rent,Housing & Utilities,Rent,
+50,1,all,merchant,contains,example university,Education,Tuition,
+60,1,all,description,contains,refundable deposit,Credits,Housing deposit,Example Housing Deposit

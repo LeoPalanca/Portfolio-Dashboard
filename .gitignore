@@ -1,0 +1,42 @@
+# Local configuration and private data
+.env
+config.toml
+data/private/
+asset_exposures.csv
+asset_exposures.backup_*.csv
+asset_mappings.csv
+data/crypto_wallets.csv
+data/crypto_wallet_positions.csv
+data/crypto_wallet_transactions.csv
+data/expense_category_rules.csv
+data/watchlist.json
+tests/golden/local/
+
+# Runtime caches and state
+.*cache*.json
+data/eurostat_cpi_cache.json
+*.log
+*.pid
+
+# Local backups and generated files
+*.backup_*.csv
+*.bak
+data/etf_holdings/
+
+# Python/tooling artifacts
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.py[cod]
+build/
+dist/
+*.egg-info/
+
+# Editor/OS/session metadata
+.DS_Store
+.nodeterm/
+scratch/
+.idea/
+.vscode/
