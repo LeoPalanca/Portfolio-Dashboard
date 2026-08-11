@@ -73,6 +73,11 @@
               <span class="settings-switch-hint">Use blue and orange instead of green and red</span>
             </label>
           </div>
+          <div class="settings-group">
+            <div class="settings-label" id="settings-sections-label">Sections</div>
+            <ul class="settings-sections" id="settings-sections" aria-labelledby="settings-sections-label"></ul>
+            <button type="button" class="settings-reset" id="settings-sections-reset">Reset to default</button>
+          </div>
         </div>
       </div>
     </div>
@@ -140,7 +145,7 @@
     <div class="movers-panel" id="movers-panel" hidden></div>
 
     <!-- User Rankings -->
-    <section>
+    <section data-section="family-rankings">
       <div class="section-head expanded" data-collapse="rankings-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -168,7 +173,7 @@
     </section>
 
     <!-- Portfolio Value -->
-    <section>
+    <section data-section="portfolio-value">
       <div class="section-head expanded" data-collapse="value-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -185,7 +190,7 @@
     </section>
 
     <!-- Cash Flow Evolution -->
-    <section>
+    <section data-section="cash-flow-evolution">
       <div class="section-head expanded" data-collapse="cashflow-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -200,7 +205,7 @@
     </section>
 
     <!-- Current Holdings -->
-    <section>
+    <section data-section="current-holdings">
       <div class="section-head expanded" data-collapse="holdings-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -258,7 +263,7 @@
     </section>
 
     <!-- MyStyle Fee Compounding Calculator -->
-    <section id="mystyle-calc-section" class="is-hidden">
+    <section data-section="mystyle-fee-drag-calculator" id="mystyle-calc-section" class="is-hidden">
       <div class="section-head expanded" data-collapse="mystyle-calc-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -334,7 +339,7 @@
 
     <!-- Product-specific breakdowns belong in private configuration. -->
     <!-- Watchlist -->
-    <section>
+    <section data-section="watchlist">
       <div class="section-head expanded" data-collapse="watchlist-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -387,7 +392,7 @@
     </section>
 
     <!-- Stock News -->
-    <section>
+    <section data-section="stock-news">
       <div class="section-head" data-collapse="news-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -406,7 +411,7 @@
     </section>
 
     <!-- Portfolio Distribution -->
-    <section>
+    <section data-section="portfolio-distribution">
       <div class="section-head" data-collapse="distribution-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -472,7 +477,7 @@
     </section>
 
     <!-- Dividends -->
-    <section>
+    <section data-section="dividends">
       <div class="section-head" data-collapse="dividends-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -536,7 +541,7 @@
     </section>
 
     <!-- Cash Account Interest -->
-    <section>
+    <section data-section="cash-account-interest">
       <div class="section-head" data-collapse="cash-interest-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -582,7 +587,7 @@
     </section>
 
     <!-- Expenses -->
-    <section class="section-support" id="expenses-section">
+    <section data-section="expenses" class="section-support" id="expenses-section">
       <div class="section-head" data-collapse="expenses-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -686,7 +691,7 @@
     </section>
 
     <!-- Net Contributions -->
-    <section>
+    <section data-section="net-contributions">
       <div class="section-head" data-collapse="contributions-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -726,7 +731,7 @@
     </section>
 
     <!-- Taxes & Costs -->
-    <section>
+    <section data-section="taxes-and-costs">
       <div class="section-head" data-collapse="frictions-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -790,7 +795,7 @@
     </section>
 
     <!-- Portfolio Statistics -->
-    <section id="stats-section" class="is-hidden">
+    <section data-section="portfolio-statistics" id="stats-section" class="is-hidden">
       <div class="section-head" data-collapse="stats-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -875,7 +880,7 @@
     </section>
 
     <!-- Pricing Coverage -->
-    <section>
+    <section data-section="pricing-coverage">
       <div class="section-head" data-collapse="coverage-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -891,7 +896,7 @@
       </div>
     </section>
     <!-- Optional per-portfolio actions loaded from private configuration. -->
-    <section id="todos-section" class="is-hidden">
+    <section data-section="suggested-actions-and-to-dos" id="todos-section" class="is-hidden">
       <div class="section-head expanded" data-collapse="todos-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -906,7 +911,7 @@
         </div>
       </div>
     </section>
-    <section class="export-panel" aria-label="Export dashboard">
+    <section data-section="import-your-statements" class="export-panel" aria-label="Export dashboard">
       <div class="export-copy">
         <span class="section-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>

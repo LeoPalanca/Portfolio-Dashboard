@@ -125,6 +125,39 @@ class FrontendAssetTest(unittest.TestCase):
         self.assertIn('event.key === "Escape"', js)
         self.assertIn('document.addEventListener("click", () => setSettingsOpen(false))', js)
 
+    def test_every_section_has_a_stable_key(self) -> None:
+        """Section preferences are stored by key, so every section needs one."""
+        html = render()
+        main = html[html.index("<main>") : html.index("</main>")]
+        sections = re.findall(r"<section\b([^>]*)>", main)
+        self.assertTrue(sections)
+        without_key = [s for s in sections if "data-section=" not in s]
+        self.assertEqual(without_key, [], "sections cannot be reordered without a key")
+        keys = re.findall(r'data-section="([^"]+)"', main)
+        self.assertEqual(len(keys), len(set(keys)), "duplicate section keys")
+
+    def test_section_preferences_survive_an_unknown_key(self) -> None:
+        """A stored preference from an older build must not drop or duplicate sections."""
+        with app.app.test_client() as client:
+            js = client.get("/static/app.js").get_data(as_text=True)
+
+        # unknown keys are filtered against the current DOM...
+        self.assertIn("if (known.has(key) && !order.includes(key)) order.push(key);", js)
+        # ...and newly added sections fall back to their default position
+        self.assertIn(
+            "DEFAULT_ORDER.forEach((key) => { if (!order.includes(key)) order.push(key); });", js
+        )
+
+    def test_user_hidden_sections_use_their_own_attribute(self) -> None:
+        """Must not reuse .is-hidden, which the app itself drives."""
+        with app.app.test_client() as client:
+            js = client.get("/static/app.js").get_data(as_text=True)
+            css = client.get("/static/app.css").get_data(as_text=True)
+
+        self.assertIn('setAttribute("data-section-off", "")', js)
+        self.assertIn("[data-section-off]", css)
+        self.assertNotIn('classList.add("is-hidden")', js)
+
     def test_design_tokens_lint_clean(self) -> None:
         """Run the drift guard in-process so it is enforced without CI."""
         result = subprocess.run(

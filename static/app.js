@@ -455,7 +455,8 @@
         </div>
       `).join("");
 
-      document.getElementById("metrics").innerHTML = marketValueHtml + restHtml + variationHtml;
+      document.getElementById("metrics").innerHTML =
+        marketValueHtml + restHtml + `<div class="metrics-variations">${variationHtml}</div>`;
       renderMoversPanel();
     }
     function periodLabel(period) {
@@ -3280,6 +3281,131 @@
     window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
       if (!storedValue(THEME_KEY)) renderChartsOnly();
     });
+
+
+    /* ─── Section visibility and order ─── */
+    const SECTIONS_KEY = "sections";
+    const sectionsList = document.getElementById("settings-sections");
+    const sectionsReset = document.getElementById("settings-sections-reset");
+    const mainEl = document.querySelector("main");
+
+    function allSections() {
+      return Array.from(document.querySelectorAll("main > section[data-section]"));
+    }
+
+    const DEFAULT_ORDER = allSections().map((el) => el.dataset.section);
+
+    function readSectionPrefs() {
+      let stored = null;
+      try { stored = JSON.parse(localStorage.getItem(SECTIONS_KEY) || "null"); } catch (e) { stored = null; }
+      const known = new Set(DEFAULT_ORDER);
+      const order = [];
+      const hidden = new Set();
+      if (stored && Array.isArray(stored.order)) {
+        stored.order.forEach((key) => {
+          if (known.has(key) && !order.includes(key)) order.push(key);
+        });
+        (stored.hidden || []).forEach((key) => { if (known.has(key)) hidden.add(key); });
+      }
+      // sections added since the preference was saved keep their default position
+      DEFAULT_ORDER.forEach((key) => { if (!order.includes(key)) order.push(key); });
+      return { order, hidden };
+    }
+
+    function writeSectionPrefs(prefs) {
+      try {
+        localStorage.setItem(SECTIONS_KEY, JSON.stringify({
+          order: prefs.order,
+          hidden: Array.from(prefs.hidden)
+        }));
+      } catch (e) { /* private mode: applies for this page only */ }
+    }
+
+    function applySectionPrefs(prefs) {
+      const byKey = new Map(allSections().map((el) => [el.dataset.section, el]));
+      prefs.order.forEach((key) => {
+        const el = byKey.get(key);
+        if (!el) return;
+        if (prefs.hidden.has(key)) el.setAttribute("data-section-off", "");
+        else el.removeAttribute("data-section-off");
+        mainEl.appendChild(el);
+      });
+    }
+
+    function sectionTitle(el) {
+      const heading = el.querySelector("h2");
+      return heading ? heading.textContent.trim() : el.dataset.section;
+    }
+
+    function renderSectionsList(prefs) {
+      if (!sectionsList) return;
+      const byKey = new Map(allSections().map((el) => [el.dataset.section, el]));
+      sectionsList.innerHTML = "";
+      prefs.order.forEach((key, index) => {
+        const el = byKey.get(key);
+        if (!el) return;
+        const li = document.createElement("li");
+        if (prefs.hidden.has(key)) li.classList.add("is-off");
+
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = !prefs.hidden.has(key);
+        box.id = `section-toggle-${key}`;
+        box.addEventListener("change", () => {
+          if (box.checked) prefs.hidden.delete(key);
+          else prefs.hidden.add(key);
+          commitSections(prefs);
+        });
+
+        const label = document.createElement("label");
+        label.htmlFor = box.id;
+        label.textContent = sectionTitle(el);
+
+        const up = document.createElement("button");
+        up.type = "button";
+        up.className = "settings-move";
+        up.textContent = "\u2191";
+        up.setAttribute("aria-label", `Move ${label.textContent} up`);
+        up.disabled = index === 0;
+        up.addEventListener("click", () => moveSection(prefs, index, -1));
+
+        const down = document.createElement("button");
+        down.type = "button";
+        down.className = "settings-move";
+        down.textContent = "\u2193";
+        down.setAttribute("aria-label", `Move ${label.textContent} down`);
+        down.disabled = index === prefs.order.length - 1;
+        down.addEventListener("click", () => moveSection(prefs, index, 1));
+
+        li.append(box, label, up, down);
+        sectionsList.appendChild(li);
+      });
+    }
+
+    function moveSection(prefs, index, delta) {
+      const target = index + delta;
+      if (target < 0 || target >= prefs.order.length) return;
+      const [key] = prefs.order.splice(index, 1);
+      prefs.order.splice(target, 0, key);
+      commitSections(prefs);
+    }
+
+    function commitSections(prefs) {
+      writeSectionPrefs(prefs);
+      applySectionPrefs(prefs);
+      renderSectionsList(prefs);
+    }
+
+    let sectionPrefs = readSectionPrefs();
+    applySectionPrefs(sectionPrefs);
+    renderSectionsList(sectionPrefs);
+
+    if (sectionsReset) {
+      sectionsReset.addEventListener("click", () => {
+        sectionPrefs = { order: DEFAULT_ORDER.slice(), hidden: new Set() };
+        commitSections(sectionPrefs);
+      });
+    }
 
     initializeSectionIdentity();
     initializeSectionWrapButtons();
