@@ -18,7 +18,7 @@ SOURCE_LABELS = {
     "revolut": "Revolut",
     "intesa": "Intesa Sanpaolo",
     "bbva": "BBVA",
-    "manual": "Manual trade spreadsheet",
+    "manual": "Personal trades",
 }
 SOURCE_EXTENSIONS = {
     "trade_republic": (".csv",),
@@ -28,8 +28,10 @@ SOURCE_EXTENSIONS = {
     "revolut": (".csv",),
     "intesa": (".xlsx",),
     "bbva": (".xls",),
-    "manual": (".csv",),
+    "manual": (".csv", ".xlsx"),
 }
+
+PERSONAL_TRADE_REQUIRED_HEADERS = {"date", "action", "asset", "quantity", "price"}
 
 
 def source_format_label(source: str) -> str:
@@ -72,7 +74,7 @@ def detect_statement_source(path: Path, requested_source: str = "auto") -> str:
             return "trade_republic"
         if {"tipo", "data di completamento", "descrizione", "importo", "state"}.issubset(headers):
             return "revolut"
-        if len(headers) >= 17:
+        if PERSONAL_TRADE_REQUIRED_HEADERS.issubset(headers) or len(headers) >= 17:
             return "manual"
         raise ValueError("The CSV headers do not match a supported Trade Republic, Revolut, or manual export")
 
@@ -91,11 +93,13 @@ def detect_statement_source(path: Path, requested_source: str = "auto") -> str:
         for sheet in workbook.worksheets[:3]:
             for row in sheet.iter_rows(max_row=30, values_only=True):
                 values = {str(value).strip().casefold() for value in row if value is not None}
+                if PERSONAL_TRADE_REQUIRED_HEADERS.issubset(values):
+                    return "manual"
                 if {"data", "operazione", "importo"}.issubset(values):
                     return "intesa"
     finally:
         workbook.close()
-    raise ValueError("The workbook sheets do not match a supported Fineco, eToro, or Intesa export")
+    raise ValueError("The workbook sheets do not match a supported Fineco, eToro, Intesa, or Personal trades export")
 
 
 def import_destination(source_dir: Path, source: str, digest: str, original_name: str) -> Path:
@@ -114,6 +118,7 @@ def import_destination(source_dir: Path, source: str, digest: str, original_name
         filename = f"bbva-{stamp}-{digest[:10]}{suffix}"
         return source_dir / "cash_exports" / source / filename
     if source == "manual":
-        return source_dir / "Spreadsheet - Trades.csv"
+        filename = f"personal-trades-{stamp}-{digest[:10]}{suffix}"
+        return source_dir / "broker_exports" / source / filename
     filename = f"{token}-{stamp}-{digest[:10]}{suffix}"
     return source_dir / "broker_exports" / source / filename

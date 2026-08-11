@@ -99,6 +99,7 @@ def print_file_layout(source_dir: Path) -> None:
     print(f"  {source_dir / 'broker_exports' / 'fineco'}  (Fineco XLSX)")
     print(f"  {source_dir / 'broker_exports' / 'interactive_brokers'}  (Interactive Brokers PDF)")
     print(f"  {source_dir / 'broker_exports' / 'etoro'}  (eToro XLSX)")
+    print(f"  {source_dir / 'broker_exports' / 'manual'}  (Personal trades CSV/XLSX)")
     print(f"  {source_dir / 'cash_exports' / 'revolut'}  (Revolut CSV)")
     print(f"  {source_dir / 'cash_exports' / 'intesa'}  (Intesa XLSX)")
     print(f"  {source_dir / 'cash_exports' / 'bbva'}  (BBVA XLS)")

@@ -46,6 +46,7 @@ class ImportApiTest(unittest.TestCase):
         supported = {item["id"]: item["format"] for item in status.get_json()["supported_sources"]}
         self.assertEqual(supported["trade_republic"], "CSV")
         self.assertEqual(supported["interactive_brokers"], "PDF")
+        self.assertEqual(supported["manual"], "CSV/XLSX")
         self.assertEqual(len(imported_files), 1)
 
     def test_rejects_unsupported_extension(self) -> None:

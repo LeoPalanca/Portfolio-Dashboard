@@ -116,13 +116,25 @@ Broker discovery patterns are configurable. The parsers currently support:
 - Revolut account-statement CSVs
 - Intesa account-operation workbooks
 - BBVA account workbooks
-- Manual trade CSV fallback
+- Personal trade CSV/XLSX fallback (downloadable templates are available in onboarding)
 - Configured snapshot portfolios
 
 These formats are platform-specific, not interchangeable. A Trade Republic import,
 for example, must be its supported CSV export; renaming or converting it to XLSX does
 not make it compatible. The browser and CLI validate the selected platform against
 the extension and then validate the file's expected headers or workbook sheets.
+
+Personal trade templates use the same header-based schema in CSV and XLSX:
+
+```text
+date,action,asset,isin,broker,currency,quantity,price,fees,tax,total
+```
+
+`date`, `action`, `asset`, `quantity`, and `price` are required. Dates use
+`YYYY-MM-DD`; actions are `BUY` or `SELL`. ISIN, broker, currency, fees, tax, and
+total are optional. Quantity and price must be positive. `total` is the absolute
+cash value and is derived when omitted. The former positional 17-column personal
+CSV remains supported for existing installations.
 
 Each non-primary portfolio is declared under a `[portfolios.<id>]` TOML table. A
 profile can specify its display name, snapshot pattern, history start, transaction

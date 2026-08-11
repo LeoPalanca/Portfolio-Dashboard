@@ -63,6 +63,19 @@ ROOT_DIR = SETTINGS.source_dir
 PRIMARY_PORTFOLIO_ID = SETTINGS.primary_portfolio_id.lower()
 PRIMARY_PORTFOLIO_NAME = SETTINGS.primary_portfolio_name
 TRADES_CSV = ROOT_DIR / SETTINGS.manual_trades_file
+PERSONAL_TRADE_COLUMNS = (
+    "date",
+    "action",
+    "asset",
+    "isin",
+    "broker",
+    "currency",
+    "quantity",
+    "price",
+    "fees",
+    "tax",
+    "total",
+)
 TRADE_REPUBLIC_PATTERN = SETTINGS.trade_republic_pattern
 FINECO_PATTERN = SETTINGS.fineco_pattern
 IB_PATTERN = SETTINGS.interactive_brokers_pattern
@@ -373,21 +386,144 @@ def read_trades() -> tuple[list[Trade], dict[str, Any]]:
             "sources": broker_sources,
         }
 
-    if not TRADES_CSV.exists():
+    personal_files = manual_trade_files()
+    if not personal_files:
         return [], {
             "kind": "No imported statements",
             "relative_path": "",
             "sources": [],
         }
-    trades = read_manual_trades(TRADES_CSV)
+    personal_file = personal_files[-1]
+    trades = read_manual_trades(personal_file)
     return trades, {
-        "path": TRADES_CSV,
-        "kind": "Manual spreadsheet",
-        "relative_path": TRADES_CSV.name,
+        "path": personal_file,
+        "kind": "Personal trades",
+        "relative_path": configured_path_label(personal_file),
     }
 
 
-def read_manual_trades(path: Path) -> list[Trade]:
+def manual_trade_files() -> list[Path]:
+    candidates = [TRADES_CSV] if TRADES_CSV.exists() else []
+    personal_directory = ROOT_DIR / "broker_exports" / "manual"
+    candidates.extend(personal_directory.glob("*.csv"))
+    candidates.extend(personal_directory.glob("*.xlsx"))
+
+    def sort_key(path: Path) -> tuple[float, str]:
+        try:
+            return path.stat().st_mtime, path.name
+        except OSError:
+            return 0.0, path.name
+
+    return sorted(set(candidates), key=sort_key)
+
+
+def normalize_personal_header(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().casefold()).strip("_")
+
+
+def parse_personal_trade_date(value: Any) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    raw = str(value or "").strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y"):
+        try:
+            return datetime.strptime(raw, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"Unsupported personal trade date: {raw!r}; use YYYY-MM-DD")
+
+
+def personal_trade_from_row(row: dict[str, Any], line_number: int) -> Trade:
+    values = {normalize_personal_header(key): value for key, value in row.items()}
+    asset = str(values.get("asset") or "").strip()
+    if not asset:
+        raise ValueError(f"Personal trades row {line_number} is missing asset")
+    action_raw = str(values.get("action") or "").strip().upper()
+    if action_raw in {"BUY", "ACQUISTO", "PURCHASE"}:
+        action = "Acquisto"
+        direction = Decimal("1")
+    elif action_raw in {"SELL", "VENDITA", "SALE"}:
+        action = "Vendita"
+        direction = Decimal("-1")
+    else:
+        raise ValueError(f"Personal trades row {line_number} action must be BUY or SELL")
+
+    quantity = abs(parse_decimal(str(values.get("quantity") or "")))
+    price = abs(parse_decimal(str(values.get("price") or "")))
+    if quantity <= ZERO or price <= ZERO:
+        raise ValueError(f"Personal trades row {line_number} requires positive quantity and price")
+    fees = abs(parse_decimal(str(values.get("fees") or "")))
+    tax = abs(parse_decimal(str(values.get("tax") or "")))
+    total_raw = str(values.get("total") or "").strip()
+    gross = price * quantity
+    derived_total = gross + fees + tax if direction > ZERO else max(ZERO, gross - fees - tax)
+    total = abs(parse_decimal(total_raw)) if total_raw else derived_total
+    currency = str(values.get("currency") or "EUR").strip().upper() or "EUR"
+    return Trade(
+        asset=asset,
+        isin=str(values.get("isin") or "").strip().upper(),
+        broker=str(values.get("broker") or "Personal").strip() or "Personal",
+        action=action,
+        currency_hint=currency,
+        cash_currency=currency,
+        date=parse_personal_trade_date(values.get("date")),
+        price=price,
+        quantity=quantity,
+        quantity_diff=quantity * direction,
+        total_spend=total,
+        fees=fees,
+        tax=tax,
+        grand_total=total,
+        grand_total_present=bool(total_raw),
+        source="manual",
+    )
+
+
+def read_standard_personal_csv(path: Path) -> list[Trade]:
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        headers = {normalize_personal_header(value) for value in (reader.fieldnames or [])}
+        required = {"date", "action", "asset", "quantity", "price"}
+        if not required.issubset(headers):
+            missing = ", ".join(sorted(required - headers))
+            raise ValueError(f"Personal trades CSV is missing required columns: {missing}")
+        return [
+            personal_trade_from_row(row, line_number)
+            for line_number, row in enumerate(reader, start=2)
+            if any(str(value or "").strip() for value in row.values())
+        ]
+
+
+def read_personal_xlsx(path: Path) -> list[Trade]:
+    workbook = load_workbook(path, data_only=True, read_only=True)
+    try:
+        sheet = workbook["Trades"] if "Trades" in workbook.sheetnames else workbook.active
+        rows = iter(sheet.iter_rows(values_only=True))
+        headers: list[str] | None = None
+        header_row_number = 0
+        for header_row_number, row in enumerate(rows, start=1):
+            candidate = [normalize_personal_header(value) for value in row]
+            if {"date", "action", "asset", "quantity", "price"}.issubset(set(candidate)):
+                headers = candidate
+                break
+            if header_row_number >= 30:
+                break
+        if headers is None:
+            raise ValueError("Personal trades XLSX is missing date, action, asset, quantity, and price columns")
+        trades = []
+        for row_number, row in enumerate(rows, start=header_row_number + 1):
+            if not any(value is not None and str(value).strip() for value in row):
+                continue
+            record = {header: row[index] if index < len(row) else None for index, header in enumerate(headers) if header}
+            trades.append(personal_trade_from_row(record, row_number))
+        return trades
+    finally:
+        workbook.close()
+
+
+def read_legacy_manual_csv(path: Path) -> list[Trade]:
     trades: list[Trade] = []
     with path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.reader(handle)
@@ -424,6 +560,19 @@ def read_manual_trades(path: Path) -> list[Trade]:
                 )
             )
 
+    return sorted(trades, key=lambda item: (item.date, item.asset, item.action))
+
+
+def read_manual_trades(path: Path) -> list[Trade]:
+    if path.suffix.casefold() == ".xlsx":
+        trades = read_personal_xlsx(path)
+    else:
+        with path.open(newline="", encoding="utf-8-sig") as handle:
+            headers = {normalize_personal_header(value) for value in next(csv.reader(handle), [])}
+        if {"date", "action", "asset", "quantity", "price"}.issubset(headers):
+            trades = read_standard_personal_csv(path)
+        else:
+            trades = read_legacy_manual_csv(path)
     return sorted(trades, key=lambda item: (item.date, item.asset, item.action))
 
 
@@ -6974,7 +7123,7 @@ def import_status_payload() -> dict[str, Any]:
         or latest_fineco_export()
         or latest_ib_export()
         or latest_etoro_export()
-        or TRADES_CSV.exists()
+        or manual_trade_files()
     )
     return {
         **ledger,
@@ -6997,6 +7146,57 @@ def import_status_payload() -> dict[str, Any]:
 @app.get("/api/imports/status")
 def api_import_status():
     return jsonify(import_status_payload())
+
+
+@app.get("/api/imports/template")
+def api_personal_trade_template():
+    template_format = (request.args.get("format") or "csv").strip().casefold()
+    if template_format == "csv":
+        text_output = io.StringIO()
+        csv.writer(text_output).writerow(PERSONAL_TRADE_COLUMNS)
+        output = io.BytesIO(text_output.getvalue().encode("utf-8-sig"))
+        return send_file(output, mimetype="text/csv", as_attachment=True, download_name="personal-trades-template.csv")
+    if template_format == "xlsx":
+        from openpyxl.styles import Font, PatternFill
+        from openpyxl.worksheet.datavalidation import DataValidation
+
+        workbook = Workbook()
+        trades_sheet = workbook.active
+        trades_sheet.title = "Trades"
+        trades_sheet.append(PERSONAL_TRADE_COLUMNS)
+        trades_sheet.freeze_panes = "A2"
+        trades_sheet.auto_filter.ref = "A1:K1"
+        header_fill = PatternFill("solid", fgColor="1E3A5F")
+        for cell in trades_sheet[1]:
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = header_fill
+        widths = (14, 12, 28, 18, 18, 12, 14, 14, 12, 12, 16)
+        for index, width in enumerate(widths, start=1):
+            trades_sheet.column_dimensions[chr(64 + index)].width = width
+        action_validation = DataValidation(type="list", formula1='"BUY,SELL"', allow_blank=False)
+        trades_sheet.add_data_validation(action_validation)
+        action_validation.add("B2:B10000")
+
+        instructions = workbook.create_sheet("Instructions")
+        instructions.append(("Personal trades template", "Enter one transaction per row on the Trades sheet."))
+        instructions.append(("Required", "date, action, asset, quantity, price"))
+        instructions.append(("Date", "Use YYYY-MM-DD; Excel date cells are also accepted."))
+        instructions.append(("Action", "BUY or SELL"))
+        instructions.append(("Optional", "isin, broker, currency, fees, tax, total"))
+        instructions.append(("Total", "Absolute cash value. If blank, it is derived from price, quantity, fees, and tax."))
+        instructions.column_dimensions["A"].width = 20
+        instructions.column_dimensions["B"].width = 88
+        instructions["A1"].font = Font(bold=True)
+        output = io.BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name="personal-trades-template.xlsx",
+        )
+    return jsonify({"error": "Template format must be csv or xlsx"}), 400
 
 
 @app.post("/api/imports")
@@ -7591,6 +7791,16 @@ HTML = r"""<!doctype html>
     .import-file-name { margin-top: 8px; color: var(--blue); font-size: 12px; }
     .import-supported { padding: 10px 12px; border-radius: 8px; background: rgba(148,163,184,0.06); }
     .import-supported strong { color: var(--ink-secondary); }
+    .import-templates { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+    .import-templates a {
+      padding: 5px 9px;
+      border: 1px solid rgba(96,165,250,0.24);
+      border-radius: 7px;
+      color: var(--blue);
+      text-decoration: none;
+      background: rgba(96,165,250,0.06);
+    }
+    .import-templates a:hover { border-color: rgba(96,165,250,0.48); color: var(--ink); }
     .import-options { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
     .import-options label { color: var(--muted); font-size: 12px; }
     .import-options select { min-width: 210px; }
@@ -10268,7 +10478,12 @@ HTML = r"""<!doctype html>
             </span>
             <input id="import-file" name="file" type="file" accept=".csv,.xls,.xlsx,.pdf" required>
           </label>
-          <p class="import-supported"><strong>Supported:</strong> Trade Republic CSV · Fineco XLSX · Interactive Brokers PDF · eToro XLSX · Revolut CSV · Intesa XLSX · BBVA XLS · Manual trades CSV</p>
+          <p class="import-supported"><strong>Supported:</strong> Trade Republic CSV · Fineco XLSX · Interactive Brokers PDF · eToro XLSX · Revolut CSV · Intesa XLSX · BBVA XLS · Personal trades CSV/XLSX</p>
+          <div class="import-templates">
+            <span>Personal trade template:</span>
+            <a href="/api/imports/template?format=csv" download>CSV</a>
+            <a href="/api/imports/template?format=xlsx" download>XLSX</a>
+          </div>
           <div class="import-options">
             <label for="import-source">Statement source</label>
             <select id="import-source" name="source">
@@ -10280,7 +10495,7 @@ HTML = r"""<!doctype html>
               <option value="revolut">Revolut — CSV</option>
               <option value="intesa">Intesa Sanpaolo — XLSX</option>
               <option value="bbva">BBVA — XLS</option>
-              <option value="manual">Manual trade spreadsheet — CSV</option>
+              <option value="manual">Personal trades — CSV/XLSX</option>
             </select>
           </div>
           <div class="import-status" id="import-status" role="status" aria-live="polite"></div>
