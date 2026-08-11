@@ -160,9 +160,15 @@ logs_app() {
 clean_cache() {
     echo -e "${BLUE}[*] Cleaning dashboard cache files...${NC}"
     local count=0
-    for cache_file in ".price_cache.json" ".price_symbol_cache.json" ".news_cache.json" ".history_cache.json"; do
-        if [ -f "${APP_DIR}/${cache_file}" ]; then
-            rm -f "${APP_DIR}/${cache_file}"
+    local cache_dir
+    cache_dir=$(cd "$APP_DIR" && "$PYTHON_BIN" -c 'from src.portfolio_dashboard.config import get_settings; print(get_settings().cache_dir)')
+    if [ -z "$cache_dir" ]; then
+        echo -e "${RED}[-] Could not resolve the configured cache directory.${NC}"
+        return 1
+    fi
+    for cache_file in "prices.json" "price-symbols.json" "news.json" "history.json" "watchlist.json" "eurostat-cpi.json"; do
+        if [ -f "${cache_dir}/${cache_file}" ]; then
+            rm -f "${cache_dir}/${cache_file}"
             echo -e "  Deleted ${cache_file}"
             count=$((count+1))
         fi
