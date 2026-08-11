@@ -1,41 +1,47 @@
 # Design Tokens
 
-**Target release: 0.4 (layout)** — current shipped version is 0.3.1.
+**Shipped in 0.4.** This began as the specification for the layout pass and now documents the
+system as built. The migration tables are kept because they explain *why* each value is what
+it is.
 
-This is the specification for the 0.4 layout pass. It defines the token system, the light and
-dark themes, and the exact mapping from every off-system value currently in the codebase to
-its replacement.
-
-Scope note: 0.4 is a **consistency** release, not a visual redesign. Applied correctly, the
-mappings below change almost nothing visually in dark mode — they replace eyeballed values
-with scale values and add a light theme. The actual aesthetic redesign comes after.
+0.4 was a **consistency** release, not a visual redesign: eyeballed values were replaced with
+scale values and a light theme was added. Dark mode is visually unchanged apart from one
+contrast fix. The aesthetic redesign comes after.
 
 ---
 
-## Current state
+## Results
 
-Measured against `app.py:7594` (the 270,657-char inline frontend: 1,987 CSS lines / 386 rules,
-3,239 JS lines, 952 markup lines).
+Starting point was `app.py:7594` — a 270,657-char inline frontend (1,987 CSS lines / 386 rules,
+3,239 JS lines, 952 markup lines) inside a Python string literal.
 
-| Dimension | Distinct values today | Target |
+| Dimension | Before | After |
 | --- | --- | --- |
-| Spacing | 23 (of 214 uses) | 7 |
-| Font size | 12 | 7 |
-| Border radius | 11 | 4 |
-| Box shadow | 20 (of 30 uses) | 4 |
-| Transition | 21 (9 durations) | 3 durations, 2 easings |
-| Hex colours | 32 across CSS/JS/markup | 0 outside the theme blocks |
-| z-index | 5 unscaled (1, 5, 90, 100, 1200) | 5 named |
+| Frontend location | one string literal in `app.py` | `templates/` + `static/` |
+| `app.py` | 13,773 lines | 7,599 lines |
+| Spacing | 23 literals (214 uses) | 7 scale tokens (+ `1px`/`2px` hairlines) |
+| Font size | 12 values | 7 steps |
+| Border radius | 11 values | 4 tokens |
+| Box shadow | 28 bespoke | 4 elevation tiers |
+| Transition | 11 durations | 3 tokens, 2 easings |
+| Colour literals in JS | 16 hex + 30 rgba | 0 |
+| Colour literals in CSS body | 32 hex + 187 rgba | 0 |
+| z-index | 5 arbitrary | 5 named |
+| Themes | dark only | dark + light, OS-aware, toggleable |
 
-Two defects to fix while we are here:
+Enforced by `scripts/lint_design_tokens.py --strict`, which runs in CI and as a test.
 
-- **`--text-sub` is a ghost token.** Used 8× as `var(--text-sub, #94a3b8)` — 7 in JS, 1 in
-  markup — and never defined. The fallback always wins, so `#94a3b8` renders as an
-  undocumented third secondary-text grey alongside `--ink-secondary` and `--muted`.
-- **`--muted #64748b` fails WCAG AA**: 4.02:1 on `--bg`, 3.73:1 on `--panel-solid`, and it is
-  used for 11–12px label text. Fixed below.
+Two defects fixed along the way:
 
-Six tokens are defined and never referenced — delete them: `--glass`, `--pink-dim`,
+- **`--text-sub` was a ghost token** — used 8× as `var(--text-sub, #94a3b8)` and never defined,
+  so the fallback always won and `#94a3b8` acted as an undocumented third grey.
+- **`color: var(--ink;)`** in the subcategory table — a stray semicolon inside the parentheses
+  made it invalid CSS, so that colour had never applied. Found by the linter.
+
+And **`--muted #64748b` failed WCAG AA** (4.02:1 on `--bg`, 3.73:1 on `--panel-solid`) at
+11–12px. Now `#7c8ba1` at 5.52:1.
+
+Six tokens were defined and never referenced, and are gone: `--glass`, `--pink-dim`,
 `--violet-dim`, `--gradient-1`, `--gradient-2`, `--gradient-3`.
 
 ---
@@ -50,8 +56,9 @@ Two tiers. Component CSS may **only** reference tier 2.
    what it looks like. A finance dashboard should never say "green" in a stylesheet; it should
    say "gain".
 
-Hue-named legacy aliases (`--blue`, `--green`, …) are kept as pointers to the semantic roles
-so the 386 existing rules keep working during migration. They get deleted once call sites move.
+Hue-named aliases (`--blue`, `--green`, …) existed during the migration so the 386 existing
+rules kept working while call sites moved one commit at a time. All 253 have since been
+migrated and the aliases are gone.
 
 ### Theme switching
 
@@ -287,182 +294,57 @@ Replaces `1, 5, 90, 100, 1200`.
 | `--z-modal` | `1000` | dialogs, import onboarding |
 
 ---
+## The theme block
 
-## Ready-to-paste theme block
+The live definitions are in [`static/app.css`](../static/app.css) — `:root` for dark, then the
+same light values under both `@media (prefers-color-scheme: light) :root:not([data-theme="dark"])`
+and `:root[data-theme="light"]` so an explicit choice wins in either direction. The duplication
+is deliberate: plain CSS has no way to share one declaration block between a media query and an
+attribute selector, and a test asserts the two copies never drift apart.
 
-Replaces the current `:root` block wholesale.
+Alongside the themed roles sit two deliberately **theme-invariant** groups:
 
-```css
-:root {
-  /* ---- surfaces ---- */
-  --surface-page:    #0c0f1a;
-  --surface-panel:   #111827;
-  --surface-raised:  #1e293b;
-  --surface-overlay: rgba(17, 24, 39, 0.70);
+- `--brand-*` — broker marks. Trade Republic is white and Fineco is yellow in light mode too,
+  so these are literals on purpose and the linter exempts them.
+- the scales (`--space-*`, `--text-*`, `--radius-*`, `--motion-*`, `--z-*`) — geometry and
+  timing do not change with colour.
 
-  /* ---- text ---- */
-  --text-primary:   #f1f5f9;
-  --text-secondary: #cbd5e1;
-  --text-muted:     #7c8ba1;
+## How it was done
 
-  /* ---- borders ---- */
-  --border:        rgba(148, 163, 184, 0.12);
-  --border-strong: rgba(148, 163, 184, 0.20);
+Each step was a separate commit, individually revertible, with the suite green throughout:
 
-  /* ---- semantic ---- */
-  --accent:   #60a5fa;
-  --positive: #34d399;
-  --negative: #f87171;
-  --warning:  #fbbf24;
+1. `6562cdc` extract the frontend out of `app.py` — verified byte-identical
+2. `a645abb` two-tier theme system + light mode + the linter
+3. `bc8ff52` presentation out of JS and inline attributes
+4. `17a4ffd` collapse the scales (389 replacements)
+5. `f582731` theme toggle
+6. `63fcc01` retire the legacy aliases (253 call sites)
 
-  /* ---- chart series ---- */
-  --series-teal:   #2dd4bf;
-  --series-violet: #a78bfa;
-  --series-cyan:   #22d3ee;
-  --series-pink:   #f472b6;
-
-  /* ---- derived fills ---- */
-  --accent-dim:   color-mix(in srgb, var(--accent)   15%, transparent);
-  --positive-dim: color-mix(in srgb, var(--positive) 12%, transparent);
-  --negative-dim: color-mix(in srgb, var(--negative) 12%, transparent);
-  --warning-dim:  color-mix(in srgb, var(--warning)  12%, transparent);
-
-  /* ---- elevation ---- */
-  --elev-0: none;
-  --elev-1: 0 1px 3px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.04);
-  --elev-2: 0 8px 20px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06);
-  --elev-3: 0 12px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.08);
-  --elev-glow: 0 0 20px var(--accent-dim);
-
-  /* ---- scales (theme-invariant) ---- */
-  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
-  --space-5: 24px; --space-6: 32px; --space-7: 48px;
-
-  --text-2xs: 10px; --text-xs: 11px; --text-sm: 12px; --text-base: 13px;
-  --text-lg: 16px;  --text-xl: 19px; --text-2xl: 22px;
-
-  --radius-sm: 8px; --radius-md: 10px; --radius-lg: 14px; --radius-pill: 999px;
-
-  --motion-fast: 120ms; --motion-base: 200ms; --motion-slow: 360ms;
-  --ease:     cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-out: cubic-bezier(0, 0, 0.2, 1);
-
-  --z-base: 1; --z-sticky: 10; --z-header: 100; --z-overlay: 500; --z-modal: 1000;
-
-  /* ---- legacy aliases: delete as call sites migrate ---- */
-  --bg: var(--surface-page);
-  --bg-secondary: var(--surface-panel);
-  --panel: var(--surface-overlay);
-  --panel-solid: var(--surface-panel);
-  --panel-hover: var(--surface-raised);
-  --ink: var(--text-primary);
-  --ink-secondary: var(--text-secondary);
-  --muted: var(--text-muted);
-  --text-sub: var(--text-muted);        /* was the undefined ghost token */
-  --line: var(--border);
-  --line-strong: var(--border-strong);
-  --blue: var(--accent);
-  --green: var(--positive);
-  --red: var(--negative);
-  --amber: var(--warning);
-  --teal: var(--series-teal);
-  --violet: var(--series-violet);
-  --cyan: var(--series-cyan);
-  --pink: var(--series-pink);
-  --blue-dim: var(--accent-dim);
-  --green-dim: var(--positive-dim);
-  --red-dim: var(--negative-dim);
-  --amber-dim: var(--warning-dim);
-  --shadow: var(--elev-2);
-  --shadow-lg: var(--elev-3);
-  --shadow-glow: var(--elev-glow);
-  --radius: var(--radius-lg);
-}
-
-/* Light theme — OS preference, unless explicitly overridden to dark */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) { /* @import light-values */ }
-}
-/* Light theme — explicit toggle, wins in both directions */
-:root[data-theme="light"] { /* @import light-values */ }
-```
-
-Both light selectors carry the same declarations:
-
-```css
-  --surface-page:    #f7f8fa;
-  --surface-panel:   #ffffff;
-  --surface-raised:  #f1f5f9;
-  --surface-overlay: rgba(255, 255, 255, 0.80);
-
-  --text-primary:   #0f172a;
-  --text-secondary: #334155;
-  --text-muted:     #5b6878;
-
-  --border:        rgba(15, 23, 42, 0.10);
-  --border-strong: rgba(15, 23, 42, 0.18);
-
-  --accent:   #2563eb;
-  --positive: #047857;
-  --negative: #dc2626;
-  --warning:  #b45309;
-
-  --series-teal:   #0f766e;
-  --series-violet: #6d28d9;
-  --series-cyan:   #0e7490;
-  --series-pink:   #be185d;
-
-  --elev-1: 0 1px 2px rgba(15,23,42,0.06);
-  --elev-2: 0 4px 12px rgba(15,23,42,0.08);
-  --elev-3: 0 12px 28px rgba(15,23,42,0.12);
-  --elev-glow: 0 0 0 3px var(--accent-dim);
-```
-
-The `--gradient-accent` token needs a light variant too; the other three gradients are unused
-and get deleted.
-
----
-
-## Execution order for 0.4
-
-The frontend is still a single string literal at `app.py:7594`, and **262 inline-style
-touchpoints** (69 in markup, 128 in JS template strings, 64 `el.style.x =` assignments) mean
-presentation currently lives in JavaScript. You cannot theme what is hardcoded in a template
-string, so extraction has to come first.
-
-1. **Extract** the literal to `static/app.css`, `static/app.js`, `templates/index.html`.
-   Pure move, zero behaviour change. This is also the last big piece of the backend
-   restructure Codex has been running.
-2. **Land the theme block** with all legacy aliases intact. Nothing else changes; the app
-   should look identical. Only `--text-muted` shifts, and only to fix the contrast failure.
-3. **De-inline presentation.** Move the 128 JS-template and 69 markup `style="` attributes to
-   classes. Keep `el.style.display` (32 uses) or convert to `classList` — you already use
-   `classList` 29 times, so the pattern exists.
-4. **Sweep the scales** — spacing, radius, type, shadow, motion — using the mapping tables.
-   Mechanical, and each is independently verifiable by screenshot diff.
-5. **Add the theme toggle** and the runtime chart-palette reader.
-6. **Delete the legacy aliases** and the six dead tokens.
-
-Steps 2–6 are individually revertible. Do not batch them into one commit.
+`el.style.display` was deliberately left in JavaScript. Those 32 assignments are component
+state, not theming, and converting them would add risk without serving the goal.
 
 ## Guardrails
 
-Add a CI check so drift cannot return — this is the part that makes the system hold:
+`scripts/lint_design_tokens.py` fails the build on:
 
-- Fail if any hex literal appears in `static/app.css` outside the `:root` / `[data-theme]`
-  blocks, or anywhere in `static/app.js`.
-- Fail on `px` values in `padding`/`margin`/`gap` that are not one of the seven scale steps.
-- Assert every `var(--x)` reference resolves to a defined token. This alone would have caught
-  `--text-sub` before it shipped.
+1. a `var(--token)` reference that resolves to nothing — this is what caught `--text-sub`
+   and the malformed `var(--ink;)`
+2. colour literals outside the theme blocks in `app.css`
+3. any colour literal in `app.js`, since it cannot follow a theme switch
+4. `padding`/`margin`/`gap` values off the spacing scale
+5. the two light selectors drifting apart
 
-## Verification
+It runs in `.github/workflows/ci.yml` on Python 3.11/3.12/3.13 and again as a pytest case, so
+it is enforced even outside CI.
 
-- Screenshot-diff every section in dark mode before and after each step; steps 2 and 4 should
-  produce a near-empty diff.
-- Toggle light/dark on every section and confirm no unreadable text — chart tooltips, table
-  hover states, and the refresh overlay are the likely misses.
-- Re-run the contrast table after any colour change; every text token must clear 4.5:1 against
-  both `--surface-page` and `--surface-panel`.
-- Confirm the theme survives reload and that first paint does not flash the wrong theme.
-- The 71 existing tests must stay green throughout — none of this touches Python logic beyond
-  moving the literal out.
+## Still open
+
+- **Contrast is verified by calculation, not by eye.** Someone should look at light mode on a
+  real screen — chart tooltips, table hover states and the refresh overlay are the likely misses.
+- **34 inline `style=` attributes remain in the markup and 93 in JS templates.** They no longer
+  contain colour, so they do not block theming, but they are still presentation in the wrong
+  place. Mostly one-off layout blocks that deserve named classes.
+- **`color-mix()` needs Safari 16.2+ / Chrome 111+ / Firefox 113+.** Fine for a local dashboard;
+  worth noting if this is ever embedded somewhere older.
+- **The colour-blind alternative is not built.** Gain/loss still relies on red/green plus the
+  `+`/`−` sign. A blue/amber pair reusing `--accent` and `--warning` would be the fix.

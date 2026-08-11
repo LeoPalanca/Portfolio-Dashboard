@@ -10,6 +10,8 @@ from __future__ import annotations
 import ast
 import json
 import re
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 from typing import Any
@@ -90,6 +92,15 @@ class FrontendAssetTest(unittest.TestCase):
 
         self.assertIsNone(PLACEHOLDER_RE.search(html))
         self.assertIsNone(PLACEHOLDER_RE.search(js))
+
+    def test_design_tokens_lint_clean(self) -> None:
+        """Run the drift guard in-process so it is enforced without CI."""
+        result = subprocess.run(
+            [sys.executable, str(APP_DIR / "scripts" / "lint_design_tokens.py"), "--strict"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_app_py_holds_no_inline_frontend(self) -> None:
         tree = ast.parse((APP_DIR / "app.py").read_text(encoding="utf-8"))
