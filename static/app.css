@@ -2251,6 +2251,42 @@ body.dashboard-redrawing .dashboard-refresh-overlay {
 /* ─── Display settings menu ─── */
 .settings-wrap { position: relative; display: inline-flex; }
 
+/* square icon button: same height as its text siblings, no text width */
+#settings-toggle {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  background: var(--surface-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) var(--ease);
+}
+#settings-toggle:hover {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+#settings-toggle[aria-expanded="true"] {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+#settings-toggle svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .settings-menu {
   position: absolute;
   top: calc(100% + var(--space-2));
