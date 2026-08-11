@@ -286,7 +286,7 @@
               <span class="calc-label">Projected Value (ETF):</span>
               <span class="calc-val green" id="val-proj-etf">€0</span>
             </div>
-            <div class="calc-row" style="margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line-strong);">
+            <div class="calc-row" style="margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--border-strong);">
               <span class="calc-label fw-600">Estimated Fee Difference:</span>
               <span class="calc-val amber" id="val-lost-fees">€0</span>
             </div>
@@ -339,21 +339,21 @@
           background: rgba(15, 23, 42, 0.4);
           padding: 8px 12px;
           border-radius: var(--radius-md);
-          border: 1px solid var(--line);
+          border: 1px solid var(--border);
         ">
           <input type="text" id="watchlist-add-input" placeholder="Enter Ticker (e.g. FUSD.L)" style="
             flex: 1;
             background: transparent;
             border: none;
-            color: var(--ink);
+            color: var(--text-primary);
             font-size: 13px;
             outline: none;
             padding: 4px 0;
           ">
           <button type="button" id="watchlist-add-btn" style="
-            background: var(--blue-dim);
-            border: 1px solid var(--blue);
-            color: var(--blue);
+            background: var(--accent-dim);
+            border: 1px solid var(--accent);
+            color: var(--accent);
             border-radius: 6px;
             padding: 4px 12px;
             font-size: 12px;
@@ -591,8 +591,8 @@
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <h3 style="margin: 0;">Expense Trend</h3>
                 <div class="periods secondary-selector" id="expense-trend-mode" aria-label="Expense trend mode" style="padding: 2px; border-radius: 7px; background: rgba(15,23,42,0.34); display: flex;">
-                  <button type="button" id="expense-toggle-monthly" class="active" style="min-height: 22px; padding: 2px 8px; font-size: 11px; font-weight: 500; border-radius: 5px; background: var(--blue); color: white; border: none; cursor: pointer;">Monthly</button>
-                  <button type="button" id="expense-toggle-cumulative" style="min-height: 22px; padding: 2px 8px; font-size: 11px; font-weight: 500; border-radius: 5px; background: transparent; color: var(--text-sub, #94a3b8); border: none; cursor: pointer;">Cumulative</button>
+                  <button type="button" id="expense-toggle-monthly" class="active" style="min-height: 22px; padding: 2px 8px; font-size: 11px; font-weight: 500; border-radius: 5px; background: var(--accent); color: white; border: none; cursor: pointer;">Monthly</button>
+                  <button type="button" id="expense-toggle-cumulative" style="min-height: 22px; padding: 2px 8px; font-size: 11px; font-weight: 500; border-radius: 5px; background: transparent; color: var(--text-muted, #94a3b8); border: none; cursor: pointer;">Cumulative</button>
                 </div>
               </div>
               <div id="expense-trend-legend" style="display: flex; gap: 12px; font-size: 11px; margin-bottom: 8px; align-items: center;"></div>
@@ -748,8 +748,8 @@
               <tbody id="frictions-events"></tbody>
             </table>
           </div>
-          <div id="tax-losses-wrap" style="display:none; margin-top: 20px; border-top: 1px solid var(--line); padding-top: 20px;">
-            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--ink);">Tax Loss Carry-forwards (Minusvalenze)</h3>
+          <div id="tax-losses-wrap" style="display:none; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
+            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-primary);">Tax Loss Carry-forwards (Minusvalenze)</h3>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -879,7 +879,7 @@
       </div>
       <div class="section-content expanded" id="todos-content">
         <div class="section-body">
-          <ul id="todos-list" style="margin: 0; padding-left: 20px; line-height: 1.6; color: var(--ink-secondary);">
+          <ul id="todos-list" style="margin: 0; padding-left: 20px; line-height: 1.6; color: var(--text-secondary);">
             <!-- Populated via JS -->
           </ul>
         </div>
@@ -953,12 +953,12 @@
     
     <!-- Info Modal -->
     <div id="info-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(12, 15, 26, 0.8); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s ease;">
-      <div style="background: var(--bg-secondary); border: 1px solid var(--line-strong); border-radius: var(--radius); max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto; padding: 24px; box-shadow: var(--shadow-lg); position: relative; color: var(--ink);">
-        <button type="button" onclick="closeInfoModal()" style="position: absolute; right: 16px; top: 16px; background: transparent; border: none; font-size: 20px; cursor: pointer; color: var(--muted); line-height: 1;">&times;</button>
-        <h3 id="modal-title" style="font-size: 18px; font-weight: 700; margin-bottom: 16px; color: var(--ink); border-bottom: 1px solid var(--line); padding-bottom: 10px;"></h3>
-        <div id="modal-content" style="line-height: 1.6; font-size: 13.5px; color: var(--ink-secondary);"></div>
+      <div style="background: var(--surface-panel); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto; padding: 24px; box-shadow: var(--elev-3); position: relative; color: var(--text-primary);">
+        <button type="button" onclick="closeInfoModal()" style="position: absolute; right: 16px; top: 16px; background: transparent; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); line-height: 1;">&times;</button>
+        <h3 id="modal-title" style="font-size: 18px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary); border-bottom: 1px solid var(--border); padding-bottom: 10px;"></h3>
+        <div id="modal-content" style="line-height: 1.6; font-size: 13.5px; color: var(--text-secondary);"></div>
         <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
-          <button type="button" onclick="closeInfoModal()" style="background: var(--panel-hover); border: 1px solid var(--line-strong); border-radius: var(--radius-md); padding: 8px 16px; color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 500;">Close</button>
+          <button type="button" onclick="closeInfoModal()" style="background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 8px 16px; color: var(--text-primary); cursor: pointer; font-size: 13px; font-weight: 500;">Close</button>
         </div>
       </div>
     </div>

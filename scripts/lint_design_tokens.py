@@ -39,7 +39,7 @@ SPACING_EXEMPT = {"0", "0px", "1px", "auto", "-1px", "2px"}
 def theme_blocks(css: str) -> list[tuple[str, str]]:
     """Return (label, body) for :root and each [data-theme] block."""
     blocks = []
-    for m in re.finditer(r"(:root[^{]*|\[data-theme=[^{]*)\{", css):
+    for m in re.finditer(r"(:root(?:\[data-theme=\"\w+\"\])?|:root:not\(\[data-theme=\"\w+\"\]\))\s*\{", css):
         start = m.end()
         depth, i = 1, start
         while i < len(css) and depth:

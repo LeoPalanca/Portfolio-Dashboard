@@ -9,7 +9,7 @@
         const content = `
           <p class="mb-3"><strong>What it is:</strong> A private individual pension plan (<em>PIP - Piano Individuale Pensionistico</em>) offered by Banca Mediolanum.</p>
           <p class="mb-3"><strong>Tax Advantage:</strong> Annual contributions are fully deductible from taxable income up to a maximum of <strong>€5.164,57</strong>. At a 43% marginal tax bracket, this yields an immediate <strong>+75.4% return</strong> (saving €2.220 in taxes on a €2.943 net outlay).</p>
-          <div style="background: color-mix(in srgb, var(--warning) 8%, transparent); border-left: 3px solid var(--amber); padding: 12px; margin-bottom: 16px; border-radius: 4px; font-size: 13px; color: var(--ink-secondary);">
+          <div style="background: color-mix(in srgb, var(--warning) 8%, transparent); border-left: 3px solid var(--warning); padding: 12px; margin-bottom: 16px; border-radius: 4px; font-size: 13px; color: var(--text-secondary);">
             <strong class="c-warning">Management Fee Drag Compounding Impact:</strong>
             <p class="stack-tight">Traditional PIPs have an annual management cost (ISC) of <strong>~2.0%</strong>. A low-cost alternative Open Pension Fund (FPA) like <em>Amundi SecondaPensione</em> has a fee of only <strong>~0.8%</strong>.</p>
             <p class="stack-tight">Over a 15-year period on €5.164 annual contributions:</p>
@@ -17,7 +17,7 @@
               <li><strong>Standard FPA (~0.8% fee)</strong>: yields <strong>~€120.000</strong> net payout</li>
               <li><strong>Traditional PIP (~2.0% fee)</strong>: yields <strong>~€108.000</strong> net payout</li>
             </ul>
-            <p style="margin-top: 6px; margin-bottom: 0; font-weight: 500; color: var(--ink);">Transferring this policy to a low-cost FPA saves ~€12.000 in lost fees while fully preserving the tax deduction!</p>
+            <p style="margin-top: 6px; margin-bottom: 0; font-weight: 500; color: var(--text-primary);">Transferring this policy to a low-cost FPA saves ~€12.000 in lost fees while fully preserving the tax deduction!</p>
           </div>
         `;
         showInfoModal(title, content);
@@ -26,7 +26,7 @@
         const content = `
           <p class="mb-3"><strong>What it is:</strong> A multi-fund insurance wrapper can combine product-level charges with the costs of its underlying funds.</p>
           <p class="mb-3"><strong>Why compare fees:</strong> Small annual cost differences compound over long holding periods. Use the calculator with the fees and capital from your own documents.</p>
-          <div style="background: color-mix(in srgb, var(--negative) 8%, transparent); border-left: 3px solid var(--red); padding: 12px; margin-bottom: 16px; border-radius: 4px; font-size: 13px; color: var(--ink-secondary);">
+          <div style="background: color-mix(in srgb, var(--negative) 8%, transparent); border-left: 3px solid var(--negative); padding: 12px; margin-bottom: 16px; border-radius: 4px; font-size: 13px; color: var(--text-secondary);">
             <strong class="c-negative">Illustrative comparison only</strong>
             <p class="stack-tight">The calculator does not include taxes, trading costs, guarantees, insurance benefits, or changes in future returns. It is not investment advice.</p>
           </div>
@@ -975,11 +975,11 @@
       const scorePills = `
         <button type="button" id="freq-pill" class="score-pill teal ${returnVisibility.freq_score ? "active" : ""}" title="Toggle time-weighted outperformance line">
           <span class="score-pill-label">Time > MSCI</span>
-          <span class="score-pill-value" style="color: ${scoreFreq >= 50 ? 'var(--green)' : 'var(--red)'};">${scoreFreq.toFixed(1)}%</span>
+          <span class="score-pill-value" style="color: ${scoreFreq >= 50 ? 'var(--positive)' : 'var(--negative)'};">${scoreFreq.toFixed(1)}%</span>
         </button>
         <button type="button" id="weighted-pill" class="score-pill violet ${returnVisibility.weighted_score ? "active" : ""}" title="Toggle area-weighted outperformance line">
           <span class="score-pill-label">Area</span>
-          <span class="score-pill-value" style="color: ${scoreWeighted >= 50 ? 'var(--green)' : 'var(--red)'};">${scoreWeighted.toFixed(1)}%</span>
+          <span class="score-pill-value" style="color: ${scoreWeighted >= 50 ? 'var(--positive)' : 'var(--negative)'};">${scoreWeighted.toFixed(1)}%</span>
         </button>
       `;
 
@@ -997,7 +997,7 @@
       const transHtml = `
         <label>
           <input type="checkbox" id="toggle-transactions" ${showTransactions ? "checked" : ""}>
-          <i class="dot" style="background:var(--blue); border-radius:0; width: 2px; height: 10px; border: 1px dashed var(--blue); margin-top: 2px;"></i>
+          <i class="dot" style="background:var(--accent); border-radius:0; width: 2px; height: 10px; border: 1px dashed var(--accent); margin-top: 2px;"></i>
           Flow Events
         </label>
         ${(showTransactions && isTotal) ? `
@@ -1228,15 +1228,15 @@
               width: 14px;
               height: 14px;
               border-radius: 50%;
-              background: var(--line-strong);
-              color: var(--ink-secondary);
+              background: var(--border-strong);
+              color: var(--text-secondary);
               font-size: 10px;
               font-weight: bold;
               font-family: serif;
               font-style: italic;
               margin-left: 6px;
               cursor: pointer;
-              border: 1px solid var(--muted);
+              border: 1px solid var(--text-muted);
               vertical-align: middle;
             " title="Click for details">i</span>
           `;
@@ -1250,15 +1250,15 @@
               width: 14px;
               height: 14px;
               border-radius: 50%;
-              background: var(--line-strong);
-              color: var(--ink-secondary);
+              background: var(--border-strong);
+              color: var(--text-secondary);
               font-size: 10px;
               font-weight: bold;
               font-family: serif;
               font-style: italic;
               margin-left: 6px;
               cursor: pointer;
-              border: 1px solid var(--muted);
+              border: 1px solid var(--text-muted);
               vertical-align: middle;
             " title="Click for details">i</span>
           `;
@@ -1314,9 +1314,9 @@
                         const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="this.style.display='none';" style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
                         return `
                           <tr style="border-bottom: 1px solid var(--tint-faint); line-height: 24px;">
-                            <td style="text-align: left; padding: 2px 0; font-size: 0.82em; display: flex; align-items: center; color: var(--muted);">${logoImg}<span>${escapeHtml(h.holding)}</span></td>
-                            <td style="text-align: right; padding: 2px 0; font-size: 0.82em; color: var(--muted);">${money(h.market_value_eur)}</td>
-                            <td style="text-align: right; padding: 2px 0; font-size: 0.82em; color: var(--muted);">${percent(h.weight_pct)}</td>
+                            <td style="text-align: left; padding: 2px 0; font-size: 0.82em; display: flex; align-items: center; color: var(--text-muted);">${logoImg}<span>${escapeHtml(h.holding)}</span></td>
+                            <td style="text-align: right; padding: 2px 0; font-size: 0.82em; color: var(--text-muted);">${money(h.market_value_eur)}</td>
+                            <td style="text-align: right; padding: 2px 0; font-size: 0.82em; color: var(--text-muted);">${percent(h.weight_pct)}</td>
                           </tr>
                         `;
                       }).join("")}
@@ -1327,7 +1327,7 @@
             `;
           }
           
-          const chevron = hasHoldings ? `<span class="chevron" style="display: inline-block; transition: transform 0.2s; margin-right: 6px; font-size: 0.75em; color: var(--muted); width: 10px; text-align: center;">▶</span>` : "";
+          const chevron = hasHoldings ? `<span class="chevron" style="display: inline-block; transition: transform 0.2s; margin-right: 6px; font-size: 0.75em; color: var(--text-muted); width: 10px; text-align: center;">▶</span>` : "";
           const clickableStyle = hasHoldings ? "cursor: pointer; user-select: none;" : "";
           const onclickAttr = hasHoldings ? `onclick="toggleSector('${subId}', this)"` : "";
           
@@ -1482,7 +1482,7 @@
       }
       
       document.getElementById("news-summary").innerHTML = data.status === "available"
-        ? `${itemsToRender.length}/${data.count || 0} headlines | ${symbols.length} tickers${window.activeNewsFilter ? ` | filter: <span style="color:var(--blue); font-weight:bold; cursor:pointer; text-decoration:underline;" onclick="toggleNewsFilter('${escapeHtml(window.activeNewsFilter)}')">${escapeHtml(window.activeNewsFilter)} (clear)</span>` : ''}`
+        ? `${itemsToRender.length}/${data.count || 0} headlines | ${symbols.length} tickers${window.activeNewsFilter ? ` | filter: <span style="color:var(--accent); font-weight:bold; cursor:pointer; text-decoration:underline;" onclick="toggleNewsFilter('${escapeHtml(window.activeNewsFilter)}')">${escapeHtml(window.activeNewsFilter)} (clear)</span>` : ''}`
         : `No headlines available | ${symbols.length} tickers`;
         
       document.getElementById("news-symbols").innerHTML = symbols.length
@@ -1518,11 +1518,11 @@
           <div class="glass-card" style="padding: 15px; display: flex; flex-direction: column; justify-content: space-between; position: relative;">
             <div>
               <div style="display: flex; justify-content: space-between; align-items: start;">
-                <h4 style="color: var(--red); font-size: 14px; margin-bottom: 4px;">${escapeHtml(item.ticker)}</h4>
+                <h4 style="color: var(--negative); font-size: 14px; margin-bottom: 4px;">${escapeHtml(item.ticker)}</h4>
                 <button type="button" class="watchlist-remove-btn" data-ticker="${escapeHtml(item.ticker)}" style="
                   background: color-mix(in srgb, var(--negative) 10%, transparent);
                   border: 1px solid color-mix(in srgb, var(--negative) 20%, transparent);
-                  color: var(--red);
+                  color: var(--negative);
                   border-radius: 50%;
                   width: 24px;
                   height: 24px;
@@ -1535,14 +1535,14 @@
                   transition: all 0.2s ease;
                 " title="Remove from Watchlist">−</button>
               </div>
-              <p style="font-size: 11px; color: var(--muted);">${escapeHtml(item.error)}</p>
+              <p style="font-size: 11px; color: var(--text-muted);">${escapeHtml(item.error)}</p>
             </div>
           </div>
         `;
       }
 
       const sign = item.change >= 0 ? "+" : "";
-      const changeColor = item.change >= 0 ? "var(--green)" : "var(--red)";
+      const changeColor = item.change >= 0 ? "var(--positive)" : "var(--negative)";
       const priceText = `${item.price.toFixed(2)} ${item.currency}`;
       const changeText = `${sign}${item.change.toFixed(2)} (${sign}${item.change_pct.toFixed(2)}%)`;
 
@@ -1558,11 +1558,11 @@
         " onmouseover="this.style.transform='translateY(-2px)';" onmouseout="this.style.transform='translateY(0)';">
           <div>
             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
-              <span style="font-weight: 700; font-size: 14px; color: var(--ink);">${escapeHtml(item.ticker)}</span>
+              <span style="font-weight: 700; font-size: 14px; color: var(--text-primary);">${escapeHtml(item.ticker)}</span>
               <button type="button" class="watchlist-remove-btn" data-ticker="${escapeHtml(item.ticker)}" style="
                 background: color-mix(in srgb, var(--negative) 10%, transparent);
                 border: 1px solid color-mix(in srgb, var(--negative) 20%, transparent);
-                color: var(--red);
+                color: var(--negative);
                 border-radius: 50%;
                 width: 24px;
                 height: 24px;
@@ -1577,7 +1577,7 @@
             </div>
             <h4 style="
               font-size: 12px; 
-              color: var(--muted); 
+              color: var(--text-muted); 
               font-weight: 500;
               margin-bottom: 12px;
               white-space: nowrap;
@@ -1588,7 +1588,7 @@
           
           <div style="display: flex; justify-content: space-between; align-items: end; margin-top: auto;">
             <div>
-              <div style="font-size: 18px; font-weight: 700; color: var(--ink); margin-bottom: 2px;">${priceText}</div>
+              <div style="font-size: 18px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px;">${priceText}</div>
               <div style="font-size: 12px; font-weight: 600; color: ${changeColor};">${changeText}</div>
             </div>
             
@@ -1596,7 +1596,7 @@
               <a href="${escapeHtml(item.justetf_url)}" target="_blank" style="
                 font-size: 11px;
                 font-weight: 600;
-                color: var(--cyan);
+                color: var(--series-cyan);
                 background: color-mix(in srgb, var(--series-cyan) 10%, transparent);
                 border: 1px solid color-mix(in srgb, var(--series-cyan) 20%, transparent);
                 border-radius: 6px;
@@ -1607,7 +1607,7 @@
               <a href="${escapeHtml(item.yfinance_url)}" target="_blank" style="
                 font-size: 11px;
                 font-weight: 600;
-                color: var(--amber);
+                color: var(--warning);
                 background: color-mix(in srgb, var(--warning) 10%, transparent);
                 border: 1px solid color-mix(in srgb, var(--warning) 20%, transparent);
                 border-radius: 6px;
@@ -1631,7 +1631,7 @@
       if (!grid) return;
       
       if (!list.length) {
-        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--muted); padding: 30px; border: 1px dashed var(--line); border-radius: var(--radius-md); font-size: 13px;">Watchlist is empty. Enter a ticker to start tracking.</div>`;
+        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 30px; border: 1px dashed var(--border); border-radius: var(--radius-md); font-size: 13px;">Watchlist is empty. Enter a ticker to start tracking.</div>`;
         return;
       }
       
@@ -1672,7 +1672,7 @@
       } catch (err) {
         console.error("Watchlist error:", err);
         const grid = document.getElementById("watchlist-grid");
-        if (grid) grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--red); padding: 20px;">Error: ${escapeHtml(err.message)}</div>`;
+        if (grid) grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--negative); padding: 20px;">Error: ${escapeHtml(err.message)}</div>`;
         if (summary) summary.textContent = "Error loading watchlist";
       }
     }
@@ -1845,7 +1845,7 @@
               <td class="positive fw-600">${money(row.net_eur)}</td>
               <td class="negative">${money(row.tax_eur)}</td>
               <td>${money(row.gross_eur)}</td>
-              <td style="text-align: left; color: var(--muted); font-size: 0.9em;">${escapeHtml(row.description)}</td>
+              <td style="text-align: left; color: var(--text-muted); font-size: 0.9em;">${escapeHtml(row.description)}</td>
             </tr>
           `).join("")
         : `<tr><td colspan="6" class="empty-state">No interest payments recorded.</td></tr>`;
@@ -2155,7 +2155,7 @@
         : expenses.categories.slice(0, 12).map(row => `
           <tr style="cursor: pointer;" onclick="toggleCategorySubcategories(this, '${escapeHtml(row.category)}')">
             <td class="cell-flex">
-              <svg class="category-chevron" style="width: 10px; height: 10px; margin-right: 6px; transition: transform 0.2s; fill: var(--ink-secondary); flex-shrink: 0;" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/></svg>
+              <svg class="category-chevron" style="width: 10px; height: 10px; margin-right: 6px; transition: transform 0.2s; fill: var(--text-secondary); flex-shrink: 0;" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/></svg>
               <span>${escapeHtml(row.category)}</span>
             </td>
             <td>${row.count}</td>
@@ -2207,7 +2207,7 @@
               <td>${escapeHtml(row.source_label || row.source || "")}</td>
               <td>${escapeHtml(row.category || "")}</td>
               <td>${escapeHtml(row.merchant || "")}</td>
-              <td style="text-align: left; color: var(--muted); max-width: 340px; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(row.description || "")}</td>
+              <td style="text-align: left; color: var(--text-muted); max-width: 340px; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(row.description || "")}</td>
               <td class="${signedClass(signedAmount)}">${money(signedAmount)}</td>
             </tr>
           `;
@@ -2245,12 +2245,12 @@
       
       const subtableHtml = `
         <tr class="subcategory-breakdown-row" style="background: var(--tint-faint);">
-          <td colspan="4" style="padding: 12px 16px 16px 28px; border-bottom: 1px solid var(--line);">
-            <div style="border-left: 2px solid var(--green); padding-left: 12px; margin-top: 4px;">
-              <h4 style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--ink-secondary); margin-bottom: 8px; letter-spacing: 0.05em; text-align: left;">Subcategories for ${escapeHtml(categoryName)}</h4>
+          <td colspan="4" style="padding: 12px 16px 16px 28px; border-bottom: 1px solid var(--border);">
+            <div style="border-left: 2px solid var(--positive); padding-left: 12px; margin-top: 4px;">
+              <h4 style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px; letter-spacing: 0.05em; text-align: left;">Subcategories for ${escapeHtml(categoryName)}</h4>
               <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
                 <thead>
-                  <tr style="border-bottom: 1px solid var(--tint-hover); color: var(--ink-secondary); font-weight: 500;">
+                  <tr style="border-bottom: 1px solid var(--tint-hover); color: var(--text-secondary); font-weight: 500;">
                     <th style="text-align: left; padding: 4px 8px;">Subcategory</th>
                     <th style="text-align: right; padding: 4px 8px; width: 60px;">Rows</th>
                     <th style="text-align: right; padding: 4px 8px; width: 100px;">Amount</th>
@@ -2261,11 +2261,11 @@
                   ${subcategories.map(sub => {
                     const pctShare = totalAmount > 0 ? (sub.amount / totalAmount * 100).toFixed(1) : "0.0";
                     return `
-                      <tr style="border-bottom: 1px solid var(--tint-subtle); color: var(--ink;); cursor: pointer;" onclick="showSubcategoryDetails('${escapeHtml(categoryName)}', '${escapeHtml(sub.subcategory)}')">
+                      <tr style="border-bottom: 1px solid var(--tint-subtle); color: var(--text-primary); cursor: pointer;" onclick="showSubcategoryDetails('${escapeHtml(categoryName)}', '${escapeHtml(sub.subcategory)}')">
                         <td style="text-align: left; padding: 6px 8px; font-weight: 500; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--tint-strong);">${escapeHtml(sub.subcategory)}</td>
                         <td style="text-align: right; padding: 6px 8px;">${sub.count}</td>
-                        <td style="text-align: right; padding: 6px 8px; font-weight: 600; color: var(--green);">${money(sub.amount)}</td>
-                        <td style="text-align: right; padding: 6px 8px; color: var(--ink-secondary);">${pctShare}%</td>
+                        <td style="text-align: right; padding: 6px 8px; font-weight: 600; color: var(--positive);">${money(sub.amount)}</td>
+                        <td style="text-align: right; padding: 6px 8px; color: var(--text-secondary);">${pctShare}%</td>
                       </tr>
                     `;
                   }).join("")}
@@ -2315,8 +2315,8 @@
           <tr style="border-bottom: 1px solid var(--tint-subtle);">
             <td style="padding: 6px 8px; font-family: monospace;">${escapeHtml(row.date)}</td>
             <td style="padding: 6px 8px;">${escapeHtml(row.source_label || row.source || "")}</td>
-            <td style="padding: 6px 8px; font-weight: 500; color: var(--ink);">${escapeHtml(row.merchant || "")}</td>
-            <td style="padding: 6px 8px; color: var(--ink-secondary); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(row.description || "")}">${escapeHtml(row.description || "")}</td>
+            <td style="padding: 6px 8px; font-weight: 500; color: var(--text-primary);">${escapeHtml(row.merchant || "")}</td>
+            <td style="padding: 6px 8px; color: var(--text-secondary); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(row.description || "")}">${escapeHtml(row.description || "")}</td>
             <td style="padding: 6px 8px; text-align: right; font-weight: 600;" class="${amountClass}">${money(signedAmount)}</td>
           </tr>
         `;
@@ -2326,7 +2326,7 @@
         <div class="table-wrap" style="margin-top: 8px;">
           <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
             <thead>
-              <tr style="border-bottom: 1px solid var(--line-strong); color: var(--ink-secondary); font-weight: 500;">
+              <tr style="border-bottom: 1px solid var(--border-strong); color: var(--text-secondary); font-weight: 500;">
                 <th style="text-align: left; padding: 6px 8px; width: 85px; cursor: pointer; user-select: none;" onclick="window.sortSubcategoryDetails('date')">Date${indicator('date')}</th>
                 <th style="text-align: left; padding: 6px 8px; width: 85px; cursor: pointer; user-select: none;" onclick="window.sortSubcategoryDetails('source')">Source${indicator('source')}</th>
                 <th style="text-align: left; padding: 6px 8px; width: 120px; cursor: pointer; user-select: none;" onclick="window.sortSubcategoryDetails('merchant')">Merchant${indicator('merchant')}</th>
@@ -2830,10 +2830,10 @@
       });
     }
     function formatRankingPct(val) {
-      if (val === null || val === undefined) return `<span style="color:var(--muted)">—</span>`;
+      if (val === null || val === undefined) return `<span style="color:var(--text-muted)">—</span>`;
       const num = Number(val);
       const sign = num > 0 ? "+" : "";
-      const color = num > 0 ? "var(--green)" : (num < 0 ? "var(--red)" : "var(--muted)");
+      const color = num > 0 ? "var(--positive)" : (num < 0 ? "var(--negative)" : "var(--text-muted)");
       return `<span style="color:${color};font-weight:600">${sign}${num.toFixed(2)}%</span>`;
     }
 
@@ -2848,7 +2848,7 @@
       
       const commonDateStr = data.common_start_date || "—";
       const ytdDateStr = data.ytd_start_date || "—";
-      windowLabel.innerHTML = `Common alignment from <span style="color:var(--violet);font-weight:600">${commonDateStr}</span> | YTD from <span style="color:var(--amber);font-weight:600">${ytdDateStr}</span>`;
+      windowLabel.innerHTML = `Common alignment from <span style="color:var(--series-violet);font-weight:600">${commonDateStr}</span> | YTD from <span style="color:var(--warning);font-weight:600">${ytdDateStr}</span>`;
 
       const sorted = [...data.rankings].sort((a, b) => {
         let valA = 0.0;
@@ -2870,7 +2870,7 @@
         
         const isCurrentPerson = (user.person === selectedPerson);
         const rowStyle = isCurrentPerson ? 'background: color-mix(in srgb, var(--accent) 8%, transparent); font-weight: 500;' : '';
-        const nameStyle = isCurrentPerson ? 'color: var(--blue); font-weight: 700;' : '';
+        const nameStyle = isCurrentPerson ? 'color: var(--accent); font-weight: 700;' : '';
 
         return `
           <tr style="${rowStyle}">
@@ -2896,7 +2896,7 @@
         if (rankingsSort.key === k) {
           const arrow = rankingsSort.direction === "desc" ? " ↓" : " ↑";
           el.textContent = title + arrow;
-          el.style.color = "var(--ink)";
+          el.style.color = "var(--text-primary)";
         } else {
           el.textContent = title;
           el.style.color = "";
@@ -3121,7 +3121,7 @@
         selectedExpenseTrendMode = "monthly";
         toggleMonthly.classList.add("active");
         toggleCumulative.classList.remove("active");
-        toggleMonthly.style.background = "var(--blue)";
+        toggleMonthly.style.background = "var(--accent)";
         toggleMonthly.style.color = "white";
         toggleCumulative.style.background = "transparent";
         toggleCumulative.style.color = "var(--text-muted)";
@@ -3135,7 +3135,7 @@
         selectedExpenseTrendMode = "cumulative";
         toggleCumulative.classList.add("active");
         toggleMonthly.classList.remove("active");
-        toggleCumulative.style.background = "var(--blue)";
+        toggleCumulative.style.background = "var(--accent)";
         toggleCumulative.style.color = "white";
         toggleMonthly.style.background = "transparent";
         toggleMonthly.style.color = "var(--text-muted)";
