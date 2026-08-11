@@ -16,9 +16,8 @@ import urllib.request
 import warnings
 import xml.etree.ElementTree as ET
 from bisect import bisect_right
-from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +25,17 @@ from flask import Flask, jsonify, request, send_file
 from openpyxl import Workbook, load_workbook
 
 from src.portfolio_dashboard.config import get_settings
+from src.portfolio_dashboard.domain import (
+    EUR,
+    ZERO,
+    Dividend,
+    ExpenseRule,
+    FrictionEvent,
+    Trade,
+    decimal_to_float,
+    money,
+    parse_decimal,
+)
 
 try:
     import yfinance as yf
@@ -116,76 +126,10 @@ PRICE_TTL_SECONDS = 15 * 60
 HISTORY_TTL_SECONDS = 12 * 60 * 60
 NEWS_TTL_SECONDS = 60 * 60
 
-EUR = Decimal("1")
-ZERO = Decimal("0")
 FINECO_DIVIDEND_NET_RATE = Decimal("0.74")
 _CACHE_WRITE_LOCK = threading.RLock()
 
 app = Flask(__name__)
-
-
-@dataclass(frozen=True)
-class Trade:
-    asset: str
-    isin: str
-    broker: str
-    action: str
-    currency_hint: str
-    cash_currency: str
-    date: date
-    price: Decimal
-    quantity: Decimal
-    quantity_diff: Decimal
-    total_spend: Decimal
-    fees: Decimal
-    tax: Decimal
-    grand_total: Decimal
-    grand_total_present: bool
-    source: str
-
-
-@dataclass(frozen=True)
-class Dividend:
-    broker: str
-    asset: str
-    isin: str
-    date: date
-    amount_eur: Decimal
-    tax_eur: Decimal
-
-
-@dataclass(frozen=True)
-class FrictionEvent:
-    broker: str
-    event_type: str
-    date: date
-    amount_eur: Decimal
-    description: str
-
-
-@dataclass(frozen=True)
-class ExpenseRule:
-    priority: int
-    source: str
-    match_field: str
-    match_type: str
-    pattern: str
-    category: str
-    subcategory: str
-    merchant: str
-
-
-def parse_decimal(value: str | None) -> Decimal:
-    raw = (value or "").strip()
-    if not raw:
-        return ZERO
-    raw = raw.replace("EUR", "").replace("$", "").replace(" ", "")
-    if "," in raw:
-        raw = raw.replace(".", "").replace(",", ".")
-    try:
-        return Decimal(raw)
-    except InvalidOperation:
-        return ZERO
 
 
 def parse_trade_date(day_value: str, year_value: str) -> date:
@@ -202,18 +146,6 @@ def parse_trade_date(day_value: str, year_value: str) -> date:
         return date(int(year_value.strip()), int(month), int(day))
 
     raise ValueError(f"Unsupported trade date: {day_value!r}")
-
-
-def decimal_to_float(value: Decimal) -> float:
-    if not value.is_finite():
-        return 0.0
-    return float(value.quantize(Decimal("0.0001")))
-
-
-def money(value: Decimal) -> float:
-    if not value.is_finite():
-        return 0.0
-    return float(value.quantize(Decimal("0.01")))
 
 
 def load_json(path: Path) -> dict[str, Any]:
