@@ -36,6 +36,7 @@ from src.portfolio_dashboard.domain import (
     money,
     parse_decimal,
 )
+from src.portfolio_dashboard.ingest import BrokerAdapter, FunctionBrokerAdapter
 
 try:
     import yfinance as yf
@@ -311,51 +312,29 @@ def revolut_statement_files() -> list[Path]:
     return sorted((item[3] for item in best_by_currency.values()), key=lambda item: item.name)
 
 
+def broker_adapters() -> tuple[BrokerAdapter, ...]:
+    return (
+        FunctionBrokerAdapter("Trade Republic", latest_trade_republic_export, read_trade_republic_trades),
+        FunctionBrokerAdapter("Fineco", latest_fineco_export, read_fineco_trades),
+        FunctionBrokerAdapter("Interactive Brokers", latest_ib_export, read_interactive_brokers_trades),
+        FunctionBrokerAdapter("eToro", latest_etoro_export, read_etoro_trades),
+    )
+
+
 def read_trades() -> tuple[list[Trade], dict[str, Any]]:
-    trade_republic_file = latest_trade_republic_export()
-    fineco_file = latest_fineco_export()
-    ib_file = latest_ib_export()
-    etoro_file = latest_etoro_export()
-    broker_sources = []
+    broker_sources: list[dict[str, Any]] = []
     trades: list[Trade] = []
 
-    if trade_republic_file:
-        trades.extend(read_trade_republic_trades(trade_republic_file))
+    for adapter in broker_adapters():
+        export_path = adapter.discover()
+        if export_path is None:
+            continue
+        trades.extend(adapter.parse(export_path))
         broker_sources.append(
             {
-                "path": trade_republic_file,
-                "kind": "Trade Republic",
-                "relative_path": configured_path_label(trade_republic_file),
-            }
-        )
-
-    if fineco_file:
-        trades.extend(read_fineco_trades(fineco_file))
-        broker_sources.append(
-            {
-                "path": fineco_file,
-                "kind": "Fineco",
-                "relative_path": configured_path_label(fineco_file),
-            }
-        )
-
-    if ib_file:
-        trades.extend(read_interactive_brokers_trades(ib_file))
-        broker_sources.append(
-            {
-                "path": ib_file,
-                "kind": "Interactive Brokers",
-                "relative_path": configured_path_label(ib_file),
-            }
-        )
-
-    if etoro_file:
-        trades.extend(read_etoro_trades(etoro_file))
-        broker_sources.append(
-            {
-                "path": etoro_file,
-                "kind": "eToro",
-                "relative_path": configured_path_label(etoro_file),
+                "path": export_path,
+                "kind": adapter.name,
+                "relative_path": configured_path_label(export_path),
             }
         )
 
