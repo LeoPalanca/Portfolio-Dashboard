@@ -5,9 +5,13 @@ import tempfile
 import unittest
 
 from src.portfolio_dashboard.config import PortfolioProfile, Settings
+from src.portfolio_dashboard.version import APP_VERSION
 
 
 class SettingsTest(unittest.TestCase):
+    def test_application_version_comes_from_project_metadata(self) -> None:
+        self.assertRegex(APP_VERSION, r"^\d+\.\d+\.\d+")
+
     def test_paths_and_profiles_are_derived_from_settings(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

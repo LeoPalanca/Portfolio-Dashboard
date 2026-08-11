@@ -24,7 +24,9 @@ from typing import Any
 from flask import Flask, jsonify, request, send_file
 from openpyxl import Workbook, load_workbook
 
+from src.portfolio_dashboard import APP_VERSION
 from src.portfolio_dashboard.config import get_settings
+from src.portfolio_dashboard.cache import HistoryStore
 from src.portfolio_dashboard.domain import (
     EUR,
     ZERO,
@@ -122,6 +124,7 @@ FULL_OFFICIAL_COMPOSITION_STATUSES = {"ok", "cached", "cash_equivalent", "offici
 SYMBOL_CACHE = SETTINGS.cache_path("price-symbols.json")
 PRICE_CACHE = SETTINGS.cache_path("prices.json")
 HISTORY_CACHE = SETTINGS.cache_path("history.json")
+HISTORY_CACHE_DIR = SETTINGS.cache_dir / "history"
 NEWS_CACHE = SETTINGS.cache_path("news.json")
 PRICE_TTL_SECONDS = 15 * 60
 HISTORY_TTL_SECONDS = 12 * 60 * 60
@@ -4595,46 +4598,14 @@ def fetch_price(symbol: str, refresh: bool = False) -> dict[str, Any]:
     return payload
 
 
-_history_cache_in_memory = None
+_history_store: HistoryStore | None = None
 
 
-def get_history_cache():
-    global _history_cache_in_memory
-    if _history_cache_in_memory is None:
-        _history_cache_in_memory = load_json(HISTORY_CACHE)
-    return _history_cache_in_memory
-
-
-def cached_history_for_range(
-    cache: dict[str, Any],
-    symbol: str,
-    start: date,
-    end: date,
-    now: int,
-) -> dict[str, Any] | None:
-    exact_key = f"{symbol}|{start.isoformat()}|{end.isoformat()}"
-    exact = cache.get(exact_key)
-    if (
-        isinstance(exact, dict)
-        and exact.get("status") == "priced"
-        and now - int(exact.get("fetched_at", 0)) < HISTORY_TTL_SECONDS
-    ):
-        return exact
-
-    for key, payload in cache.items():
-        if not isinstance(payload, dict) or payload.get("status") != "priced":
-            continue
-        parts = key.split("|")
-        if len(parts) != 3 or parts[0] != symbol:
-            continue
-        try:
-            cached_start = date.fromisoformat(parts[1])
-            cached_end = date.fromisoformat(parts[2])
-        except ValueError:
-            continue
-        if cached_start <= start and cached_end >= end and now - int(payload.get("fetched_at", 0)) < HISTORY_TTL_SECONDS:
-            return payload
-    return None
+def get_history_store() -> HistoryStore:
+    global _history_store
+    if _history_store is None:
+        _history_store = HistoryStore(HISTORY_CACHE_DIR, legacy_file=HISTORY_CACHE)
+    return _history_store
 
 
 def fetch_history(symbol: str, start: date, end: date, refresh: bool = False) -> dict[str, Any]:
@@ -4643,10 +4614,9 @@ def fetch_history(symbol: str, start: date, end: date, refresh: bool = False) ->
     if yf is None:
         return {"status": "yfinance_missing", "prices": {}}
 
-    cache = get_history_cache()
+    store = get_history_store()
     now = int(time.time())
-    key = f"{symbol}|{start.isoformat()}|{end.isoformat()}"
-    cached = None if refresh else cached_history_for_range(cache, symbol, start, end, now)
+    cached = None if refresh else store.get_range(symbol, start, end, now, HISTORY_TTL_SECONDS)
     if cached:
         return cached
 
@@ -4677,9 +4647,7 @@ def fetch_history(symbol: str, start: date, end: date, refresh: bool = False) ->
     except Exception as exc:
         payload = {"symbol": symbol, "status": "history_error", "error": str(exc), "prices": {}, "fetched_at": now}
 
-    cache[key] = payload
-    save_json(HISTORY_CACHE, cache)
-    return payload
+    return store.merge(symbol, payload, start, end)
 
 
 _PRICE_LOOKUP_CACHE: dict[int, tuple[dict[str, float], int, tuple[date, ...], tuple[float, ...]]] = {}
@@ -4791,11 +4759,11 @@ def benchmark_delta(latest: dict[str, Any], past: dict[str, Any], key: str) -> f
 
 def fetch_crypto_eur_history(asset: str, start: date, end: date, refresh: bool = False) -> dict[str, Any]:
     asset = (asset or "").upper()
-    cache = get_history_cache()
-    key = f"crypto-eur:{asset}|{start.isoformat()}|{end.isoformat()}"
-    cached = cache.get(key)
+    store = get_history_store()
+    key = f"crypto-eur:{asset}"
     now = int(time.time())
-    if cached and not refresh and now - int(cached.get("fetched_at", 0)) < HISTORY_TTL_SECONDS:
+    cached = None if refresh else store.get_range(key, start, end, now, HISTORY_TTL_SECONDS)
+    if cached:
         return cached
 
     import urllib.parse
@@ -4850,35 +4818,21 @@ def fetch_crypto_eur_history(asset: str, start: date, end: date, refresh: bool =
     except Exception as exc:
         payload = {"symbol": f"{asset}-EUR", "status": "history_error", "error": str(exc), "prices": {}, "fetched_at": now}
 
-    cache[key] = payload
-    save_json(HISTORY_CACHE, cache)
-    return payload
+    return store.merge(key, payload, start, end)
 
 
 def latest_cached_history_price(symbol: str) -> dict[str, Any] | None:
-    cache = get_history_cache()
-    best_date: str | None = None
-    best_price: float | None = None
-    best_currency = infer_currency(symbol)
-    for key, payload in cache.items():
-        if not key.startswith(f"{symbol}|") or payload.get("status") != "priced":
-            continue
-        prices = payload.get("prices", {})
-        for price_date, price in prices.items():
-            if best_date is None or price_date > best_date:
-                best_date = price_date
-                best_price = price
-                best_currency = payload.get("currency", best_currency)
-    if best_price is None:
+    cached = get_history_store().latest_price(symbol)
+    if cached is None:
         return None
     return {
         "symbol": symbol,
-        "price": float(best_price),
-        "currency": normalize_currency_code(best_currency),
+        "price": float(cached["price"]),
+        "currency": normalize_currency_code(cached.get("currency") or infer_currency(symbol)),
         "status": "priced",
         "fetched_at": int(time.time()),
         "source": "history_cache",
-        "price_date": best_date,
+        "price_date": cached["price_date"],
     }
 
 
@@ -7163,8 +7117,11 @@ def index():
             f'<span class="user-avatar" aria-hidden="true">{icon}</span>'
             f'<span class="selector-label">{safe_name}</span></button>'
         )
-    return HTML.replace("<!-- PORTFOLIO_BUTTONS -->", "".join(buttons)).replace(
-        "__PRIMARY_PORTFOLIO_ID__", json.dumps(PRIMARY_PORTFOLIO_ID)
+    return (
+        HTML.replace("<!-- PORTFOLIO_BUTTONS -->", "".join(buttons))
+        .replace("__PRIMARY_PORTFOLIO_ID__", json.dumps(PRIMARY_PORTFOLIO_ID))
+        .replace("__APP_VERSION_TEXT__", html.escape(APP_VERSION))
+        .replace("__APP_VERSION_JSON__", json.dumps(APP_VERSION))
     )
 
 
@@ -9098,7 +9055,7 @@ HTML = r"""<!doctype html>
       </span>
       <div class="topbar-copy">
         <h1>Portfolio Dashboard</h1>
-        <div class="meta" id="meta">Loading…</div>
+        <div class="meta" id="meta">Portfolio Dashboard v__APP_VERSION_TEXT__</div>
       </div>
     </div>
     <div class="topbar-actions">
@@ -10164,6 +10121,7 @@ HTML = r"""<!doctype html>
     let rankingsSort = { key: "common", direction: "desc" };
     let selectedExpenseTrendMode = "monthly";
     const PRIMARY_PORTFOLIO_ID = __PRIMARY_PORTFOLIO_ID__;
+    const APP_VERSION = __APP_VERSION_JSON__;
     let selectedPerson = PRIMARY_PORTFOLIO_ID;
     let selectedPeriod = "since24";
     let selectedBerkshireMode = "stock";
@@ -12874,7 +12832,7 @@ HTML = r"""<!doctype html>
 
       document.getElementById("range").textContent = chartRangeLabel(data.series || []);
       document.getElementById("value-window").textContent = selectedWindowLabel();
-      document.getElementById("meta").textContent = `${data.trade_source}: ${data.trade_count} trades, ${data.asset_count} assets, updated ${data.generated_at}`;
+      document.getElementById("meta").textContent = `Portfolio Dashboard v${APP_VERSION}`;
       updateExportSummary();
     }
     function renderChartsOnly() {

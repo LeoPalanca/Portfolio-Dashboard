@@ -173,6 +173,14 @@ clean_cache() {
             count=$((count+1))
         fi
     done
+    if [ -d "${cache_dir}/history" ]; then
+        local history_count
+        history_count=$(find "${cache_dir}/history" -type f | wc -l | tr -d ' ')
+        find "${cache_dir}/history" -type f -delete
+        find "${cache_dir}/history" -depth -type d -empty -delete
+        count=$((count+history_count))
+        echo -e "  Deleted ${history_count} per-symbol history cache file(s)"
+    fi
     echo -e "${GREEN}[+] Cleaned $count cache file(s).${NC}"
 }
 

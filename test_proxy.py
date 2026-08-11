@@ -27,9 +27,11 @@ class PriceHistoryLookupTest(unittest.TestCase):
             "fetched_at": int(time.time()),
             "prices": {"2024-06-03": 42.0},
         }
-        cache = {"ABC|2024-01-01|2024-12-31": payload}
+        class FakeStore:
+            def get_range(self, *args):
+                return payload
 
-        with patch.object(app, "get_history_cache", return_value=cache), patch.object(app, "yf", object()):
+        with patch.object(app, "get_history_store", return_value=FakeStore()), patch.object(app, "yf", object()):
             result = app.fetch_history("ABC", date(2024, 6, 1), date(2024, 6, 30))
 
         self.assertIs(result, payload)

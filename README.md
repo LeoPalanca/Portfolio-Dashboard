@@ -45,6 +45,11 @@ boundaries are:
   portfolio-specific derived data.
 - `cache_dir`: disposable price, history, news, watchlist, and CPI caches.
 
+Historical prices are stored as one compact merged JSON file per symbol under
+`cache_dir/history/`. On first use, installations with the former monolithic
+`history.json` cache migrate it automatically and archive the original under
+`cache_dir/legacy/`.
+
 Environment variables use the `PORTFOLIO_` prefix and override TOML values. For
 example:
 
