@@ -3234,6 +3234,41 @@
       if (el) el.addEventListener("input", updateCalculator);
     });
 
+    /* ─── Theme ─── */
+    const THEME_KEY = "theme";
+
+    function storedTheme() {
+      try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; }
+    }
+
+    function systemTheme() {
+      return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    }
+
+    function activeTheme() {
+      return document.documentElement.getAttribute("data-theme") || systemTheme();
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* ignore */ }
+      // Charts read their colours from computed tokens at draw time, so they
+      // need a repaint; CSS-driven parts re-theme on their own.
+      renderChartsOnly();
+    }
+
+    const themeToggle = document.getElementById("theme-toggle");
+    if (themeToggle) {
+      themeToggle.addEventListener("click", () => {
+        applyTheme(activeTheme() === "light" ? "dark" : "light");
+      });
+    }
+
+    // Follow the OS while the user has not made an explicit choice.
+    window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+      if (!storedTheme()) renderChartsOnly();
+    });
+
     initializeSectionIdentity();
     initializeSectionWrapButtons();
     checkImportOnboarding();

@@ -227,6 +227,7 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ─── Scrollbar ─── */
@@ -2216,3 +2217,41 @@ body.dashboard-redrawing .dashboard-refresh-overlay {
 .stack-tight { margin-top: var(--space-2); margin-bottom: 0; }
 .mb-3 { margin-bottom: var(--space-3); }
 .mb-0 { margin-bottom: 0; }
+
+/* ─── Theme toggle ─── */
+#theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) var(--ease);
+}
+#theme-toggle:hover {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+#theme-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* show the icon for the theme you would switch *to* */
+.theme-icon--light { display: none; }
+.theme-icon--dark { display: inline-flex; }
+:root[data-theme="light"] .theme-icon--light { display: inline-flex; }
+:root[data-theme="light"] .theme-icon--dark { display: none; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .theme-icon--light { display: inline-flex; }
+  :root:not([data-theme="dark"]) .theme-icon--dark { display: none; }
+}
