@@ -27,7 +27,8 @@ JS = ROOT / "static" / "app.js"
 HTML = ROOT / "templates" / "index.html"
 
 SPACING_PROPS = r"(?:padding|margin|gap|row-gap|column-gap)(?:-(?:top|right|bottom|left|inline|block))?"
-HEX_RE = re.compile(r"#[0-9a-fA-F]{3,8}\b")
+# (?<!&) keeps numeric HTML entities such as &#9650; from reading as colours
+HEX_RE = re.compile(r"(?<![&\w])#[0-9a-fA-F]{3,8}\b")
 RGB_RE = re.compile(r"\brgba?\(")
 VAR_USE_RE = re.compile(r"var\(\s*(--[\w-]+)")
 VAR_DEF_RE = re.compile(r"^\s*(--[\w-]+)\s*:", re.MULTILINE)

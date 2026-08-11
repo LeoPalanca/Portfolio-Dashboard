@@ -74,7 +74,7 @@
             <span class="time-scale" aria-hidden="true"><span></span></span>
           </button>
         </div>
-        <div class="periods selector-fancy broker-selector" id="brokers" aria-label="Broker filter" style="display:none;"></div>
+        <div class="periods selector-fancy broker-selector is-hidden" id="brokers" aria-label="Broker filter"></div>
       </div>
       <div class="control-row secondary-controls" aria-label="Secondary dashboard options">
         <span class="secondary-label">Options</span>
@@ -218,7 +218,7 @@
     </section>
 
     <!-- MyStyle Fee Compounding Calculator -->
-    <section id="mystyle-calc-section" style="display: none;">
+    <section id="mystyle-calc-section" class="is-hidden">
       <div class="section-head expanded" data-collapse="mystyle-calc-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -268,7 +268,7 @@
               <span class="calc-val green" id="val-proj-etf">€0</span>
             </div>
             <div class="calc-row" style="margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line-strong);">
-              <span class="calc-label" style="font-weight: 600;">Estimated Fee Difference:</span>
+              <span class="calc-label fw-600">Estimated Fee Difference:</span>
               <span class="calc-val amber" id="val-lost-fees">€0</span>
             </div>
             <div class="calc-progress">
@@ -750,7 +750,7 @@
     </section>
 
     <!-- Portfolio Statistics -->
-    <section id="stats-section" style="display:none;">
+    <section id="stats-section" class="is-hidden">
       <div class="section-head" data-collapse="stats-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
@@ -769,11 +769,11 @@
               <h3>Your Portfolio</h3>
               <table>
                 <tbody>
-                  <tr><td style="text-align:left; font-weight:600;">Mean Daily Return</td><td id="stats-port-mean" style="text-align:right; font-weight:600;">-</td></tr>
-                  <tr><td style="text-align:left;">Daily Return Variance</td><td id="stats-port-var" style="text-align:right;">-</td></tr>
-                  <tr><td style="text-align:left;">Daily Volatility (Std Dev)</td><td id="stats-port-daily-vol" style="text-align:right;">-</td></tr>
-                  <tr><td style="text-align:left; font-weight:600; color:var(--blue);">Annualized Volatility</td><td id="stats-port-ann-vol" style="text-align:right; font-weight:600; color:var(--blue);">-</td></tr>
-                  <tr><td style="text-align:left; font-weight:600; color:var(--green);">Annualized Sharpe Ratio</td><td id="stats-port-sharpe" style="text-align:right; font-weight:600; color:var(--green);">-</td></tr>
+                  <tr><td class="ta-l fw-600">Mean Daily Return</td><td id="stats-port-mean" class="ta-r fw-600">-</td></tr>
+                  <tr><td class="ta-l">Daily Return Variance</td><td id="stats-port-var" class="ta-r">-</td></tr>
+                  <tr><td class="ta-l">Daily Volatility (Std Dev)</td><td id="stats-port-daily-vol" class="ta-r">-</td></tr>
+                  <tr><td class="ta-l fw-600 c-accent">Annualized Volatility</td><td id="stats-port-ann-vol" class="ta-r fw-600 c-accent">-</td></tr>
+                  <tr><td class="ta-l fw-600 c-positive">Annualized Sharpe Ratio</td><td id="stats-port-sharpe" class="ta-r fw-600 c-positive">-</td></tr>
                 </tbody>
               </table>
             </div>
@@ -781,11 +781,11 @@
               <h3>Benchmark: MSCI World</h3>
               <table>
                 <tbody>
-                  <tr><td style="text-align:left; font-weight:600;">Mean Daily Return</td><td id="stats-msci-mean" style="text-align:right; font-weight:600;">-</td></tr>
-                  <tr><td style="text-align:left;">Daily Return Variance</td><td id="stats-msci-var" style="text-align:right;">-</td></tr>
-                  <tr><td style="text-align:left;">Daily Volatility (Std Dev)</td><td id="stats-msci-daily-vol" style="text-align:right;">-</td></tr>
-                  <tr><td style="text-align:left; font-weight:600; color:var(--blue);">Annualized Volatility</td><td id="stats-msci-ann-vol" style="text-align:right; font-weight:600; color:var(--blue);">-</td></tr>
-                  <tr><td style="text-align:left; font-weight:600; color:var(--green);">Annualized Sharpe Ratio</td><td id="stats-msci-sharpe" style="text-align:right; font-weight:600; color:var(--green);">-</td></tr>
+                  <tr><td class="ta-l fw-600">Mean Daily Return</td><td id="stats-msci-mean" class="ta-r fw-600">-</td></tr>
+                  <tr><td class="ta-l">Daily Return Variance</td><td id="stats-msci-var" class="ta-r">-</td></tr>
+                  <tr><td class="ta-l">Daily Volatility (Std Dev)</td><td id="stats-msci-daily-vol" class="ta-r">-</td></tr>
+                  <tr><td class="ta-l fw-600 c-accent">Annualized Volatility</td><td id="stats-msci-ann-vol" class="ta-r fw-600 c-accent">-</td></tr>
+                  <tr><td class="ta-l fw-600 c-positive">Annualized Sharpe Ratio</td><td id="stats-msci-sharpe" class="ta-r fw-600 c-positive">-</td></tr>
                 </tbody>
               </table>
             </div>
@@ -793,11 +793,11 @@
               <h3>Benchmark: XEON (Cash)</h3>
               <table>
                 <tbody>
-                  <tr><td style="text-align:left; font-weight:600;">Mean Daily Return</td><td id="stats-xeon-mean" style="text-align:right; font-weight:600;">-</td></tr>
-                  <tr><td style="text-align:left;">Daily Return Variance</td><td id="stats-xeon-var" style="text-align:right;">-</td></tr>
-                  <tr><td style="text-align:left;">Daily Volatility (Std Dev)</td><td id="stats-xeon-daily-vol" style="text-align:right;">-</td></tr>
-                  <tr><td style="text-align:left; font-weight:600; color:var(--blue);">Annualized Volatility</td><td id="stats-xeon-ann-vol" style="text-align:right; font-weight:600; color:var(--blue);">-</td></tr>
-                  <tr><td style="text-align:left; font-weight:600; color:var(--green);">Annualized Sharpe Ratio</td><td id="stats-xeon-sharpe" style="text-align:right; font-weight:600; color:var(--green);">-</td></tr>
+                  <tr><td class="ta-l fw-600">Mean Daily Return</td><td id="stats-xeon-mean" class="ta-r fw-600">-</td></tr>
+                  <tr><td class="ta-l">Daily Return Variance</td><td id="stats-xeon-var" class="ta-r">-</td></tr>
+                  <tr><td class="ta-l">Daily Volatility (Std Dev)</td><td id="stats-xeon-daily-vol" class="ta-r">-</td></tr>
+                  <tr><td class="ta-l fw-600 c-accent">Annualized Volatility</td><td id="stats-xeon-ann-vol" class="ta-r fw-600 c-accent">-</td></tr>
+                  <tr><td class="ta-l fw-600 c-positive">Annualized Sharpe Ratio</td><td id="stats-xeon-sharpe" class="ta-r fw-600 c-positive">-</td></tr>
                 </tbody>
               </table>
             </div>
@@ -851,7 +851,7 @@
       </div>
     </section>
     <!-- Optional per-portfolio actions loaded from private configuration. -->
-    <section id="todos-section" style="display:none;">
+    <section id="todos-section" class="is-hidden">
       <div class="section-head expanded" data-collapse="todos-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>

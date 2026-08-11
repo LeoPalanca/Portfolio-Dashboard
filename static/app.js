@@ -7,12 +7,12 @@
       if (type === 'europension') {
         const title = "Mediolanum Europension TaxBenefit Previdenza";
         const content = `
-          <p style="margin-bottom: 12px;"><strong>What it is:</strong> A private individual pension plan (<em>PIP - Piano Individuale Pensionistico</em>) offered by Banca Mediolanum.</p>
-          <p style="margin-bottom: 12px;"><strong>Tax Advantage:</strong> Annual contributions are fully deductible from taxable income up to a maximum of <strong>€5.164,57</strong>. At a 43% marginal tax bracket, this yields an immediate <strong>+75.4% return</strong> (saving €2.220 in taxes on a €2.943 net outlay).</p>
-          <div style="background: rgba(245, 158, 11, 0.08); border-left: 3px solid var(--amber); padding: 12px; margin-bottom: 16px; border-radius: 4px; font-size: 13px; color: var(--ink-secondary);">
-            <strong style="color: var(--amber);">Management Fee Drag Compounding Impact:</strong>
-            <p style="margin-top: 6px; margin-bottom: 0;">Traditional PIPs have an annual management cost (ISC) of <strong>~2.0%</strong>. A low-cost alternative Open Pension Fund (FPA) like <em>Amundi SecondaPensione</em> has a fee of only <strong>~0.8%</strong>.</p>
-            <p style="margin-top: 6px; margin-bottom: 0;">Over a 15-year period on €5.164 annual contributions:</p>
+          <p class="mb-3"><strong>What it is:</strong> A private individual pension plan (<em>PIP - Piano Individuale Pensionistico</em>) offered by Banca Mediolanum.</p>
+          <p class="mb-3"><strong>Tax Advantage:</strong> Annual contributions are fully deductible from taxable income up to a maximum of <strong>€5.164,57</strong>. At a 43% marginal tax bracket, this yields an immediate <strong>+75.4% return</strong> (saving €2.220 in taxes on a €2.943 net outlay).</p>
+          <div style="background: color-mix(in srgb, var(--warning) 8%, transparent); border-left: 3px solid var(--amber); padding: 12px; margin-bottom: 16px; border-radius: 4px; font-size: 13px; color: var(--ink-secondary);">
+            <strong class="c-warning">Management Fee Drag Compounding Impact:</strong>
+            <p class="stack-tight">Traditional PIPs have an annual management cost (ISC) of <strong>~2.0%</strong>. A low-cost alternative Open Pension Fund (FPA) like <em>Amundi SecondaPensione</em> has a fee of only <strong>~0.8%</strong>.</p>
+            <p class="stack-tight">Over a 15-year period on €5.164 annual contributions:</p>
             <ul style="margin: 6px 0 0 16px; padding: 0;">
               <li><strong>Standard FPA (~0.8% fee)</strong>: yields <strong>~€120.000</strong> net payout</li>
               <li><strong>Traditional PIP (~2.0% fee)</strong>: yields <strong>~€108.000</strong> net payout</li>
@@ -24,13 +24,13 @@
       } else if (type === 'mystyle') {
         const title = "Managed Product Fee Analysis";
         const content = `
-          <p style="margin-bottom: 12px;"><strong>What it is:</strong> A multi-fund insurance wrapper can combine product-level charges with the costs of its underlying funds.</p>
-          <p style="margin-bottom: 12px;"><strong>Why compare fees:</strong> Small annual cost differences compound over long holding periods. Use the calculator with the fees and capital from your own documents.</p>
-          <div style="background: rgba(239, 68, 68, 0.08); border-left: 3px solid var(--red); padding: 12px; margin-bottom: 16px; border-radius: 4px; font-size: 13px; color: var(--ink-secondary);">
-            <strong style="color: var(--red);">Illustrative comparison only</strong>
-            <p style="margin-top: 6px; margin-bottom: 0;">The calculator does not include taxes, trading costs, guarantees, insurance benefits, or changes in future returns. It is not investment advice.</p>
+          <p class="mb-3"><strong>What it is:</strong> A multi-fund insurance wrapper can combine product-level charges with the costs of its underlying funds.</p>
+          <p class="mb-3"><strong>Why compare fees:</strong> Small annual cost differences compound over long holding periods. Use the calculator with the fees and capital from your own documents.</p>
+          <div style="background: color-mix(in srgb, var(--negative) 8%, transparent); border-left: 3px solid var(--red); padding: 12px; margin-bottom: 16px; border-radius: 4px; font-size: 13px; color: var(--ink-secondary);">
+            <strong class="c-negative">Illustrative comparison only</strong>
+            <p class="stack-tight">The calculator does not include taxes, trading costs, guarantees, insurance benefits, or changes in future returns. It is not investment advice.</p>
           </div>
-          <p style="margin-bottom: 0;">Actual statement charges belong in the private portfolio configuration and appear in the dashboard's Frictions section.</p>
+          <p class="mb-0">Actual statement charges belong in the private portfolio configuration and appear in the dashboard's Frictions section.</p>
         `;
         showInfoModal(title, content);
       }
@@ -105,13 +105,13 @@
     }
     function initializeSectionIdentity() {
       const accents = {
-        blue: ["#60a5fa", "rgba(96,165,250,0.09)"],
-        teal: ["#2dd4bf", "rgba(45,212,191,0.08)"],
-        green: ["#34d399", "rgba(52,211,153,0.08)"],
-        amber: ["#fbbf24", "rgba(251,191,36,0.08)"],
-        violet: ["#a78bfa", "rgba(167,139,250,0.08)"],
-        red: ["#f87171", "rgba(248,113,113,0.07)"],
-        slate: ["rgba(148,163,184,0.70)", "rgba(148,163,184,0.06)"]
+        blue: ["var(--accent)", "color-mix(in srgb, var(--accent) 9%, transparent)"],
+        teal: ["var(--series-teal)", "color-mix(in srgb, var(--series-teal) 8%, transparent)"],
+        green: ["var(--positive)", "color-mix(in srgb, var(--positive) 8%, transparent)"],
+        amber: ["var(--warning)", "color-mix(in srgb, var(--warning) 8%, transparent)"],
+        violet: ["var(--series-violet)", "color-mix(in srgb, var(--series-violet) 8%, transparent)"],
+        red: ["var(--negative)", "color-mix(in srgb, var(--negative) 7%, transparent)"],
+        slate: ["var(--text-muted)", "color-mix(in srgb, var(--text-muted) 6%, transparent)"]
       };
       const config = {
         "Portfolio Value": { tier: "primary", accent: "blue", icon: "value" },
@@ -772,7 +772,7 @@
         const y = top + t * (h - top - bottom);
         const value = maxY - t * (maxY - minY);
         svg.insertAdjacentHTML("beforeend", `<line class="grid-line" x1="${left}" y1="${y}" x2="${w-right}" y2="${y}"></line>`);
-        svg.insertAdjacentHTML("beforeend", `<text x="${left - 6}" y="${y + 4}" fill="#64748b" font-size="11" text-anchor="end">${tickFmt(value)}</text>`);
+        svg.insertAdjacentHTML("beforeend", `<text x="${left - 6}" y="${y + 4}" class="chart-axis-label" text-anchor="end">${tickFmt(value)}</text>`);
       }
       /* Transaction Flow Events (Dotted vertical lines) */
       if (svgId === "value-chart" && showTransactions) {
@@ -802,7 +802,7 @@
             const strokeWidth = (1.0 + ratio * 3.0).toFixed(2);
             // Scale opacity from 0.25 to 0.75
             const opacity = (0.25 + ratio * 0.5).toFixed(2);
-            const color = diff > 0 ? "#22c55e" : "#ef4444"; // green vs red
+            const flowClass = diff > 0 ? "is-inflow" : "is-outflow";
             const flowAmtStr = Math.abs(diff).toLocaleString("it-IT", {minimumFractionDigits: 0, maximumFractionDigits: 2});
             let tooltipText = "";
             if (useTotal) {
@@ -816,10 +816,9 @@
             }
             
             svg.insertAdjacentHTML("beforeend", `
-              <line class="flow-event-line" 
+              <line class="flow-event-line ${flowClass}" 
                     x1="${x}" y1="${top}" 
                     x2="${x}" y2="${h - bottom}" 
-                    stroke="${color}" 
                     stroke-opacity="${opacity}" 
                     stroke-width="${strokeWidth}" 
                     stroke-dasharray="3,3"
@@ -839,21 +838,21 @@
       /* X-axis ticks */
       xTicks(series, Math.min(8, Math.floor(w / 110))).forEach(date => {
         const x = xScale(date);
-        svg.insertAdjacentHTML("beforeend", `<text x="${x}" y="${h - 10}" fill="#64748b" font-size="11" text-anchor="middle">${formatShortDate(date)}</text>`);
+        svg.insertAdjacentHTML("beforeend", `<text x="${x}" y="${h - 10}" class="chart-axis-label" text-anchor="middle">${formatShortDate(date)}</text>`);
       });
       addHover(svg, series, defs, xScale, yScale, w, h, top, bottom, (value, key) => key.includes("pct") || key.includes("score") ? `${value.toFixed(2)}%` : money(value));
     }
     function getLegendColor(klass) {
-      if (klass.includes("market")) return getComputedStyle(document.documentElement).getPropertyValue("--green");
-      if (klass.includes("invested")) return getComputedStyle(document.documentElement).getPropertyValue("--blue");
-      if (klass.includes("profit")) return getComputedStyle(document.documentElement).getPropertyValue("--violet");
-      if (klass.includes("return")) return getComputedStyle(document.documentElement).getPropertyValue("--red");
-      if (klass.includes("msci")) return getComputedStyle(document.documentElement).getPropertyValue("--cyan");
-      if (klass.includes("xeon")) return getComputedStyle(document.documentElement).getPropertyValue("--pink");
-      if (klass.includes("inflation")) return getComputedStyle(document.documentElement).getPropertyValue("--amber");
-      if (klass.includes("weighted")) return getComputedStyle(document.documentElement).getPropertyValue("--violet");
-      if (klass.includes("freq")) return getComputedStyle(document.documentElement).getPropertyValue("--teal");
-      return "#94a3b8";
+      if (klass.includes("market")) return getComputedStyle(document.documentElement).getPropertyValue("--positive");
+      if (klass.includes("invested")) return getComputedStyle(document.documentElement).getPropertyValue("--accent");
+      if (klass.includes("profit")) return getComputedStyle(document.documentElement).getPropertyValue("--series-violet");
+      if (klass.includes("return")) return getComputedStyle(document.documentElement).getPropertyValue("--negative");
+      if (klass.includes("msci")) return getComputedStyle(document.documentElement).getPropertyValue("--series-cyan");
+      if (klass.includes("xeon")) return getComputedStyle(document.documentElement).getPropertyValue("--series-pink");
+      if (klass.includes("inflation")) return getComputedStyle(document.documentElement).getPropertyValue("--warning");
+      if (klass.includes("weighted")) return getComputedStyle(document.documentElement).getPropertyValue("--series-violet");
+      if (klass.includes("freq")) return getComputedStyle(document.documentElement).getPropertyValue("--series-teal");
+      return getComputedStyle(document.documentElement).getPropertyValue("--text-muted");
     }
     function bindReturnLegend() {
       document.querySelectorAll("[data-return-series]").forEach(input => {
@@ -1099,14 +1098,14 @@
         const y = top + t * (h - top - bottom);
         const value = maxY - t * (maxY - minY);
         svg.insertAdjacentHTML("beforeend", `<line class="grid-line" x1="${left}" y1="${y}" x2="${w-right}" y2="${y}"></line>`);
-        svg.insertAdjacentHTML("beforeend", `<text x="${left - 6}" y="${y + 4}" fill="#64748b" font-size="11" text-anchor="end">${smartTickFormat(value)}</text>`);
+        svg.insertAdjacentHTML("beforeend", `<text x="${left - 6}" y="${y + 4}" class="chart-axis-label" text-anchor="end">${smartTickFormat(value)}</text>`);
       }
       activeChartDefs.forEach(([key, label, klass]) => {
         svg.insertAdjacentHTML("beforeend", `<path class="series-line ${klass}" d="${pointPath(series, key, xScale, yScale)}"></path>`);
       });
       xTicks(series, Math.min(8, Math.floor(w / 110))).forEach(date => {
         const x = xScale(date);
-        svg.insertAdjacentHTML("beforeend", `<text x="${x}" y="${h - 10}" fill="#64748b" font-size="11" text-anchor="middle">${formatShortDate(date)}</text>`);
+        svg.insertAdjacentHTML("beforeend", `<text x="${x}" y="${h - 10}" class="chart-axis-label" text-anchor="middle">${formatShortDate(date)}</text>`);
       });
       document.getElementById("legend").innerHTML = chartDefs.map(([key, label, klass]) => cashLegendItem(key, label, klass)).join("");
       bindCashLegend();
@@ -1154,14 +1153,14 @@
       let color = "";
       let bg = "";
       if (type === "ETF") {
-        color = "#10B981";
-        bg = "rgba(16, 185, 129, 0.12)";
+        color = "var(--positive)";
+        bg = "color-mix(in srgb, var(--positive) 12%, transparent)";
       } else if (type === "STOCK") {
-        color = "#F59E0B";
-        bg = "rgba(245, 158, 11, 0.12)";
+        color = "var(--warning)";
+        bg = "color-mix(in srgb, var(--warning) 12%, transparent)";
       } else if (type === "CUR") {
-        color = "#8B5CF6";
-        bg = "rgba(139, 92, 246, 0.12)";
+        color = "var(--series-violet)";
+        bg = "color-mix(in srgb, var(--series-violet) 12%, transparent)";
       } else {
         return "";
       }
@@ -1216,7 +1215,7 @@
       const sortedDisplayed = sortedPositions(displayed);
       document.getElementById("positions").innerHTML = sortedDisplayed.length ? sortedDisplayed.map(p => {
         const logoUrl = p.isin ? `https://assets.parqet.com/logos/isin/${p.isin}?format=png` : (p.symbol ? `https://assets.parqet.com/logos/symbol/${p.symbol}?format=png` : '');
-        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${p.symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${p.symbol}?format=png'; } else { this.style.display='none'; }" style="width: 20px; height: 20px; border-radius: 50%; vertical-align: middle; margin-right: 8px; background: rgba(255,255,255,0.05); flex-shrink: 0;">` : '';
+        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${p.symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${p.symbol}?format=png'; } else { this.style.display='none'; }" style="width: 20px; height: 20px; border-radius: 50%; vertical-align: middle; margin-right: 8px; background: var(--tint-hover); flex-shrink: 0;">` : '';
         
         let assetNameHtml = `<span>${p.asset}</span>`;
         if (p.asset.toLowerCase().includes("europension taxbenefit")) {
@@ -1267,7 +1266,7 @@
         
         return `
           <tr>
-            <td style="text-align: left; display: flex; align-items: center;">${logoImg}${assetNameHtml}${badgeHtml(p.asset_type)}</td>
+            <td class="cell-flex">${logoImg}${assetNameHtml}${badgeHtml(p.asset_type)}</td>
             <td>${num.format(p.quantity)}</td>
             <td>${p.isin || ""}</td>
             <td>${p.symbol || ""}</td>
@@ -1305,16 +1304,16 @@
           let holdingsHtml = "";
           if (hasHoldings) {
             holdingsHtml = `
-              <tr id="${subId}" style="display: none; background: rgba(255,255,255,0.015);">
+              <tr id="${subId}" style="display: none; background: var(--tint-faint);">
                 <td colspan="3" style="padding: 4px 12px 8px 20px;">
                   <table style="width: 100%; border-collapse: collapse; margin: 2px 0;">
                     <tbody>
                       ${row.holdings.map(h => {
                         const hTicker = h.holding_ticker;
                         const logoUrl = hTicker ? `https://assets.parqet.com/logos/symbol/${hTicker}?format=png` : '';
-                        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="this.style.display='none';" style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: rgba(255,255,255,0.05); flex-shrink: 0;">` : '';
+                        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="this.style.display='none';" style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
                         return `
-                          <tr style="border-bottom: 1px solid rgba(255,255,255,0.01); line-height: 24px;">
+                          <tr style="border-bottom: 1px solid var(--tint-faint); line-height: 24px;">
                             <td style="text-align: left; padding: 2px 0; font-size: 0.82em; display: flex; align-items: center; color: var(--muted);">${logoImg}<span>${escapeHtml(h.holding)}</span></td>
                             <td style="text-align: right; padding: 2px 0; font-size: 0.82em; color: var(--muted);">${money(h.market_value_eur)}</td>
                             <td style="text-align: right; padding: 2px 0; font-size: 0.82em; color: var(--muted);">${percent(h.weight_pct)}</td>
@@ -1334,7 +1333,7 @@
           
           return `
             <tr style="${clickableStyle}" ${onclickAttr}>
-              <td style="text-align: left; display: flex; align-items: center;">${chevron}${distributionNameCell(row, key)}</td>
+              <td class="cell-flex">${chevron}${distributionNameCell(row, key)}</td>
               <td>${money(row.market_value_eur)}</td>
               <td>${percent(row.weight_pct)}</td>
             </tr>
@@ -1346,10 +1345,10 @@
       return rows.map(row => {
         const ticker = row.holding_ticker;
         const logoUrl = (key === "holding" && ticker) ? `https://assets.parqet.com/logos/symbol/${ticker}?format=png` : '';
-        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="this.style.display='none';" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: rgba(255,255,255,0.05); flex-shrink: 0;">` : '';
+        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="this.style.display='none';" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
         return `
           <tr>
-            <td style="text-align: left; display: flex; align-items: center;">${logoImg}${distributionNameCell(row, key)}</td>
+            <td class="cell-flex">${logoImg}${distributionNameCell(row, key)}</td>
             <td>${money(row.market_value_eur)}</td>
             <td>${percent(row.weight_pct)}</td>
           </tr>
@@ -1409,11 +1408,11 @@
             const isSelected = sourceKey(row) === selectedDistributionSource;
             const symbol = window.assetToSymbolMap ? window.assetToSymbolMap[row.asset] : '';
             const logoUrl = row.isin ? `https://assets.parqet.com/logos/isin/${row.isin}?format=png` : (symbol ? `https://assets.parqet.com/logos/symbol/${symbol}?format=png` : '');
-            const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: rgba(255,255,255,0.05); flex-shrink: 0;">` : '';
+            const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
             return `
               <tr class="composition-source-row ${isSelected ? "selected" : ""}" data-source-key="${escapeHtml(sourceKey(row))}">
-                <td style="text-align: left; display: flex; align-items: center;">${logoImg}<div><div style="display:flex; align-items:center; gap:4px;"><span>${row.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}${isSelected ? '<span class="selected-flag">Selected</span>' : ''}</div><div class="subtle">${row.isin || ""}</div></div></td>
-                <td style="text-align: left;">${escapeHtml(row.fund_name || row.asset || "")}</td>
+                <td class="cell-flex">${logoImg}<div><div style="display:flex; align-items:center; gap:4px;"><span>${row.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}${isSelected ? '<span class="selected-flag">Selected</span>' : ''}</div><div class="subtle">${row.isin || ""}</div></div></td>
+                <td class="ta-l">${escapeHtml(row.fund_name || row.asset || "")}</td>
                 <td>${row.issuer || ""}</td>
                 <td>${sourceStatusLabel(row)}</td>
                 <td>${row.rows || 0}${row.weight_sum ? ` / ${row.weight_sum}%` : ""}</td>
@@ -1436,10 +1435,10 @@
         ? data.missing.map(row => {
             const symbol = window.assetToSymbolMap ? window.assetToSymbolMap[row.asset] : '';
             const logoUrl = row.isin ? `https://assets.parqet.com/logos/isin/${row.isin}?format=png` : (symbol ? `https://assets.parqet.com/logos/symbol/${symbol}?format=png` : '');
-            const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: rgba(255,255,255,0.05); flex-shrink: 0;">` : '';
+            const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
             return `
               <tr>
-                <td style="text-align: left; display: flex; align-items: center;">${logoImg}<span>${row.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}</td>
+                <td class="cell-flex">${logoImg}<span>${row.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}</td>
                 <td>${row.isin || ""}</td>
                 <td>${money(row.market_value_eur)}</td>
                 <td>${sourceStatusLabel(row)}</td>
@@ -1456,7 +1455,7 @@
       const upperSymbol = symbol.toUpperCase();
       const isin = window.symbolToIsinMap ? window.symbolToIsinMap[upperSymbol] : '';
       const logoUrl = isin ? `https://assets.parqet.com/logos/isin/${isin}?format=png` : `https://assets.parqet.com/logos/symbol/${upperSymbol}?format=png`;
-      return `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1) { this.src = 'https://assets.parqet.com/logos/symbol/${upperSymbol}?format=png'; } else { this.style.display='none'; }" style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 5px; background: rgba(255,255,255,0.15); flex-shrink: 0;">`;
+      return `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1) { this.src = 'https://assets.parqet.com/logos/symbol/${upperSymbol}?format=png'; } else { this.style.display='none'; }" style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 5px; background: var(--tint-strong); flex-shrink: 0;">`;
     }
 
     function toggleNewsFilter(symbol) {
@@ -1521,8 +1520,8 @@
               <div style="display: flex; justify-content: space-between; align-items: start;">
                 <h4 style="color: var(--red); font-size: 14px; margin-bottom: 4px;">${escapeHtml(item.ticker)}</h4>
                 <button type="button" class="watchlist-remove-btn" data-ticker="${escapeHtml(item.ticker)}" style="
-                  background: rgba(248, 113, 113, 0.1);
-                  border: 1px solid rgba(248, 113, 113, 0.2);
+                  background: color-mix(in srgb, var(--negative) 10%, transparent);
+                  border: 1px solid color-mix(in srgb, var(--negative) 20%, transparent);
                   color: var(--red);
                   border-radius: 50%;
                   width: 24px;
@@ -1561,8 +1560,8 @@
             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
               <span style="font-weight: 700; font-size: 14px; color: var(--ink);">${escapeHtml(item.ticker)}</span>
               <button type="button" class="watchlist-remove-btn" data-ticker="${escapeHtml(item.ticker)}" style="
-                background: rgba(248, 113, 113, 0.1);
-                border: 1px solid rgba(248, 113, 113, 0.2);
+                background: color-mix(in srgb, var(--negative) 10%, transparent);
+                border: 1px solid color-mix(in srgb, var(--negative) 20%, transparent);
                 color: var(--red);
                 border-radius: 50%;
                 width: 24px;
@@ -1598,24 +1597,24 @@
                 font-size: 11px;
                 font-weight: 600;
                 color: var(--cyan);
-                background: rgba(34, 211, 238, 0.1);
-                border: 1px solid rgba(34, 211, 238, 0.2);
+                background: color-mix(in srgb, var(--series-cyan) 10%, transparent);
+                border: 1px solid color-mix(in srgb, var(--series-cyan) 20%, transparent);
                 border-radius: 6px;
                 padding: 4px 8px;
                 text-decoration: none;
                 transition: all 0.2s ease;
-              " onmouseover="this.style.background='rgba(34, 211, 238, 0.2)';" onmouseout="this.style.background='rgba(34, 211, 238, 0.1)';">JustETF</a>
+              " onmouseover="this.style.background='color-mix(in srgb, var(--series-cyan) 20%, transparent)';" onmouseout="this.style.background='color-mix(in srgb, var(--series-cyan) 10%, transparent)';">JustETF</a>
               <a href="${escapeHtml(item.yfinance_url)}" target="_blank" style="
                 font-size: 11px;
                 font-weight: 600;
                 color: var(--amber);
-                background: rgba(251, 191, 36, 0.1);
-                border: 1px solid rgba(251, 191, 36, 0.2);
+                background: color-mix(in srgb, var(--warning) 10%, transparent);
+                border: 1px solid color-mix(in srgb, var(--warning) 20%, transparent);
                 border-radius: 6px;
                 padding: 4px 8px;
                 text-decoration: none;
                 transition: all 0.2s ease;
-              " onmouseover="this.style.background='rgba(251, 191, 36, 0.2)';" onmouseout="this.style.background='rgba(251, 191, 36, 0.1)';">Yahoo</a>
+              " onmouseover="this.style.background='color-mix(in srgb, var(--warning) 20%, transparent)';" onmouseout="this.style.background='color-mix(in srgb, var(--warning) 10%, transparent)';">Yahoo</a>
             </div>
           </div>
         </div>
@@ -1737,10 +1736,10 @@
       document.getElementById("dividends-aggregate").innerHTML = sortedAgg.map(r => {
         const symbol = window.assetToSymbolMap ? window.assetToSymbolMap[r.asset] : '';
         const logoUrl = r.isin ? `https://assets.parqet.com/logos/isin/${r.isin}?format=png` : (symbol ? `https://assets.parqet.com/logos/symbol/${symbol}?format=png` : '');
-        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: rgba(255,255,255,0.05); flex-shrink: 0;">` : '';
+        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
         return `
           <tr>
-            <td style="text-align: left; display: flex; align-items: center;">${logoImg}<span>${r.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[r.asset] : '')}</td>
+            <td class="cell-flex">${logoImg}<span>${r.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[r.asset] : '')}</td>
             <td>${r.isin}</td>
             <td>${r.count}</td>
             <td>${money(r.amount)}</td>
@@ -1794,9 +1793,9 @@
             <td>${y.year}</td>
             <td>${money(y.total_net)}</td>
             <td>${avgMarket > 0 ? money(avgMarket) : "-"}</td>
-            <td class="positive" style="font-weight: 600;">${avgMarket > 0 ? `${pct.format(divYield)}%` : "-"}</td>
+            <td class="positive fw-600">${avgMarket > 0 ? `${pct.format(divYield)}%` : "-"}</td>
             <td>${avgContrib > 0 ? money(avgContrib) : "-"}</td>
-            <td class="positive" style="font-weight: 600;">${avgContrib > 0 ? `${pct.format(yieldOnCost)}%` : "-"}</td>
+            <td class="positive fw-600">${avgContrib > 0 ? `${pct.format(yieldOnCost)}%` : "-"}</td>
           </tr>
         `;
       }).join("");
@@ -1804,12 +1803,12 @@
       document.getElementById("dividends").innerHTML = (dividends.rows || []).map(row => {
         const symbol = window.assetToSymbolMap ? window.assetToSymbolMap[row.asset] : '';
         const logoUrl = row.isin ? `https://assets.parqet.com/logos/isin/${row.isin}?format=png` : (symbol ? `https://assets.parqet.com/logos/symbol/${symbol}?format=png` : '');
-        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: rgba(255,255,255,0.05); flex-shrink: 0;">` : '';
+        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" style="width: 16px; height: 16px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
         return `
           <tr>
             <td>${row.date}</td>
             <td>${row.broker}</td>
-            <td style="text-align: left; display: flex; align-items: center;">${logoImg}<span>${row.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}</td>
+            <td class="cell-flex">${logoImg}<span>${row.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}</td>
             <td>${row.isin || ""}</td>
             <td>${money(row.amount_eur)}</td>
             <td>${money(row.tax_eur)}</td>
@@ -1828,9 +1827,9 @@
       document.getElementById("cash-interest-broker").innerHTML = info.by_broker && info.by_broker.length
         ? info.by_broker.map(row => `
             <tr>
-              <td style="text-align: left; font-weight: 500;">${escapeHtml(row.broker)}</td>
+              <td class="ta-l fw-500">${escapeHtml(row.broker)}</td>
               <td>${row.payments_count}</td>
-              <td class="positive" style="font-weight: 600;">${money(row.net_eur)}</td>
+              <td class="positive fw-600">${money(row.net_eur)}</td>
               <td class="negative">${money(row.tax_eur)}</td>
               <td>${money(row.gross_eur)}</td>
             </tr>
@@ -1842,8 +1841,8 @@
         ? info.payments.map(row => `
             <tr>
               <td>${row.date}</td>
-              <td style="text-align: left; font-weight: 500;">${escapeHtml(row.broker)}</td>
-              <td class="positive" style="font-weight: 600;">${money(row.net_eur)}</td>
+              <td class="ta-l fw-500">${escapeHtml(row.broker)}</td>
+              <td class="positive fw-600">${money(row.net_eur)}</td>
               <td class="negative">${money(row.tax_eur)}</td>
               <td>${money(row.gross_eur)}</td>
               <td style="text-align: left; color: var(--muted); font-size: 0.9em;">${escapeHtml(row.description)}</td>
@@ -1966,27 +1965,27 @@
       if (legend) {
         if (selectedExpenseTrendMode === "cumulative") {
           legend.innerHTML = `
-            <span style="display: inline-flex; align-items: center; gap: 4px; color: var(--text-sub, #94a3b8);">
-              <i style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #60a5fa;"></i>
+            <span class="inline-legend">
+              <i class="legend-dot legend-dot--accent"></i>
               Cumulative Outflow
             </span>
-            <span style="display: inline-flex; align-items: center; gap: 4px; color: var(--text-sub, #94a3b8);">
-              <i style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34d399;"></i>
+            <span class="inline-legend">
+              <i class="legend-dot legend-dot--positive"></i>
               Cumulative Income
             </span>
-            <span style="display: inline-flex; align-items: center; gap: 4px; color: var(--text-sub, #94a3b8);">
-              <i style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #fbbf24;"></i>
+            <span class="inline-legend">
+              <i class="legend-dot legend-dot--warning"></i>
               Cumulative Net Outflow
             </span>
           `;
         } else {
           legend.innerHTML = `
-            <span style="display: inline-flex; align-items: center; gap: 4px; color: var(--text-sub, #94a3b8);">
-              <i style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #60a5fa;"></i>
+            <span class="inline-legend">
+              <i class="legend-dot legend-dot--accent"></i>
               Outflow
             </span>
-            <span style="display: inline-flex; align-items: center; gap: 4px; color: var(--text-sub, #94a3b8);">
-              <i style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34d399;"></i>
+            <span class="inline-legend">
+              <i class="legend-dot legend-dot--positive"></i>
               Income
             </span>
           `;
@@ -2063,9 +2062,9 @@
           netPath += `${index ? "L" : "M"}${x} ${yNet}`;
         });
 
-        const outflowLine = `<path class="expense-line spend" d="${outflowPath}" fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>`;
-        const incomeLine = `<path class="expense-line income" d="${incomePath}" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>`;
-        const netLine = `<path class="expense-line net" d="${netPath}" fill="none" stroke="#fbbf24" stroke-width="2" stroke-dasharray="3,3" stroke-linecap="round" stroke-linejoin="round"></path>`;
+        const outflowLine = `<path class="expense-line spend" d="${outflowPath}" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>`;
+        const incomeLine = `<path class="expense-line income" d="${incomePath}" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>`;
+        const netLine = `<path class="expense-line net" d="${netPath}" fill="none" stroke-width="2" stroke-dasharray="3,3" stroke-linecap="round" stroke-linejoin="round"></path>`;
 
         const dotsAndLabels = cumulativeRows.map((row, index) => {
           const x = xScale(index);
@@ -2078,13 +2077,13 @@
           const showLabel = (index % labelStep === 0) || (index === cumulativeRows.length - 1);
 
           return `
-            <circle cx="${x.toFixed(2)}" cy="${yOut.toFixed(2)}" r="4" fill="#60a5fa" stroke="var(--panel, #1e293b)" stroke-width="1.5">
+            <circle cx="${x.toFixed(2)}" cy="${yOut.toFixed(2)}" r="4" class="point point--accent" stroke-width="1.5">
               <title>${row.month} cumulative outflow: ${money(row.outflow)}</title>
             </circle>
-            <circle cx="${x.toFixed(2)}" cy="${yInc.toFixed(2)}" r="4" fill="#34d399" stroke="var(--panel, #1e293b)" stroke-width="1.5">
+            <circle cx="${x.toFixed(2)}" cy="${yInc.toFixed(2)}" r="4" class="point point--positive" stroke-width="1.5">
               <title>${row.month} cumulative income: ${money(row.income)}</title>
             </circle>
-            <circle cx="${x.toFixed(2)}" cy="${yNet.toFixed(2)}" r="4" fill="#fbbf24" stroke="var(--panel, #1e293b)" stroke-width="1.5">
+            <circle cx="${x.toFixed(2)}" cy="${yNet.toFixed(2)}" r="4" class="point point--warning" stroke-width="1.5">
               <title>${row.month} cumulative net: ${money(row.net)}</title>
             </circle>
             ${showLabel ? `<text class="expense-label" x="${x.toFixed(2)}" y="${height - 10}" text-anchor="middle">${escapeHtml(label)}</text>` : ""}
@@ -2155,7 +2154,7 @@
         ? `<tr><td colspan="4" class="empty-state">${escapeHtml(message)}</td></tr>`
         : expenses.categories.slice(0, 12).map(row => `
           <tr style="cursor: pointer;" onclick="toggleCategorySubcategories(this, '${escapeHtml(row.category)}')">
-            <td style="text-align: left; display: flex; align-items: center;">
+            <td class="cell-flex">
               <svg class="category-chevron" style="width: 10px; height: 10px; margin-right: 6px; transition: transform 0.2s; fill: var(--ink-secondary); flex-shrink: 0;" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/></svg>
               <span>${escapeHtml(row.category)}</span>
             </td>
@@ -2245,13 +2244,13 @@
       const subcategories = Object.values(subcatMap).sort((a, b) => b.amount - a.amount);
       
       const subtableHtml = `
-        <tr class="subcategory-breakdown-row" style="background: rgba(255, 255, 255, 0.015);">
+        <tr class="subcategory-breakdown-row" style="background: var(--tint-faint);">
           <td colspan="4" style="padding: 12px 16px 16px 28px; border-bottom: 1px solid var(--line);">
             <div style="border-left: 2px solid var(--green); padding-left: 12px; margin-top: 4px;">
               <h4 style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--ink-secondary); margin-bottom: 8px; letter-spacing: 0.05em; text-align: left;">Subcategories for ${escapeHtml(categoryName)}</h4>
               <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
                 <thead>
-                  <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); color: var(--ink-secondary); font-weight: 500;">
+                  <tr style="border-bottom: 1px solid var(--tint-hover); color: var(--ink-secondary); font-weight: 500;">
                     <th style="text-align: left; padding: 4px 8px;">Subcategory</th>
                     <th style="text-align: right; padding: 4px 8px; width: 60px;">Rows</th>
                     <th style="text-align: right; padding: 4px 8px; width: 100px;">Amount</th>
@@ -2262,8 +2261,8 @@
                   ${subcategories.map(sub => {
                     const pctShare = totalAmount > 0 ? (sub.amount / totalAmount * 100).toFixed(1) : "0.0";
                     return `
-                      <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.03); color: var(--ink;); cursor: pointer;" onclick="showSubcategoryDetails('${escapeHtml(categoryName)}', '${escapeHtml(sub.subcategory)}')">
-                        <td style="text-align: left; padding: 6px 8px; font-weight: 500; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: rgba(255,255,255,0.2);">${escapeHtml(sub.subcategory)}</td>
+                      <tr style="border-bottom: 1px solid var(--tint-subtle); color: var(--ink;); cursor: pointer;" onclick="showSubcategoryDetails('${escapeHtml(categoryName)}', '${escapeHtml(sub.subcategory)}')">
+                        <td style="text-align: left; padding: 6px 8px; font-weight: 500; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--tint-strong);">${escapeHtml(sub.subcategory)}</td>
                         <td style="text-align: right; padding: 6px 8px;">${sub.count}</td>
                         <td style="text-align: right; padding: 6px 8px; font-weight: 600; color: var(--green);">${money(sub.amount)}</td>
                         <td style="text-align: right; padding: 6px 8px; color: var(--ink-secondary);">${pctShare}%</td>
@@ -2313,7 +2312,7 @@
         const signedAmount = kind === "income" ? Number(row.amount_eur || 0) : (kind === "credits" ? Number(row.amount_eur || 0) : -Number(row.amount_eur || 0));
         const amountClass = signedAmount > 0 ? "positive" : (signedAmount < 0 ? "negative" : "");
         return `
-          <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.03);">
+          <tr style="border-bottom: 1px solid var(--tint-subtle);">
             <td style="padding: 6px 8px; font-family: monospace;">${escapeHtml(row.date)}</td>
             <td style="padding: 6px 8px;">${escapeHtml(row.source_label || row.source || "")}</td>
             <td style="padding: 6px 8px; font-weight: 500; color: var(--ink);">${escapeHtml(row.merchant || "")}</td>
@@ -2870,7 +2869,7 @@
         const ytdVal = ret.ytd;
         
         const isCurrentPerson = (user.person === selectedPerson);
-        const rowStyle = isCurrentPerson ? 'background: rgba(96, 165, 250, 0.08); font-weight: 500;' : '';
+        const rowStyle = isCurrentPerson ? 'background: color-mix(in srgb, var(--accent) 8%, transparent); font-weight: 500;' : '';
         const nameStyle = isCurrentPerson ? 'color: var(--blue); font-weight: 700;' : '';
 
         return `
@@ -3125,7 +3124,7 @@
         toggleMonthly.style.background = "var(--blue)";
         toggleMonthly.style.color = "white";
         toggleCumulative.style.background = "transparent";
-        toggleCumulative.style.color = "var(--text-sub, #94a3b8)";
+        toggleCumulative.style.color = "var(--text-muted)";
         if (dashboardData) {
           const expenses = periodExpenses(dashboardData);
           renderExpenseTrend(expenses.months);
@@ -3139,7 +3138,7 @@
         toggleCumulative.style.background = "var(--blue)";
         toggleCumulative.style.color = "white";
         toggleMonthly.style.background = "transparent";
-        toggleMonthly.style.color = "var(--text-sub, #94a3b8)";
+        toggleMonthly.style.color = "var(--text-muted)";
         if (dashboardData) {
           const expenses = periodExpenses(dashboardData);
           renderExpenseTrend(expenses.months);
