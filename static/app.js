@@ -190,6 +190,9 @@
     const PRIMARY_PORTFOLIO_ID = APP_CONFIG.primaryPortfolioId;
     const SINCE_2024_PORTFOLIO_IDS = new Set(APP_CONFIG.since2024PortfolioIds);
     const APP_VERSION = APP_CONFIG.appVersion;
+    const HAS_MULTIPLE_PORTFOLIOS = APP_CONFIG.hasMultiplePortfolios;
+    const PORTFOLIO_FEATURES = APP_CONFIG.portfolioFeatures || {};
+    const ANNUAL_RISK_FREE_RATE = APP_CONFIG.annualRiskFreeRate;
     const importModal = document.getElementById("import-modal");
     const importForm = document.getElementById("import-form");
     const importFile = document.getElementById("import-file");
@@ -200,7 +203,7 @@
     let selectedPerson = PRIMARY_PORTFOLIO_ID;
     let selectedPeriod = SINCE_2024_PORTFOLIO_IDS.has(PRIMARY_PORTFOLIO_ID) ? "since24" : "all";
     let selectedBerkshireMode = "stock";
-    let selectedProxyMode = "on";
+    let selectedProxyMode = APP_CONFIG.defaultProxyMode;
     let selectedLiveMode = "all";
     let selectedReturnMode = "price";
     let chartResizeTimer = null;
@@ -213,6 +216,12 @@
     let selectedDistributionSource = "";
     let loadRequestId = 0;
     let redrawTimer = null;
+
+    const statsInfo = document.getElementById("stats-info");
+    if (statsInfo) {
+      const pct = (Number(ANNUAL_RISK_FREE_RATE || 0) * 100).toFixed(1);
+      statsInfo.innerHTML = `<strong>Volatility & Risk Summary:</strong> Daily variance, standard deviation (volatility), and annualized volatility are calculated using the strictly daily business-day return series of the portfolio and the MSCI World index. Sharpe ratio is annualized assuming a ${pct}% risk-free rate.`;
+    }
 
     function openImportDialog(firstRun = false) {
       document.getElementById("import-title").textContent = firstRun ? "Welcome — import your first statement" : "Import your statements";
@@ -235,7 +244,7 @@
 
     async function checkImportOnboarding() {
       try {
-        const response = await fetch("/api/imports/status");
+        const response = await fetch(`/api/imports/status?portfolio_id=${encodeURIComponent(selectedPerson)}`);
         const status = await response.json();
         if (response.ok && !status.ready && status.imports === 0) openImportDialog(true);
       } catch (error) {
@@ -268,6 +277,7 @@
       event.preventDefault();
       if (!importFile.files.length) return;
       const form = new FormData(importForm);
+      form.set("portfolio_id", selectedPerson);
       importSubmit.disabled = true;
       importSubmit.textContent = "Importing…";
       importStatus.className = "import-status";
@@ -2886,8 +2896,10 @@
 
     function renderDashboard(data) {
       updatePeriodButtons();
-      // Check if MyStyle is in the portfolio to show/hide and setup fee calculator
-      const hasMyStyle = (data.positions || []).some(p => p.asset.toLowerCase().includes("mystyle"));
+      // Product-specific analysis must be explicitly enabled in private configuration.
+      const enabledFeatures = new Set(PORTFOLIO_FEATURES[selectedPerson] || []);
+      const hasMyStyle = enabledFeatures.has("mystyle_analysis")
+        && (data.positions || []).some(p => p.asset.toLowerCase().includes("mystyle"));
       const calcSection = document.getElementById("mystyle-calc-section");
       const breakdownSection = document.getElementById("mystyle-breakdown-section");
       if (calcSection) {
@@ -2970,6 +2982,20 @@
       window.clearTimeout(chartResizeTimer);
       chartResizeTimer = window.setTimeout(renderChartsOnly, 80);
     }
+
+    async function loadRankings(params, requestId) {
+      try {
+        const response = await fetch(`/api/rankings?${params.toString()}`);
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Rankings request failed.");
+        if (requestId !== loadRequestId) return;
+        rankingsData = result;
+        renderRankings(rankingsData);
+      } catch (err) {
+        if (requestId === loadRequestId) console.warn("Rankings failed to load:", err.message);
+      }
+    }
+
     async function load(refresh = false, label = "Updating dashboard") {
       const requestId = ++loadRequestId;
       const button = document.getElementById("refresh");
@@ -2980,23 +3006,15 @@
       try {
         const params = currentQueryParams();
         if (refresh) params.set("refresh", "1");
-        const [portfolioRes, rankingsRes] = await Promise.all([
-          fetch(`/api/portfolio?${params.toString()}`),
-          fetch(`/api/rankings?${params.toString()}`)
-        ]);
+        const portfolioRes = await fetch(`/api/portfolio?${params.toString()}`);
         const data = await portfolioRes.json();
         if (!portfolioRes.ok) throw new Error(data.error || "Dashboard request failed.");
-        if (rankingsRes.ok) {
-          rankingsData = await rankingsRes.json();
-        } else {
-          const rankErr = await rankingsRes.json();
-          console.warn("Rankings failed to load:", rankErr.error);
-        }
         if (requestId !== loadRequestId) return;
         dashboardData = data;
         renderDashboard(data);
         loadNews(refresh, data.news_symbols || []);
         loadWatchlist(refresh);
+        if (HAS_MULTIPLE_PORTFOLIOS) void loadRankings(params, requestId);
       } catch (err) {
         if (requestId !== loadRequestId) return;
         error.textContent = err.message;
@@ -3038,6 +3056,7 @@
       });
     });
     document.querySelectorAll("#proxy-mode button").forEach(button => {
+      button.classList.toggle("active", button.dataset.proxy === selectedProxyMode);
       button.addEventListener("click", () => {
         if (selectedProxyMode === button.dataset.proxy) return;
         selectedProxyMode = button.dataset.proxy;

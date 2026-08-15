@@ -29,5 +29,20 @@ jobs:
       - name: Design tokens
         run: uv run python scripts/lint_design_tokens.py --strict
 
+      - name: Python syntax
+        run: uv run python -m compileall -q app.py run.py src scripts
+
+      - name: Python lint
+        run: uv run ruff check src run.py scripts/import_statements.py
+
+      - name: Package type check
+        run: uv run mypy src
+
+      - name: Frontend syntax
+        run: node --check static/app.js
+
       - name: Tests
         run: uv run pytest -q
+
+      - name: Build distribution
+        run: uv build

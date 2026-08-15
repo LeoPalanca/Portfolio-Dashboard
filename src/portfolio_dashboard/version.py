@@ -21,3 +21,13 @@ def _application_version() -> str:
 
 APP_VERSION = _application_version()
 
+
+def display_version(base_version: str, edition_suffix: str = "") -> str:
+    """Add an optional private-edition suffix without changing package metadata."""
+
+    suffix = edition_suffix.strip()
+    if not suffix:
+        return base_version
+    if not suffix.isalnum():
+        raise ValueError("edition_suffix must contain only letters and numbers")
+    return f"{base_version}{suffix}"

@@ -28,7 +28,7 @@ from flask import Flask, jsonify, render_template, request, send_file
 from openpyxl import Workbook, load_workbook
 from werkzeug.utils import secure_filename
 
-from src.portfolio_dashboard import APP_VERSION
+from src.portfolio_dashboard import APP_VERSION, display_version
 from src.portfolio_dashboard.cache import HistoryStore
 from src.portfolio_dashboard.config import get_settings
 from src.portfolio_dashboard.domain import (
@@ -58,6 +58,8 @@ except Exception:  # pragma: no cover - handled at runtime in the dashboard
 
 
 SETTINGS = get_settings()
+DISPLAY_VERSION = display_version(APP_VERSION, SETTINGS.edition_suffix)
+DEFAULT_PROXY_MODE = SETTINGS.default_proxy_mode
 APP_DIR = SETTINGS.project_dir
 ROOT_DIR = SETTINGS.source_dir
 PRIMARY_PORTFOLIO_ID = SETTINGS.primary_portfolio_id.lower()
@@ -156,7 +158,8 @@ PRICE_TTL_SECONDS = 15 * 60
 HISTORY_TTL_SECONDS = 12 * 60 * 60
 NEWS_TTL_SECONDS = 60 * 60
 
-FINECO_DIVIDEND_NET_RATE = Decimal("0.74")
+FINECO_DIVIDEND_NET_RATE = Decimal(1) - SETTINGS.fineco_withholding_tax_rate
+BBVA_INTEREST_NET_RATE = Decimal(1) - SETTINGS.bbva_interest_tax_rate
 _CACHE_WRITE_LOCK = threading.RLock()
 
 app = Flask(__name__)
@@ -828,13 +831,7 @@ def read_dividends() -> list[Dividend]:
 
 
 def read_portfolio_dividends(person: str = PRIMARY_PORTFOLIO_ID) -> list[Dividend]:
-    person = (person or PRIMARY_PORTFOLIO_ID).lower()
-    if person == PRIMARY_PORTFOLIO_ID:
-        return read_dividends()
-    tr_file = latest_family_trade_republic_export(person)
-    if not tr_file:
-        return []
-    return sorted(read_trade_republic_dividends(tr_file), key=lambda item: (item.date, item.broker, item.asset))
+    return read_ledger_dividends(person)
 
 
 def read_trade_republic_dividends(path: Path) -> list[Dividend]:
@@ -934,6 +931,13 @@ def summarize_dividends(dividends: list[Dividend]) -> dict[str, Any]:
 
 
 def read_cash_interests(person: str = PRIMARY_PORTFOLIO_ID) -> list[dict[str, Any]]:
+    # Statement imports are normalized once; runtime analytics read the ledger only.
+    return read_ledger_interests(person)
+
+
+def read_cash_interests_from_raw_files(person: str = PRIMARY_PORTFOLIO_ID) -> list[dict[str, Any]]:
+    """Legacy parser kept only for import/migration compatibility."""
+
     interests: list[dict[str, Any]] = []
     person = person.lower()
     
@@ -992,7 +996,7 @@ def read_cash_interests(person: str = PRIMARY_PORTFOLIO_ID) -> list[dict[str, An
                             amount = ZERO
                         
                         net_val = amount
-                        gross_val = net_val / Decimal("0.74") if net_val > ZERO else ZERO
+                        gross_val = net_val / BBVA_INTEREST_NET_RATE if net_val > ZERO else ZERO
                         tax_val = gross_val - net_val
                         
                         interests.append({
@@ -2531,7 +2535,7 @@ def normalize_berkshire_mode(value: str | None) -> str:
 
 
 def normalize_proxy_mode(value: str | None) -> str:
-    return "off" if value == "off" else "on"
+    return "on" if value == "on" else "off"
 
 
 def configured_trade(adjustment: Any, history_start: date) -> Trade:
@@ -2564,7 +2568,7 @@ def family_dashboard_payload(
     person: str,
     refresh: bool = False,
     berkshire_mode: str = "stock",
-    proxy_mode: str = "on",
+    proxy_mode: str = "off",
     broker: str = "all",
     live_only: str = "off",
 ) -> dict[str, Any]:
@@ -3747,7 +3751,7 @@ def read_proxy_metadata() -> dict[str, dict[str, Any]]:
     return metadata
 
 
-def read_exposures(berkshire_mode: str = "stock", proxy_mode: str = "on") -> dict[str, list[dict[str, Any]]]:
+def read_exposures(berkshire_mode: str = "stock", proxy_mode: str = "off") -> dict[str, list[dict[str, Any]]]:
     exposures: dict[str, list[dict[str, Any]]] = {}
     if not EXPOSURES_CSV.exists():
         return exposures
@@ -4270,7 +4274,7 @@ def calculate_distribution(
     positions: list[dict[str, Any]],
     exposures: dict[str, list[dict[str, Any]]],
     berkshire_mode: str = "stock",
-    proxy_mode: str = "on",
+    proxy_mode: str = "off",
 ) -> dict[str, Any]:
     documents = read_etf_documents()
     if berkshire_mode == "lookthrough":
@@ -4737,13 +4741,8 @@ def fetch_price(symbol: str, refresh: bool = False) -> dict[str, Any]:
     cache = get_price_cache()
     cached = cache.get(symbol)
     now = int(time.time())
-    if (
-        cached
-        and cached.get("status") == "priced"
-        and not refresh
-        and now - int(cached.get("fetched_at", 0)) < PRICE_TTL_SECONDS
-    ):
-        return cached
+    if cached and cached.get("status") == "priced" and not refresh:
+        return {**cached, "cache_stale": now - int(cached.get("fetched_at", 0)) >= PRICE_TTL_SECONDS}
 
     try:
         ticker = yf.Ticker(symbol)
@@ -4798,7 +4797,7 @@ def fetch_history(symbol: str, start: date, end: date, refresh: bool = False) ->
 
     store = get_history_store()
     now = int(time.time())
-    cached = None if refresh else store.get_range(symbol, start, end, now, HISTORY_TTL_SECONDS)
+    cached = None if refresh else store.get_cached(symbol, start, end)
     if cached:
         return cached
 
@@ -4944,7 +4943,7 @@ def fetch_crypto_eur_history(asset: str, start: date, end: date, refresh: bool =
     store = get_history_store()
     key = f"crypto-eur:{asset}"
     now = int(time.time())
-    cached = None if refresh else store.get_range(key, start, end, now, HISTORY_TTL_SECONDS)
+    cached = None if refresh else store.get_cached(key, start, end)
     if cached:
         return cached
 
@@ -5136,7 +5135,20 @@ def fetch_eurostat_cpi() -> dict[str, float]:
     return {}
 
 
-def load_cash_histories(person: str) -> tuple[list[tuple[date, Decimal, Decimal]], list[tuple[date, Decimal, Decimal]], list[tuple[date, Decimal, Decimal]]]:
+def load_cash_histories(person: str) -> tuple[list[tuple[date, Decimal, Decimal]], list[tuple[date, Decimal, Decimal]], list[dict[str, Any]]]:
+    trade_republic = read_ledger_cash_events(person, "Trade Republic")
+    bbva = read_ledger_cash_events(person, "BBVA")
+    revolut = read_ledger_cash_events(person, "Revolut")
+    return (
+        [(item["date"], item["cash_change"], item["contrib_change"]) for item in trade_republic],
+        [(item["date"], item["cash_change"], item["contrib_change"]) for item in bbva],
+        revolut,
+    )
+
+
+def load_cash_histories_from_raw_files(person: str) -> tuple[list[tuple[date, Decimal, Decimal]], list[tuple[date, Decimal, Decimal]], list[dict[str, Any]]]:
+    """Legacy statement parser retained for migration diagnostics only."""
+
     tr_cash_history: list[tuple[date, Decimal, Decimal]] = []
     tr_file = latest_trade_republic_export() if person == PRIMARY_PORTFOLIO_ID else latest_family_trade_republic_export(person)
 
@@ -5167,7 +5179,6 @@ def load_cash_histories(person: str) -> tuple[list[tuple[date, Decimal, Decimal]
 
     bbva_cash_history: list[tuple[date, Decimal, Decimal]] = []
     if person == PRIMARY_PORTFOLIO_ID:
-        bbva_cash_history.append((date(2024, 1, 8), Decimal("4800.00"), Decimal("4800.00")))
         bbva_files = bbva_statement_files()
         if bbva_files:
             bbva_file = bbva_files[-1]
@@ -6033,7 +6044,7 @@ def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID
     msci_rets_only = np.array(msci_returns)
     xeon_rets_only = np.array(xeon_returns)
     
-    rf_annual = 0.03
+    rf_annual = SETTINGS.annual_risk_free_rate
     rf_daily = rf_annual / 252
     
     def calculate_stats(rets, m_rets, x_rets):
@@ -6087,19 +6098,20 @@ def dashboard_payload(
     refresh: bool = False,
     person: str = PRIMARY_PORTFOLIO_ID,
     berkshire_mode: str = "stock",
-    proxy_mode: str = "on",
+    proxy_mode: str = "off",
     broker: str = "all",
     live_only: str = "off",
 ) -> dict[str, Any]:
-    person = (person or PRIMARY_PORTFOLIO_ID).lower()
+    person = configured_portfolio_id(person)
     berkshire_mode = normalize_berkshire_mode(berkshire_mode)
     proxy_mode = normalize_proxy_mode(proxy_mode)
     broker = (broker or "all").strip().lower()
-    if person != PRIMARY_PORTFOLIO_ID:
+    ensure_legacy_statements_imported(person)
+    if person != PRIMARY_PORTFOLIO_ID and not get_movement_store().movements(person, ("trade",)):
         return family_dashboard_payload(person, refresh=refresh, berkshire_mode=berkshire_mode, proxy_mode=proxy_mode, broker=broker, live_only=live_only)
 
-    trades, source = read_trades()
-    dividends = read_dividends()
+    trades, source = read_ledger_trades(person)
+    dividends = read_ledger_dividends(person)
     wallet_positions = read_crypto_wallet_positions(person)
 
     # Get all brokers first (unfiltered)
@@ -6181,7 +6193,7 @@ def dashboard_payload(
         else calculate_valuation_series(trades, mappings, refresh=refresh, person=person, broker=broker)
     )
 
-    extra_frictions = read_extra_friction_events()
+    extra_frictions = read_ledger_frictions(person)
     if broker != "all":
         extra_frictions = [f for f in extra_frictions if f.broker.lower() == broker]
 
@@ -6189,7 +6201,7 @@ def dashboard_payload(
         trade_friction_events(trades) + inferred_fineco_sell_tax_events(trades) + extra_frictions,
         priced["market_value"],
     )
-    expenses = summarize_expense_events(read_expense_events(person, refresh=refresh))
+    expenses = summarize_expense_events(read_ledger_expenses(person))
     mapped_assets = set(mappings)
     trade_assets = {trade.asset for trade in trades} | {str(position.get("asset") or "") for position in wallet_positions}
     assets_without_isin = {
@@ -6199,8 +6211,8 @@ def dashboard_payload(
     }
 
     # Load dividends and cash interests to compute final total returns
-    dividends = read_dividends()
-    interests = read_cash_interests(person)
+    dividends = read_ledger_dividends(person)
+    interests = read_ledger_interests(person)
     if broker != "all":
         dividends = [d for d in dividends if d.broker.lower() == broker]
         interests = [i for i in interests if i.get("broker", "").lower() == broker]
@@ -6228,8 +6240,8 @@ def dashboard_payload(
 
     payload = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
-        "person": PRIMARY_PORTFOLIO_ID,
-        "person_name": PRIMARY_PORTFOLIO_NAME,
+        "person": person,
+        "person_name": PRIMARY_PORTFOLIO_NAME if person == PRIMARY_PORTFOLIO_ID else SETTINGS.portfolios[person].display_name,
         "berkshire_mode": berkshire_mode,
         "proxy_mode": proxy_mode,
         "trade_file": source["relative_path"],
@@ -6251,7 +6263,7 @@ def dashboard_payload(
         "positions": priced["positions"],
         "distribution": distribution,
         "dividends": dividend_summary,
-        "cash_interests": summarize_cash_interests(read_cash_interests(person)),
+        "cash_interests": summarize_cash_interests(read_ledger_interests(person)),
         "expenses": expenses,
         "net_contributions": contribution_summary,
         "frictions": frictions,
@@ -6369,7 +6381,7 @@ def fetch_symbol_news(symbol: str, limit: int = 6) -> list[dict[str, Any]]:
 def portfolio_news_payload(
     person: str = PRIMARY_PORTFOLIO_ID,
     berkshire_mode: str = "stock",
-    proxy_mode: str = "on",
+    proxy_mode: str = "off",
     broker: str = "all",
     refresh: bool = False,
     live_only: str = "off",
@@ -6954,13 +6966,24 @@ def export_filename(person: str, period: str, fmt: str) -> str:
 
 # ─── Local statement imports and normalized movement ledger ───
 _movement_store: MovementStore | None = None
+_legacy_import_lock = threading.Lock()
+_legacy_imported_portfolios: set[str] = set()
+_legacy_import_errors: dict[str, list[str]] = {}
 
 
 def get_movement_store() -> MovementStore:
     global _movement_store
     if _movement_store is None:
-        _movement_store = MovementStore(MOVEMENT_DATABASE)
+        _movement_store = MovementStore(MOVEMENT_DATABASE, default_portfolio_id=PRIMARY_PORTFOLIO_ID)
     return _movement_store
+
+
+def configured_portfolio_id(value: str | None) -> str:
+    portfolio_id = (value or PRIMARY_PORTFOLIO_ID).strip().lower()
+    configured = {PRIMARY_PORTFOLIO_ID, *(key.lower() for key in SETTINGS.portfolios)}
+    if portfolio_id not in configured:
+        raise ValueError(f"Unknown portfolio: {value}")
+    return portfolio_id
 
 
 def normalize_trade_movement(trade: Trade) -> dict[str, Any]:
@@ -7019,8 +7042,160 @@ def normalize_expense_movement(event: dict[str, Any]) -> dict[str, Any]:
             "category": event.get("category"),
             "subcategory": event.get("subcategory"),
             "merchant": event.get("merchant"),
+            "confidence": event.get("confidence"),
+            "source_category": event.get("source_category"),
         },
     }
+
+
+def normalize_interest_movement(event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "occurred_on": event.get("date"),
+        "event_type": "interest",
+        "account": event.get("broker"),
+        "description": event.get("description") or "Cash Interest",
+        "currency": "EUR",
+        "amount": event.get("net_eur"),
+        "tax": event.get("tax_eur"),
+        "metadata": {"gross_eur": event.get("gross_eur")},
+    }
+
+
+def normalize_cash_flow_movement(event: dict[str, Any], account: str) -> dict[str, Any]:
+    return {
+        "occurred_on": event.get("datetime") or event.get("date"),
+        "event_type": "cash_flow",
+        "account": account,
+        "description": event.get("description") or "Cash movement",
+        "currency": event.get("currency") or "EUR",
+        "amount": event.get("cash_change"),
+        "metadata": {"contribution_change": event.get("contrib_change") or ZERO},
+    }
+
+
+def read_trade_republic_interests_from_path(path: Path) -> list[dict[str, Any]]:
+    interests: list[dict[str, Any]] = []
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        for row in csv.DictReader(handle):
+            if row.get("type") != "INTEREST_PAYMENT" or not row.get("date"):
+                continue
+            amount = parse_decimal(row.get("amount"))
+            tax = abs(parse_decimal(row.get("tax") or "0"))
+            interests.append(
+                {
+                    "broker": "Trade Republic",
+                    "date": datetime.strptime(row["date"], "%Y-%m-%d").date(),
+                    "net_eur": amount - tax,
+                    "tax_eur": tax,
+                    "gross_eur": amount,
+                    "description": (row.get("description") or "Cash Interest").strip(),
+                }
+            )
+    return interests
+
+
+def read_bbva_interests_from_path(path: Path) -> list[dict[str, Any]]:
+    interests: list[dict[str, Any]] = []
+    temp_xlsx = Path(tempfile.gettempdir()) / f"bbva-interest-{os.getpid()}-{threading.get_ident()}.xlsx"
+    try:
+        shutil.copy(path, temp_xlsx)
+        workbook = load_workbook(temp_xlsx, read_only=True)
+        try:
+            for row in workbook.active.iter_rows(values_only=True):
+                if len(row) < 7:
+                    continue
+                op_date_raw, description, amount_raw = row[2], row[3], row[6]
+                if not description or "INTERESSI" not in str(description).upper() or not amount_raw:
+                    continue
+                try:
+                    event_date = datetime.strptime(str(op_date_raw).strip(), "%d/%m/%Y").date()
+                    net = Decimal(str(amount_raw).replace(" EUR", "").replace(",", ".").strip())
+                except (ValueError, TypeError):
+                    continue
+                gross = net / BBVA_INTEREST_NET_RATE if net > ZERO else ZERO
+                interests.append(
+                    {
+                        "broker": "BBVA",
+                        "date": event_date,
+                        "net_eur": net,
+                        "tax_eur": gross - net,
+                        "gross_eur": gross,
+                        "description": str(description).strip(),
+                    }
+                )
+        finally:
+            workbook.close()
+    finally:
+        temp_xlsx.unlink(missing_ok=True)
+    return interests
+
+
+def read_trade_republic_cash_flows(path: Path) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    contribution_types = {
+        "CUSTOMER_INBOUND",
+        "CUSTOMER_INPAYMENT",
+        "TRANSFER_INSTANT_INBOUND",
+        "VIBAN_TRANSFER_INBOUND",
+        "CUSTOMER_OUTBOUND_REQUEST",
+        "TRANSFER_INSTANT_OUTBOUND",
+        "CARD_TRANSACTION",
+        "CARD_TRANSACTION_INTERNATIONAL",
+        "CARD_ORDERING_FEE",
+    }
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        for row in csv.DictReader(handle):
+            if not row.get("date"):
+                continue
+            cash_change = parse_decimal(row.get("amount")) + parse_decimal(row.get("fee")) + parse_decimal(row.get("tax"))
+            if cash_change == ZERO:
+                continue
+            events.append(
+                {
+                    "date": datetime.strptime(row["date"], "%Y-%m-%d").date(),
+                    "cash_change": cash_change,
+                    "contrib_change": cash_change if row.get("type") in contribution_types else ZERO,
+                    "currency": row.get("currency") or "EUR",
+                    "description": row.get("description") or row.get("type") or "Cash movement",
+                }
+            )
+    return events
+
+
+def read_bbva_cash_flows(path: Path) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    temp_xlsx = Path(tempfile.gettempdir()) / f"bbva-cash-{os.getpid()}-{threading.get_ident()}.xlsx"
+    try:
+        shutil.copy(path, temp_xlsx)
+        workbook = load_workbook(temp_xlsx, read_only=True)
+        try:
+            for row in workbook.active.iter_rows(values_only=True):
+                if len(row) < 7:
+                    continue
+                op_date_raw, description, amount_raw = row[2], row[3], row[6]
+                if not description or description == "Causale" or not amount_raw:
+                    continue
+                try:
+                    event_date = datetime.strptime(str(op_date_raw).strip(), "%d/%m/%Y").date()
+                    amount = Decimal(str(amount_raw).replace(" EUR", "").replace(",", ".").strip())
+                except (ValueError, TypeError):
+                    continue
+                if amount == ZERO:
+                    continue
+                events.append(
+                    {
+                        "date": event_date,
+                        "cash_change": amount,
+                        "contrib_change": ZERO if "INTERESSI" in str(description).upper() else amount,
+                        "currency": "EUR",
+                        "description": str(description).strip(),
+                    }
+                )
+        finally:
+            workbook.close()
+    finally:
+        temp_xlsx.unlink(missing_ok=True)
+    return events
 
 
 def parse_statement_movements(source: str, path: Path) -> list[dict[str, Any]]:
@@ -7028,11 +7203,15 @@ def parse_statement_movements(source: str, path: Path) -> list[dict[str, Any]]:
     dividends: list[Dividend] = []
     frictions: list[FrictionEvent] = []
     expenses: list[dict[str, Any]] = []
+    interests: list[dict[str, Any]] = []
+    cash_flows: list[dict[str, Any]] = []
     if source == "trade_republic":
         trades = read_trade_republic_trades(path)
         dividends = read_trade_republic_dividends(path)
         frictions = read_trade_republic_tax_events(path)
         expenses = read_trade_republic_expense_events(path)
+        interests = read_trade_republic_interests_from_path(path)
+        cash_flows = [normalize_cash_flow_movement(item, "Trade Republic") for item in read_trade_republic_cash_flows(path)]
     elif source == "fineco":
         trades = read_fineco_trades(path)
         dividends = read_fineco_dividends(path)
@@ -7045,10 +7224,13 @@ def parse_statement_movements(source: str, path: Path) -> list[dict[str, Any]]:
         frictions = read_etoro_friction_events(path)
     elif source == "revolut":
         expenses = read_revolut_expense_events([path])
+        cash_flows = [normalize_cash_flow_movement(item, "Revolut") for item in read_revolut_cash_events([path])]
     elif source == "intesa":
         expenses = read_intesa_expense_events(path)
     elif source == "bbva":
         expenses = read_bbva_expense_events([path])
+        interests = read_bbva_interests_from_path(path)
+        cash_flows = [normalize_cash_flow_movement(item, "BBVA") for item in read_bbva_cash_flows(path)]
     elif source == "manual":
         trades = read_manual_trades(path)
     else:
@@ -7059,24 +7241,34 @@ def parse_statement_movements(source: str, path: Path) -> list[dict[str, Any]]:
         *(normalize_dividend_movement(item) for item in dividends),
         *(normalize_friction_movement(item) for item in frictions),
         *(normalize_expense_movement(item) for item in expenses),
+        *(normalize_interest_movement(item) for item in interests),
+        *cash_flows,
     ]
 
 
-def import_statement_path(path: Path, original_name: str | None = None, requested_source: str = "auto") -> dict[str, Any]:
+def import_statement_path(
+    path: Path,
+    original_name: str | None = None,
+    requested_source: str = "auto",
+    portfolio_id: str = PRIMARY_PORTFOLIO_ID,
+    archive: bool = True,
+) -> dict[str, Any]:
     if not path.is_file():
         raise ValueError("The selected statement file does not exist")
     if path.stat().st_size > SETTINGS.import_max_bytes:
         raise ValueError(f"Statement files must be smaller than {SETTINGS.import_max_bytes // (1024 * 1024)} MB")
+    owner = configured_portfolio_id(portfolio_id)
     source = detect_statement_source(path, requested_source)
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     store = get_movement_store()
-    existing = store.import_by_hash(digest)
-    if existing is not None:
+    existing = store.import_by_hash(digest, owner)
+    if existing is not None and existing.parser_version == APP_VERSION:
         return {
             "status": "duplicate",
             "duplicate": True,
             "source": existing.source_kind,
             "source_label": SOURCE_LABELS.get(existing.source_kind, existing.source_kind),
+            "portfolio_id": existing.portfolio_id,
             "movements": existing.movement_count,
             "duplicates": existing.duplicate_count,
             "stored_path": existing.stored_path,
@@ -7086,12 +7278,26 @@ def import_statement_path(path: Path, original_name: str | None = None, requeste
     movements = parse_statement_movements(source, path)
     if not movements:
         raise ValueError(f"No supported movements were found in this {SOURCE_LABELS[source]} statement")
+    if existing is not None:
+        inserted, duplicates = store.enrich_import(existing, parser_version=APP_VERSION, movements=movements)
+        return {
+            "status": "upgraded",
+            "duplicate": False,
+            "source": existing.source_kind,
+            "source_label": SOURCE_LABELS.get(existing.source_kind, existing.source_kind),
+            "portfolio_id": existing.portfolio_id,
+            "movements": inserted,
+            "duplicates": duplicates,
+            "stored_path": existing.stored_path,
+        }
 
-    destination = import_destination(ROOT_DIR, source, digest, safe_original_name)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.exists() and destination.resolve() != path.resolve():
+    archive_root = ROOT_DIR if owner == PRIMARY_PORTFOLIO_ID else ROOT_DIR / "portfolios" / owner
+    destination = import_destination(archive_root, source, digest, safe_original_name) if archive else path
+    if archive:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+    if archive and destination.exists() and destination.resolve() != path.resolve():
         raise ValueError(f"The destination already exists: {configured_path_label(destination)}")
-    copied = destination.resolve() != path.resolve()
+    copied = archive and destination.resolve() != path.resolve()
     if copied:
         shutil.copy2(path, destination)
     try:
@@ -7102,6 +7308,7 @@ def import_statement_path(path: Path, original_name: str | None = None, requeste
             stored_path=configured_path_label(destination),
             parser_version=APP_VERSION,
             movements=movements,
+            portfolio_id=owner,
         )
     except Exception:
         if copied:
@@ -7112,24 +7319,249 @@ def import_statement_path(path: Path, original_name: str | None = None, requeste
         "duplicate": False,
         "source": source,
         "source_label": SOURCE_LABELS[source],
+        "portfolio_id": owner,
         "movements": record.movement_count,
         "duplicates": record.duplicate_count,
         "stored_path": record.stored_path,
     }
 
 
-def import_status_payload() -> dict[str, Any]:
-    ledger = get_movement_store().summary()
-    has_trade_source = bool(
-        latest_trade_republic_export()
-        or latest_fineco_export()
-        or latest_ib_export()
-        or latest_etoro_export()
-        or manual_trade_files()
-    )
+def legacy_statement_candidates(portfolio_id: str) -> list[tuple[Path, str]]:
+    """Find files once for migration; normal dashboard reads never use these paths."""
+
+    owner = configured_portfolio_id(portfolio_id)
+    candidates: list[tuple[Path, str]] = []
+    if owner == PRIMARY_PORTFOLIO_ID:
+        broker_paths = [
+            (latest_trade_republic_export(), "trade_republic"),
+            (latest_fineco_export(), "fineco"),
+            (latest_ib_export(), "interactive_brokers"),
+            (latest_etoro_export(), "etoro"),
+        ]
+        candidates.extend((path, source) for path, source in broker_paths if path is not None)
+        archived_manual = sorted((ROOT_DIR / "broker_exports" / "manual").glob("*.csv")) + sorted(
+            (ROOT_DIR / "broker_exports" / "manual").glob("*.xlsx")
+        )
+        candidates.extend((path, "manual") for path in archived_manual)
+        legacy_manual = ROOT_DIR / SETTINGS.manual_trades_file
+        if not any(path for path, _source in broker_paths) and legacy_manual.exists():
+            candidates.append((legacy_manual, "manual"))
+        revolut_paths = set(ROOT_DIR.glob(REVOLUT_PATTERN)) | set((ROOT_DIR / "cash_exports" / "revolut").glob("*.csv"))
+        intesa_paths = set(ROOT_DIR.glob(INTESA_OPERATIONS_PATTERN)) | set((ROOT_DIR / "cash_exports" / "intesa").glob("*.xlsx"))
+        candidates.extend((path, "revolut") for path in sorted(revolut_paths))
+        candidates.extend((path, "intesa") for path in sorted(intesa_paths))
+        candidates.extend((path, "bbva") for path in bbva_statement_files())
+    else:
+        family_trade_republic = latest_family_trade_republic_export(owner)
+        if family_trade_republic:
+            candidates.append((family_trade_republic, "trade_republic"))
+
+    archive_root = ROOT_DIR / "portfolios" / owner
+    for source, extensions in SOURCE_EXTENSIONS.items():
+        category = "cash_exports" if source in {"revolut", "intesa", "bbva"} else "broker_exports"
+        for extension in extensions:
+            candidates.extend((path, source) for path in (archive_root / category / source).glob(f"*{extension}"))
+
+    unique: dict[Path, tuple[Path, str]] = {}
+    for path, source in candidates:
+        try:
+            unique[path.resolve()] = (path, source)
+        except OSError:
+            continue
+    return sorted(unique.values(), key=lambda item: (item[1], str(item[0])))
+
+
+def ensure_legacy_statements_imported(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> None:
+    """One-time compatibility bridge from raw-file installs to the SQLite ledger."""
+
+    owner = configured_portfolio_id(portfolio_id)
+    if owner in _legacy_imported_portfolios:
+        return
+    with _legacy_import_lock:
+        if owner in _legacy_imported_portfolios:
+            return
+        errors: list[str] = []
+        for path, source in legacy_statement_candidates(owner):
+            try:
+                import_statement_path(
+                    path,
+                    original_name=path.name,
+                    requested_source=source,
+                    portfolio_id=owner,
+                    archive=False,
+                )
+            except Exception as exc:  # A broken historical file must not block other sources.
+                errors.append(f"{configured_path_label(path)}: {exc}")
+        _legacy_import_errors[owner] = errors
+        _legacy_imported_portfolios.add(owner)
+
+
+def movement_decimal(row: dict[str, Any], field: str) -> Decimal:
+    raw = row.get(field)
+    return Decimal(str(raw)) if raw not in {None, ""} else ZERO
+
+
+def movement_date(row: dict[str, Any]) -> date:
+    return date.fromisoformat(str(row["occurred_on"])[:10])
+
+
+def read_ledger_trades(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> tuple[list[Trade], dict[str, Any]]:
+    owner = configured_portfolio_id(portfolio_id)
+    ensure_legacy_statements_imported(owner)
+    rows = get_movement_store().movements(owner, ("trade",))
+    trades: list[Trade] = []
+    for row in rows:
+        metadata = row.get("metadata") or {}
+        quantity_diff = movement_decimal(row, "quantity")
+        amount = movement_decimal(row, "amount")
+        currency = str(row.get("currency") or "EUR")
+        trades.append(
+            Trade(
+                asset=str(row.get("asset") or "Unknown"),
+                isin=str(row.get("isin") or ""),
+                broker=str(row.get("account") or SOURCE_LABELS.get(str(row.get("source_kind")), "Personal")),
+                action=str(metadata.get("action") or row.get("description") or ("Acquisto" if quantity_diff >= ZERO else "Vendita")),
+                currency_hint=currency,
+                cash_currency=currency,
+                date=movement_date(row),
+                price=movement_decimal(row, "price"),
+                quantity=abs(quantity_diff),
+                quantity_diff=quantity_diff,
+                total_spend=amount,
+                fees=movement_decimal(row, "fees"),
+                tax=movement_decimal(row, "tax"),
+                grand_total=amount,
+                grand_total_present=bool(row.get("amount")),
+                source=str(metadata.get("source") or row.get("source_kind") or "sqlite"),
+            )
+        )
+    ledger = get_movement_store().summary(owner)
+    trade_source_ids = {str(row.get("source_kind") or "") for row in rows}
+    trade_sources = [item for item in ledger["sources"] if item["source"] in trade_source_ids]
+    labels = [SOURCE_LABELS.get(item["source"], item["source"]) for item in trade_sources]
+    return trades, {
+        "kind": " + ".join(labels) if labels else "No imported statements",
+        "relative_path": configured_path_label(MOVEMENT_DATABASE),
+        "sources": trade_sources,
+    }
+
+
+def read_ledger_dividends(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[Dividend]:
+    owner = configured_portfolio_id(portfolio_id)
+    ensure_legacy_statements_imported(owner)
+    return [
+        Dividend(
+            broker=str(row.get("account") or SOURCE_LABELS.get(str(row.get("source_kind")), "")),
+            asset=str(row.get("asset") or "Unknown"),
+            isin=str(row.get("isin") or ""),
+            date=movement_date(row),
+            amount_eur=movement_decimal(row, "amount"),
+            tax_eur=movement_decimal(row, "tax"),
+        )
+        for row in get_movement_store().movements(owner, ("dividend",))
+    ]
+
+
+def read_ledger_frictions(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[FrictionEvent]:
+    owner = configured_portfolio_id(portfolio_id)
+    ensure_legacy_statements_imported(owner)
+    return [
+        FrictionEvent(
+            broker=str(row.get("account") or SOURCE_LABELS.get(str(row.get("source_kind")), "")),
+            event_type=str(row.get("event_type") or "cost"),
+            date=movement_date(row),
+            amount_eur=abs(movement_decimal(row, "amount")),
+            description=str(row.get("description") or "Cost or tax"),
+        )
+        for row in get_movement_store().movements(owner, ("cost", "tax", "dividend_tax"))
+    ]
+
+
+def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[str, Any]]:
+    owner = configured_portfolio_id(portfolio_id)
+    ensure_legacy_statements_imported(owner)
+    excluded = {"trade", "dividend", "cost", "tax", "dividend_tax", "interest", "cash_flow"}
+    events: list[dict[str, Any]] = []
+    for row in get_movement_store().movements(owner):
+        if row.get("event_type") in excluded:
+            continue
+        metadata = row.get("metadata") or {}
+        events.append(
+            {
+                "date": movement_date(row),
+                "source": str(row.get("account") or row.get("source_kind") or ""),
+                "merchant": str(metadata.get("merchant") or row.get("description") or "Unknown"),
+                "description": str(row.get("description") or ""),
+                "flow_kind": str(row.get("event_type") or "spend"),
+                "category": str(metadata.get("category") or "Uncategorized"),
+                "subcategory": str(metadata.get("subcategory") or ""),
+                "amount_eur": Decimal(str(metadata.get("amount_eur") or abs(movement_decimal(row, "amount")))),
+                "currency": str(row.get("currency") or "EUR"),
+                "native_amount": movement_decimal(row, "amount"),
+                "confidence": metadata.get("confidence"),
+                "source_category": metadata.get("source_category"),
+            }
+        )
+    return sorted(events, key=lambda item: (item["date"], item["source"], item["merchant"]))
+
+
+def read_ledger_interests(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[str, Any]]:
+    owner = configured_portfolio_id(portfolio_id)
+    ensure_legacy_statements_imported(owner)
+    interests: list[dict[str, Any]] = []
+    for row in get_movement_store().movements(owner, ("interest",)):
+        metadata = row.get("metadata") or {}
+        net = movement_decimal(row, "amount")
+        tax = movement_decimal(row, "tax")
+        interests.append(
+            {
+                "broker": str(row.get("account") or SOURCE_LABELS.get(str(row.get("source_kind")), "")),
+                "date": movement_date(row),
+                "net_eur": net,
+                "tax_eur": tax,
+                "gross_eur": Decimal(str(metadata.get("gross_eur") or net + tax)),
+                "description": str(row.get("description") or "Cash Interest"),
+            }
+        )
+    return sorted(interests, key=lambda item: item["date"], reverse=True)
+
+
+def read_ledger_cash_events(portfolio_id: str, account: str) -> list[dict[str, Any]]:
+    owner = configured_portfolio_id(portfolio_id)
+    ensure_legacy_statements_imported(owner)
+    events: list[dict[str, Any]] = []
+    for row in get_movement_store().movements(owner, ("cash_flow",)):
+        if str(row.get("account") or "").casefold() != account.casefold():
+            continue
+        occurred_on = str(row["occurred_on"])
+        try:
+            event_time = datetime.fromisoformat(occurred_on)
+        except ValueError:
+            event_time = datetime.combine(movement_date(row), datetime.min.time())
+        metadata = row.get("metadata") or {}
+        events.append(
+            {
+                "datetime": event_time,
+                "date": event_time.date(),
+                "cash_change": movement_decimal(row, "amount"),
+                "contrib_change": Decimal(str(metadata.get("contribution_change") or 0)),
+                "currency": str(row.get("currency") or "EUR"),
+            }
+        )
+    return events
+
+
+def import_status_payload(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> dict[str, Any]:
+    owner = configured_portfolio_id(portfolio_id)
+    ensure_legacy_statements_imported(owner)
+    store = get_movement_store()
+    ledger = store.summary(owner)
+    has_trade_source = bool(store.movements(owner, ("trade",)))
     return {
         **ledger,
         "ready": has_trade_source,
+        "portfolio_id": owner,
+        "migration_errors": _legacy_import_errors.get(owner, []),
         "source_dir": "sources",
         "database": configured_path_label(MOVEMENT_DATABASE),
         "supported_sources": [
@@ -7147,7 +7579,10 @@ def import_status_payload() -> dict[str, Any]:
 
 @app.get("/api/imports/status")
 def api_import_status():
-    return jsonify(import_status_payload())
+    try:
+        return jsonify(import_status_payload(request.args.get("portfolio_id", PRIMARY_PORTFOLIO_ID)))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.get("/api/imports/template")
@@ -7210,6 +7645,7 @@ def api_import_statement():
     if suffix not in {".csv", ".xls", ".xlsx", ".pdf"}:
         return jsonify({"error": "Supported statement formats are CSV, XLS, XLSX, and PDF"}), 400
     requested_source = request.form.get("source", "auto")
+    portfolio_id = request.form.get("portfolio_id", PRIMARY_PORTFOLIO_ID)
     temp_directory = SETTINGS.cache_dir / "imports"
     temp_directory.mkdir(parents=True, exist_ok=True)
     descriptor, temp_name = tempfile.mkstemp(prefix="upload-", suffix=suffix, dir=temp_directory)
@@ -7217,7 +7653,12 @@ def api_import_statement():
     temporary = Path(temp_name)
     try:
         uploaded.save(temporary)
-        result = import_statement_path(temporary, original_name=uploaded.filename, requested_source=requested_source)
+        result = import_statement_path(
+            temporary,
+            original_name=uploaded.filename,
+            requested_source=requested_source,
+            portfolio_id=portfolio_id,
+        )
         return jsonify(result), 200
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -7379,7 +7820,7 @@ def api_portfolio():
     refresh = request.args.get("refresh") == "1"
     person = request.args.get("person", PRIMARY_PORTFOLIO_ID)
     berkshire_mode = request.args.get("berkshire", "stock")
-    proxy_mode = request.args.get("proxy", "on")
+    proxy_mode = request.args.get("proxy", DEFAULT_PROXY_MODE)
     broker = request.args.get("broker", "all")
     live_only = request.args.get("live_only", "off")
     try:
@@ -7393,7 +7834,7 @@ def api_news():
     refresh = request.args.get("refresh") == "1"
     person = request.args.get("person", PRIMARY_PORTFOLIO_ID)
     berkshire_mode = request.args.get("berkshire", "stock")
-    proxy_mode = request.args.get("proxy", "on")
+    proxy_mode = request.args.get("proxy", DEFAULT_PROXY_MODE)
     broker = request.args.get("broker", "all")
     live_only = request.args.get("live_only", "off")
     raw_symbols = request.args.get("symbols", "")
@@ -7417,7 +7858,7 @@ def api_news():
 def api_rankings():
     refresh = request.args.get("refresh") == "1"
     berkshire_mode = request.args.get("berkshire", "stock")
-    proxy_mode = request.args.get("proxy", "on")
+    proxy_mode = request.args.get("proxy", DEFAULT_PROXY_MODE)
     broker = request.args.get("broker", "all")
     live_only = request.args.get("live_only", "off")
     try:
@@ -7531,7 +7972,7 @@ def api_export():
         return jsonify({"error": "Unsupported export format. Use xlsx or pdf."}), 400
     person = request.args.get("person", PRIMARY_PORTFOLIO_ID)
     berkshire_mode = normalize_berkshire_mode(request.args.get("berkshire", "stock"))
-    proxy_mode = normalize_proxy_mode(request.args.get("proxy", "on"))
+    proxy_mode = normalize_proxy_mode(request.args.get("proxy", DEFAULT_PROXY_MODE))
     broker = request.args.get("broker", "all")
     live_only = request.args.get("live_only", "off")
     period = (request.args.get("period") or "all").lower()
@@ -7586,14 +8027,25 @@ def index():
         {
             "primaryPortfolioId": PRIMARY_PORTFOLIO_ID,
             "since2024PortfolioIds": sorted(SINCE_2024_PORTFOLIO_IDS),
-            "appVersion": APP_VERSION,
+            "appVersion": DISPLAY_VERSION,
+            "defaultProxyMode": DEFAULT_PROXY_MODE,
+            "hasMultiplePortfolios": len(profiles) > 1,
+            "annualRiskFreeRate": SETTINGS.annual_risk_free_rate,
+            "portfolioFeatures": {
+                PRIMARY_PORTFOLIO_ID: [],
+                **{
+                    portfolio_id: sorted(profile.features)
+                    for portfolio_id, profile in SETTINGS.portfolios.items()
+                },
+            },
         }
     ).replace("<", "\\u003c")
     return render_template(
         "index.html",
         portfolio_buttons="".join(buttons),
+        show_rankings=len(profiles) > 1,
         since_2024_button=since_2024_button,
-        app_version=APP_VERSION,
+        app_version=DISPLAY_VERSION,
         app_config=app_config,
     )
 

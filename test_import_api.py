@@ -40,14 +40,40 @@ class ImportApiTest(unittest.TestCase):
 
         self.assertEqual(first.status_code, 200)
         self.assertEqual(first.get_json()["status"], "imported")
-        self.assertEqual(first.get_json()["movements"], 1)
+        self.assertEqual(first.get_json()["movements"], 2)
         self.assertEqual(second.get_json()["status"], "duplicate")
-        self.assertEqual(status.get_json()["movements"], 1)
+        self.assertEqual(status.get_json()["movements"], 2)
         supported = {item["id"]: item["format"] for item in status.get_json()["supported_sources"]}
         self.assertEqual(supported["trade_republic"], "CSV")
         self.assertEqual(supported["interactive_brokers"], "PDF")
         self.assertEqual(supported["manual"], "CSV/XLSX")
         self.assertEqual(len(imported_files), 1)
+
+    def test_dashboard_ledger_survives_removal_of_raw_audit_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            incoming = root / "incoming.csv"
+            incoming.write_bytes(TRADE_REPUBLIC_EXPORT)
+            database = root / "private" / "movements.sqlite3"
+            with (
+                patch.object(app, "ROOT_DIR", root / "sources"),
+                patch.object(app, "MOVEMENT_DATABASE", database),
+                patch.object(app, "_movement_store", None),
+                patch.object(app, "_legacy_imported_portfolios", set()),
+                patch.object(app, "_legacy_import_errors", {}),
+            ):
+                result = app.import_statement_path(incoming, requested_source="trade_republic")
+                archived = list((root / "sources" / "broker_exports" / "trade_republic").glob("*.csv"))
+                self.assertEqual(len(archived), 1)
+                archived[0].unlink()
+                incoming.unlink()
+
+                trades, source = app.read_ledger_trades(app.PRIMARY_PORTFOLIO_ID)
+
+        self.assertEqual(result["status"], "imported")
+        self.assertEqual(len(trades), 1)
+        self.assertEqual(trades[0].asset, "Example ETF")
+        self.assertIn("movements.sqlite3", source["relative_path"])
 
     def test_rejects_unsupported_extension(self) -> None:
         with app.app.test_client() as client:

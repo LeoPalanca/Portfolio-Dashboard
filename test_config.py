@@ -5,12 +5,18 @@ import tempfile
 import unittest
 
 from src.portfolio_dashboard.config import PortfolioProfile, Settings
-from src.portfolio_dashboard.version import APP_VERSION
+from src.portfolio_dashboard.version import APP_VERSION, display_version
 
 
 class SettingsTest(unittest.TestCase):
     def test_application_version_comes_from_project_metadata(self) -> None:
         self.assertRegex(APP_VERSION, r"^\d+\.\d+\.\d+")
+
+    def test_private_edition_suffix_is_display_only(self) -> None:
+        self.assertEqual(display_version("1.2.3", "L"), "1.2.3L")
+        self.assertEqual(display_version("1.2.3"), "1.2.3")
+        with self.assertRaises(ValueError):
+            display_version("1.2.3", "+private")
 
     def test_paths_and_profiles_are_derived_from_settings(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

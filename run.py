@@ -59,6 +59,11 @@ data_dir = {json.dumps(str(data_dir.expanduser().resolve()))}
 cache_dir = {json.dumps(str(cache_dir.expanduser().resolve()))}
 movement_database_file = "movements.sqlite3"
 scan_downloads = false
+edition_suffix = ""
+default_proxy_mode = "off"
+fineco_withholding_tax_rate = "0.26"
+bbva_interest_tax_rate = "0.26"
+annual_risk_free_rate = 0.03
 
 primary_portfolio_id = "primary"
 primary_portfolio_name = "Primary Portfolio"
@@ -112,10 +117,21 @@ def sync_environment(uv: list[str]) -> None:
     subprocess.run([*uv, "sync", "--frozen"], cwd=PROJECT_DIR, check=True)
 
 
-def import_files(uv: list[str], files: list[str], source: str = "auto") -> None:
+def import_files(uv: list[str], files: list[str], source: str = "auto", portfolio: str = "") -> None:
     if not files:
         return
-    command = [*uv, "run", "--frozen", "python", "scripts/import_statements.py", "--source", source, *files]
+    command = [
+        *uv,
+        "run",
+        "--frozen",
+        "python",
+        "scripts/import_statements.py",
+        "--source",
+        source,
+    ]
+    if portfolio:
+        command.extend(("--portfolio", portfolio))
+    command.extend(files)
     subprocess.run(command, cwd=PROJECT_DIR, check=True)
 
 
@@ -180,6 +196,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--setup", action="store_true", help="configure and install without starting the server")
     parser.add_argument("--import", dest="import_paths", nargs="+", metavar="FILE", help="import statements before starting")
     parser.add_argument("--source", default="auto", help="source id for --import (default: automatic detection)")
+    parser.add_argument("--portfolio", default="", help="configured portfolio id for --import (default: configured primary)")
     parser.add_argument("--port", type=int, default=8050)
     parser.add_argument("--no-browser", action="store_true")
     return parser.parse_args()
@@ -193,7 +210,7 @@ def main() -> int:
     uv = uv_command()
     sync_environment(uv)
     if args.import_paths:
-        import_files(uv, args.import_paths, args.source)
+        import_files(uv, args.import_paths, args.source, args.portfolio)
     elif first_setup:
         prompt_for_imports(uv)
     if args.setup:

@@ -4,9 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Portfolio Dashboard</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v={{ app_version }}">
   <script>
     // Runs before first paint so a stored light theme never flashes dark.
@@ -128,7 +125,7 @@
           <button type="button" data-berkshire="lookthrough">BRK 13F</button>
         </div>
         <div class="periods secondary-selector" id="proxy-mode" aria-label="Proxy composition mode">
-          <button type="button" data-proxy="on" class="active">Proxy gaps</button>
+          <button type="button" data-proxy="on">Proxy gaps</button>
           <button type="button" data-proxy="off">Official only</button>
         </div>
         <div class="periods secondary-selector" id="live-mode" aria-label="Live price filter">
@@ -144,7 +141,8 @@
     <div class="metrics" id="metrics"></div>
     <div class="movers-panel" id="movers-panel" hidden></div>
 
-    <!-- User Rankings -->
+    {% if show_rankings %}
+    <!-- Multi-portfolio rankings -->
     <section data-section="family-rankings">
       <div class="section-head expanded" data-collapse="rankings-content" onclick="toggleSection(this)">
         <div class="section-head-left">
@@ -171,6 +169,7 @@
         </div>
       </div>
     </section>
+    {% endif %}
 
     <!-- Portfolio Value -->
     <section data-section="portfolio-value">
@@ -807,7 +806,7 @@
         <div class="section-body">
           <div class="info-box" style="margin-bottom:15px;" id="stats-info">
             <strong>Volatility & Risk Summary:</strong>
-            Daily variance, standard deviation (volatility), and annualized volatility are calculated using the strictly daily business-day return series of the portfolio and the MSCI World index. Sharpe ratio is annualized assuming a 3.0% risk-free rate.
+            Daily variance, standard deviation, annualized volatility, and Sharpe ratio use the configured assumptions.
           </div>
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:15px;">
             <div class="table-wrap">

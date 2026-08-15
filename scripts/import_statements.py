@@ -18,12 +18,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("files", nargs="+")
     parser.add_argument("--source", default="auto")
+    parser.add_argument("--portfolio", default=None, help="configured portfolio id (default: configured primary)")
     args = parser.parse_args()
     failed = False
     for raw_path in args.files:
         path = Path(raw_path).expanduser().resolve()
         try:
-            result = import_statement_path(path, requested_source=args.source)
+            result = import_statement_path(path, requested_source=args.source, portfolio_id=args.portfolio)
             print(json.dumps({"file": path.name, **result}, ensure_ascii=False))
         except Exception as exc:  # noqa: BLE001 - one failed file must not hide results for the others
             failed = True

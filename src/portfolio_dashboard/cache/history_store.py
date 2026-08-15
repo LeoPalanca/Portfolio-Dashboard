@@ -39,6 +39,17 @@ class HistoryStore:
                     return self._payload(record, start, end, fetched_at)
         return None
 
+    def get_cached(self, cache_key: str, start: date, end: date) -> dict[str, Any] | None:
+        """Return the latest stored series even when its coverage or TTL is stale."""
+
+        with self._lock:
+            record = self._read(cache_key)
+            if record.get("status") != "priced" or not record.get("prices"):
+                return None
+            payload = self._payload(record, start, end, int(record.get("updated_at", 0)))
+            payload["cache_stale"] = True
+            return payload
+
     def merge(self, cache_key: str, payload: dict[str, Any], start: date, end: date) -> dict[str, Any]:
         if payload.get("status") != "priced":
             return payload
@@ -222,4 +233,3 @@ class HistoryStore:
         archive_path = archive_directory / "history-monolithic-v1.json"
         if not archive_path.exists():
             self.legacy_file.replace(archive_path)
-

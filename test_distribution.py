@@ -622,10 +622,16 @@ class DistributionAggregationTest(unittest.TestCase):
     def test_calculate_valuation_series_includes_cash_balances(self) -> None:
         trades, _ = app.read_trades()
         history_error = {"status": "history_error", "prices": {}}
+        cash_date = min(trade.date for trade in trades[:20])
         with (
             patch.object(app, "resolve_isin", return_value={}),
             patch.object(app, "fetch_history", return_value=history_error),
             patch.object(app, "fetch_eurostat_cpi", return_value={}),
+            patch.object(
+                app,
+                "load_cash_histories",
+                return_value=([(cash_date, Decimal("100"), Decimal("100"))], [], []),
+            ),
         ):
             valuation = app.calculate_valuation_series(trades[:20], {}, refresh=False, person=app.PRIMARY_PORTFOLIO_ID, broker="all")
         self.assertIn("series", valuation)

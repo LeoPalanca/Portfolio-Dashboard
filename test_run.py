@@ -24,6 +24,8 @@ class BootstrapTest(unittest.TestCase):
 
         self.assertIn(f'source_dir = {json.dumps(str(source.resolve()))}', content)
         self.assertIn("scan_downloads = false", content)
+        self.assertIn('edition_suffix = ""', content)
+        self.assertIn('default_proxy_mode = "off"', content)
         self.assertTrue(directories_exist)
 
 

@@ -69,6 +69,27 @@ class HistoryStoreTest(unittest.TestCase):
         self.assertTrue(archive_exists)
         self.assertFalse(legacy_exists)
 
+    def test_get_cached_returns_stale_or_partially_covered_history(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = HistoryStore(Path(temporary) / "history")
+            store.merge(
+                "ABC",
+                {
+                    "symbol": "ABC",
+                    "currency": "EUR",
+                    "status": "priced",
+                    "fetched_at": 100,
+                    "prices": {"2024-01-02": 10},
+                },
+                date(2024, 1, 1),
+                date(2024, 1, 31),
+            )
+
+            cached = store.get_cached("ABC", date(2024, 1, 1), date(2024, 2, 1))
+
+        self.assertEqual(cached["prices"], {"2024-01-02": 10.0})
+        self.assertTrue(cached["cache_stale"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -78,7 +78,10 @@ class FrontendAssetTest(unittest.TestCase):
 
         self.assertEqual(config["primaryPortfolioId"], app.PRIMARY_PORTFOLIO_ID)
         self.assertEqual(config["since2024PortfolioIds"], sorted(app.SINCE_2024_PORTFOLIO_IDS))
-        self.assertEqual(config["appVersion"], app.APP_VERSION)
+        self.assertEqual(config["appVersion"], app.DISPLAY_VERSION)
+        self.assertEqual(config["defaultProxyMode"], app.DEFAULT_PROXY_MODE)
+        self.assertEqual(config["hasMultiplePortfolios"], len(app.SETTINGS.portfolios) > 0)
+        self.assertEqual(config["annualRiskFreeRate"], app.SETTINGS.annual_risk_free_rate)
 
     def test_config_island_cannot_break_out_of_its_script_tag(self) -> None:
         match = APP_CONFIG_RE.search(render())
@@ -124,6 +127,17 @@ class FrontendAssetTest(unittest.TestCase):
 
         self.assertIn('event.key === "Escape"', js)
         self.assertIn('document.addEventListener("click", () => setSettingsOpen(false))', js)
+
+    def test_rankings_do_not_block_the_main_dashboard_render(self) -> None:
+        with app.app.test_client() as client:
+            js = client.get("/static/app.js").get_data(as_text=True)
+
+        load_start = js.index("async function load(refresh")
+        load_end = js.index('document.querySelectorAll("#periods button")', load_start)
+        load_body = js[load_start:load_end]
+        self.assertIn("renderDashboard(data);", load_body)
+        self.assertIn("void loadRankings(params, requestId);", load_body)
+        self.assertNotIn("Promise.all", load_body)
 
     def test_every_section_has_a_stable_key(self) -> None:
         """Section preferences are stored by key, so every section needs one."""

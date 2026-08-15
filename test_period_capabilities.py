@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import unittest
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -22,6 +23,12 @@ def app_config(html: str) -> dict[str, Any]:
 
 
 class PeriodCapabilityTest(unittest.TestCase):
+    def test_fresh_install_hides_multi_portfolio_rankings(self) -> None:
+        with patch.object(app, "SETTINGS", SimpleNamespace(portfolios={})), app.app.test_client() as client:
+            html = client.get("/").get_data(as_text=True)
+
+        self.assertNotIn("Family Rankings", html)
+
     def test_fresh_install_omits_since_2024_button(self) -> None:
         with patch.object(app, "SINCE_2024_PORTFOLIO_IDS", set()), app.app.test_client() as client:
             html = client.get("/").get_data(as_text=True)

@@ -1,50 +1,75 @@
 # Portfolio Dashboard
 
-A local-first finance dashboard that consolidates brokerage exports, cash-account
-statements, crypto wallets, and snapshot portfolios. It provides current holdings,
-historical valuation, total-return statistics, look-through exposure, expense
-classification, frictions, news, and XLSX/PDF exports.
+A local-first dashboard for turning broker, bank, wallet, and portfolio exports into
+one private view of holdings, performance, income, spending, and investment costs.
 
-Personal financial data is deliberately kept outside the repository. The application
-loads local paths and portfolio profiles from environment variables or an ignored
-`config.toml` file.
+Your statements and normalized SQLite ledger stay on your computer. The repository
+contains application code, synthetic tests, and public reference data—not your
+financial records.
 
-## Requirements
+> [!IMPORTANT]
+> Portfolio Dashboard is an independent personal-analysis tool, not financial, tax,
+> or investment advice. Verify imported figures against the original statements
+> before making decisions.
 
-- Python 3.11 or newer (Python 3.13 is the primary development target)
-- [`uv`](https://docs.astral.sh/uv/) for dependency management
-- `pdftotext` when importing Interactive Brokers PDF confirmations
+## What it does
 
-## Install and run
+- Imports supported CSV, XLS, XLSX, and PDF statements from the browser or CLI.
+- Normalizes trades, dividends, taxes, fees, interest, expenses, and cash movements
+  into a deduplicated SQLite ledger.
+- Calculates holdings, realized and unrealized P/L, historical valuation, total
+  return, volatility, drawdown, and benchmark comparisons.
+- Shows dividends, cash interest, expenses, contributions, tax and fee drag, and
+  look-through portfolio exposure.
+- Supports multiple locally configured portfolios; rankings appear only when more
+  than one profile exists.
+- Exports dashboard tables to XLSX or PDF.
+- Uses cache-first market data so routine loads do not wait for network refreshes.
 
-The guided launcher installs the locked environment, creates private directories
-outside the repository, offers to import statements, starts the server, and opens
-the browser:
+The current reporting currency is EUR. Instruments and transactions denominated in
+currencies such as USD and CHF are converted when the relevant importer and FX price
+history provide enough information. Selectable USD/CHF base reporting is not yet
+supported: API fields and exports ending in `_eur` are always EUR values.
+
+## Quick start
+
+Requirements:
+
+- Python 3.11 or newer
+- [`uv`](https://docs.astral.sh/uv/) (the guided launcher can install it with `pip`)
+- `pdftotext` only for Interactive Brokers PDF confirmations
+
+Clone the repository and run the guided launcher:
 
 ```bash
+git clone https://github.com/LeoPalanca/portfolio-dashboard.git
+cd portfolio-dashboard
 python run.py
 ```
 
-Useful non-interactive variants are:
+The launcher installs the locked environment, creates private directories, offers
+to import statements, starts the server on `http://127.0.0.1:8050`, and opens a
+browser. On a fresh install, the default private root is `~/PortfolioDashboard`.
+
+Useful variants:
 
 ```bash
 python run.py --setup
 python run.py --import /path/to/statement.csv --setup
+python run.py --import /path/to/statement.xlsx --portfolio household_a --setup
 python run.py --port 8051 --no-browser
 ```
 
-The manual workflow remains available:
+The manual workflow is also available:
 
 ```bash
 uv sync
 cp config.example.toml config.toml
-# Edit config.toml so its paths point to directories outside this repository.
+# Edit config.toml so all private paths point outside this repository.
 uv run python app.py
 ```
 
-Open `http://127.0.0.1:8050`.
-
-The existing helper remains available for local background operation:
+For local background operation:
 
 ```bash
 ./dashboard.sh start
@@ -53,44 +78,62 @@ The existing helper remains available for local background operation:
 ./dashboard.sh stop
 ```
 
-## Configuration and privacy
+## Supported inputs
 
-`config.example.toml` documents the supported settings. The important filesystem
-boundaries are:
+Platform exports are not interchangeable. Select the matching source and use the
+platform's native export; renaming or converting a file does not make its workbook
+layout compatible.
 
-- `source_dir`: broker and cash-account exports.
-- `data_dir`: private mappings, wallet snapshots, expense rules, watchlist, and
-  portfolio-specific derived data.
-- `cache_dir`: disposable price, history, news, watchlist, and CPI caches.
+| Source | Supported input | Notes |
+| --- | --- | --- |
+| Trade Republic | CSV | Account/activity export |
+| Fineco | XLSX | Securities workbook |
+| Interactive Brokers | PDF | Trade-confirmation report; requires `pdftotext` |
+| eToro | XLSX | Account-statement workbook |
+| Revolut | CSV | Account statement, including supported foreign-currency rows |
+| Intesa | XLSX | Account-operations workbook |
+| BBVA | XLS | Account workbook |
+| Personal trades | CSV or XLSX | Header-based template available during onboarding |
+| Snapshot portfolio | CSV | Declared in a local portfolio profile |
 
-The top-bar `Import data` action accepts CSV, XLS, XLSX, and PDF statements. It
-detects the institution when possible, preserves the raw file under `source_dir`,
-and writes deduplicated normalized events plus an import manifest to
-`data_dir/movements.sqlite3`. The same pipeline is available from
-`scripts/import_statements.py`; `run.py --import` is the recommended CLI entry.
+The import dialog detects a source when possible, validates the extension and
+expected headers or sheets, retains an audit copy under `source_dir`, and writes
+normalized movements to `data_dir/movements.sqlite3`. The same pipeline is available
+through `python run.py --import ...` and `scripts/import_statements.py`.
 
-Automatic discovery in `~/Downloads` is disabled by default. Existing installations
-that rely on it can explicitly set `scan_downloads = true` in private configuration.
+### Personal trade template
 
-The optional `Since Jan 2024` (`'24`) window is portfolio-specific and disabled on
-fresh installations. Enable it only for the relevant portfolio ids, for example
-`since_2024_portfolio_ids = ["primary"]`.
+CSV and XLSX templates use this schema:
 
-Historical prices are stored as one compact merged JSON file per symbol under
-`cache_dir/history/`. On first use, installations with the former monolithic
-`history.json` cache migrate it automatically and archive the original under
-`cache_dir/legacy/`.
-
-Environment variables use the `PORTFOLIO_` prefix and override TOML values. For
-example:
-
-```bash
-export PORTFOLIO_DATA_DIR=/path/to/private-data
-export PORTFOLIO_CACHE_DIR=/path/to/cache
+```text
+date,action,asset,isin,broker,currency,quantity,price,fees,tax,total
 ```
 
-The following private filenames are expected inside `data_dir` when the associated
-feature is used:
+`date`, `action`, `asset`, `quantity`, and `price` are required. Dates use
+`YYYY-MM-DD`; actions are `BUY` or `SELL`; quantity and price must be positive. ISIN,
+broker, currency, fees, tax, and total are optional. `total` is the absolute cash
+value and is calculated when omitted. The former positional 17-column personal CSV
+remains supported for existing installations.
+
+## Data model and filesystem boundaries
+
+`config.example.toml` documents the available settings. The main private locations
+are:
+
+- `source_dir`: retained broker and cash-account exports.
+- `data_dir`: `movements.sqlite3`, mappings, wallet data, classification rules,
+  watchlist, and portfolio-specific data.
+- `cache_dir`: disposable prices, history, news, watchlist, and CPI caches.
+
+SQLite is the canonical runtime source for imported movements. Statements are not
+reparsed on every dashboard refresh. Older installations are imported into SQLite
+once; version-1 ledgers are migrated in place and assigned to the configured primary
+portfolio. Imports and deduplication are scoped by portfolio.
+
+Automatic scanning of `~/Downloads` is disabled on fresh installations. Existing
+users can opt in with `scan_downloads = true`.
+
+These optional private files are read from `data_dir`:
 
 ```text
 asset_mappings.csv
@@ -102,85 +145,68 @@ expense_category_rules.csv
 watchlist.json
 ```
 
-They are ignored by Git even if accidentally copied back into the repository. Local
-`config.toml`, caches, logs, statement backups, and real-data contract snapshots are
-also ignored.
+The repository ignores local configuration, SQLite files, caches, logs, statement
+backups, and real-data contract snapshots. Keep private paths outside the clone as an
+additional boundary.
 
-Public market reference data stays under `data/`, including Berkshire holdings,
-issuer-document metadata, and proxy exposure compositions.
+### Portfolio profiles and private editions
 
-## Input discovery
+Additional portfolios are declared under `[portfolios.<id>]` in ignored
+`config.toml`. A profile can define a display name, snapshot pattern, history start,
+transaction adjustments, friction events, tax-loss metadata, private action items,
+and opt-in features.
 
-Broker discovery patterns are configurable. The parsers currently support:
+The package version follows semantic versioning, for example `0.6.0`. A private
+installation can add a display-only marker without forking package metadata:
 
-- Trade Republic CSV exports
-- Fineco workbooks
-- Interactive Brokers PDF confirmations
-- eToro account-statement workbooks
-- Revolut account-statement CSVs
-- Intesa account-operation workbooks
-- BBVA account workbooks
-- Personal trade CSV/XLSX fallback (downloadable templates are available in onboarding)
-- Configured snapshot portfolios
-
-These formats are platform-specific, not interchangeable. A Trade Republic import,
-for example, must be its supported CSV export; renaming or converting it to XLSX does
-not make it compatible. The browser and CLI validate the selected platform against
-the extension and then validate the file's expected headers or workbook sheets.
-
-Personal trade templates use the same header-based schema in CSV and XLSX:
-
-```text
-date,action,asset,isin,broker,currency,quantity,price,fees,tax,total
+```toml
+edition_suffix = "L"
 ```
 
-`date`, `action`, `asset`, `quantity`, and `price` are required. Dates use
-`YYYY-MM-DD`; actions are `BUY` or `SELL`. ISIN, broker, currency, fees, tax, and
-total are optional. Quantity and price must be positive. `total` is the absolute
-cash value and is derived when omitted. The former positional 17-column personal
-CSV remains supported for existing installations.
+That installation displays `0.6.0L`; fresh/public installations display `0.6.0`.
+Personal paths, adjustments, and feature flags remain in ignored configuration.
 
-Each non-primary portfolio is declared under a `[portfolios.<id>]` TOML table. A
-profile can specify its display name, snapshot pattern, history start, transaction
-adjustments, friction events, tax-loss metadata, and private action items. These
-details remain in ignored local configuration rather than application code.
+## Market data, network access, and caches
 
-## Expense classification
+Routine dashboard loads are cache-first. `Refresh Prices` performs a synchronous
+market update. Depending on the enabled feature, the application may contact:
 
-Rules are evaluated by ascending priority; the first enabled match wins. The schema
-is:
+- Yahoo Finance through `yfinance` for prices, currency metadata, benchmarks, and
+  Yahoo RSS headlines.
+- Eurostat for euro-area HICP inflation data.
+- Coinbase public market endpoints for supported crypto conversion history.
+- Parqet's image host directly from the browser for optional security logos; the
+  requested symbol or ISIN is visible to that service.
+- Fund issuers and reference sites only when the manual ETF composition updater is
+  run.
+- Coinbase, BNB Chain, or TON endpoints only when optional wallet tools are run.
 
-```text
-priority,enabled,source,match_field,match_type,pattern,category,subcategory,merchant
-```
+No analytics or telemetry service is included. External data can be incomplete,
+delayed, rate-limited, or revised. Cached market data is stored under `cache_dir` and
+can be deleted without losing the movement ledger.
 
-`source` may target one importer or use `all`. Match types are `contains`, `exact`,
-and `regex`. A synthetic starter file is provided at
-`data/expense_category_rules.example.csv`; copy and customize it in the external
-`data_dir`.
-
-Refunds and cashback are represented as income. Transfers, investments, credits,
-cash withdrawals, fees, and spending remain separate flows so the expense summary
-can reconcile net outflow without treating every account movement as consumption.
+Historical prices use one compact merged JSON file per symbol. Installations with
+the former monolithic `history.json` cache migrate it automatically and archive the
+original under `cache_dir/legacy`.
 
 ## Holdings and exposure data
 
-`asset_mappings.csv` maps imported names or ISINs to pricing symbols. Optional
-columns include `Ticker` and `Borsa`; exchange hints are used when constructing
-Yahoo Finance symbols.
+`asset_mappings.csv` maps imported names or ISINs to price symbols. Optional `Ticker`
+and `Borsa` columns provide exchange hints for Yahoo Finance symbol construction.
 
-`asset_exposures.csv` provides the look-through split for direct shares, ETFs, and
-funds:
+`asset_exposures.csv` supplies look-through data for direct shares, ETFs, and funds:
 
 ```text
 asset_name,isin,holding_name,holding_ticker,weight_pct,sector,geo,asset_class
 ```
 
-Official compositions take precedence. `data/proxy_exposures.csv` fills unresolved
-or partial products only when Proxy mode is enabled.
+Official compositions take precedence. The checked-in `data/proxy_exposures.csv`
+contains curated, modelled, and in some cases synthetic compositions used only to
+fill missing or partial products. Proxy mode is **off by default** on fresh installs.
+When enabled, proxy results are approximations for visualization—not issuer data and
+not suitable for trading, compliance, or tax decisions.
 
-The manual ETF refresh tool can inspect current positions and update issuer-sourced
-compositions:
+The manual updater can inspect positions and refresh issuer-sourced compositions:
 
 ```bash
 uv run python etf_fetcher.py list-targets
@@ -188,28 +214,71 @@ uv run python etf_fetcher.py update --official-only --dry-run --offline
 uv run python etf_fetcher.py update --official-only
 ```
 
+## Expense classification
+
+Rules are evaluated by ascending priority; the first enabled match wins:
+
+```text
+priority,enabled,source,match_field,match_type,pattern,category,subcategory,merchant
+```
+
+`source` can name one importer or `all`. Match types are `contains`, `exact`, and
+`regex`. Copy `data/expense_category_rules.example.csv` into the external `data_dir`
+and customize it.
+
+Refunds and cashback are income. Transfers, investments, credits, withdrawals,
+fees, and spending remain separate flows so net outflow is not treated as pure
+consumption.
+
+## Assumptions and limitations
+
+- The server is a local Flask development server with no login, authorization, TLS,
+  or multi-user isolation. Never bind it to a public or untrusted interface.
+- Reporting is EUR-first. Eurostat supplies euro-area inflation, and some labels and
+  benchmark choices reflect that reporting context.
+- When a supported Fineco or BBVA export provides a net amount without explicit tax,
+  the importer reconstructs gross and tax using configurable 26% defaults
+  (`fineco_withholding_tax_rate` and `bbva_interest_tax_rate`). Adjust them for the
+  relevant tax residence, instrument, and account treatment, then verify locally.
+- Market prices, FX conversion, news, mappings, and proxy compositions are best-effort
+  data and may be stale or unavailable.
+- Snapshot portfolios cannot provide transaction-level accuracy for periods before
+  the supplied history and adjustments.
+
+See [SECURITY.md](SECURITY.md) for handling and deployment guidance.
+
 ## Verification
 
-Run the project checks with:
-
 ```bash
-/opt/anaconda3/bin/python3 -m compileall -q .
-/opt/anaconda3/bin/python3 -m unittest discover -s . -p 'test*.py'
+uv sync --dev
+uv run python -m compileall -q app.py run.py src scripts
+uv run pytest -q
+uv run ruff check src run.py scripts/import_statements.py
+uv run mypy src
+uv run python scripts/lint_design_tokens.py --strict
+node --check static/app.js
 ```
 
-The test suite uses synthetic fixtures. For local refactors, the contract snapshot
-tool can also capture canonicalized real-data API responses into the ignored
-`tests/golden/local/` directory:
+Tests use synthetic fixtures. The optional contract snapshot tool writes canonical
+real-data responses to the ignored `tests/golden/local/` directory:
 
 ```bash
-/opt/anaconda3/bin/python3 scripts/snapshot_local_api.py --skip-news
+uv run python scripts/snapshot_local_api.py --skip-news
 ```
 
-Never commit that directory: its payloads contain real portfolio figures.
+Never commit that directory; its payloads contain real portfolio figures.
 
-## Development status
+## Project status
 
-The application is being migrated incrementally from a single-file Flask app to a
-typed `src/portfolio_dashboard` package. The safety and privacy boundary is in place;
-structural extraction and the planned FastAPI API layer follow as separate stages so
-behavior changes remain attributable and testable.
+Version 0.6 is a beta release. The importer, SQLite ledger, dashboard, onboarding,
+and exports are functional, while the internal application is being modularized from
+the legacy Flask module. Backward compatibility may change before 1.0 and migrations
+will be documented in release notes.
+
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Security guidance
+is in [SECURITY.md](SECURITY.md), and release notes are in
+[CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+Released under the [MIT License](LICENSE).

@@ -7,6 +7,7 @@ from datetime import date as Date
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 from pydantic_settings import (
@@ -90,6 +91,11 @@ class Settings(BaseSettings):
     movement_database_file: str = "movements.sqlite3"
     import_max_bytes: int = 50 * 1024 * 1024
     scan_downloads: bool = False
+    edition_suffix: str = ""
+    default_proxy_mode: Literal["off", "on"] = "off"
+    fineco_withholding_tax_rate: Decimal = Field(default=Decimal("0.26"), ge=0, lt=1)
+    bbva_interest_tax_rate: Decimal = Field(default=Decimal("0.26"), ge=0, lt=1)
+    annual_risk_free_rate: float = Field(default=0.03, ge=-1, lt=1)
 
     primary_portfolio_id: str = "primary"
     primary_portfolio_name: str = "Primary Portfolio"

@@ -11,6 +11,11 @@ data/crypto_wallet_transactions.csv
 data/expense_category_rules.csv
 data/watchlist.json
 tests/golden/local/
+source-files/
+private-data/
+broker_exports/
+cash_exports/
+snapshots/
 
 # Runtime caches and state
 .*cache*.json
@@ -36,6 +41,8 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+portfolio-dashboard-*.pdf
+portfolio-dashboard-*.xlsx
 
 # Editor/OS/session metadata
 .DS_Store

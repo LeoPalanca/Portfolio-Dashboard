@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
-
-EUR = Decimal("1")
-ZERO = Decimal("0")
+EUR = Decimal(1)
+ZERO = Decimal(0)
 
 
 def parse_decimal(value: str | None) -> Decimal:

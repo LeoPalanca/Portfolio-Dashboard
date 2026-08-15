@@ -6,6 +6,13 @@ movement_database_file = "movements.sqlite3"
 import_max_bytes = 52428800
 # Explicit opt-in for legacy automatic discovery in ~/Downloads.
 scan_downloads = false
+edition_suffix = ""
+# Approximate compositions are opt-in on public/fresh installations.
+default_proxy_mode = "off"
+# Defaults used only when a statement supplies a net amount without explicit tax.
+fineco_withholding_tax_rate = "0.26"
+bbva_interest_tax_rate = "0.26"
+annual_risk_free_rate = 0.03
 
 primary_portfolio_id = "primary"
 primary_portfolio_name = "Primary Portfolio"
@@ -18,6 +25,7 @@ interactive_brokers_pattern = "broker_exports/*/*interactive_brokers*.pdf"
 etoro_pattern = "broker_exports/*/*etoro*.xlsx"
 revolut_pattern = "cash_exports/*/*account-statement*.csv"
 intesa_pattern = "cash_exports/*/*account_operations*.xlsx"
+bbva_pattern = "cash_exports/*/*bbva*.xls"
 
 [portfolios.household_a]
 display_name = "Household A"

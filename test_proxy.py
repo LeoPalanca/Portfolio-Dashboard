@@ -28,7 +28,7 @@ class PriceHistoryLookupTest(unittest.TestCase):
             "prices": {"2024-06-03": 42.0},
         }
         class FakeStore:
-            def get_range(self, *args):
+            def get_cached(self, *args):
                 return payload
 
         with patch.object(app, "get_history_store", return_value=FakeStore()), patch.object(app, "yf", object()):
