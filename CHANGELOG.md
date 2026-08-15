@@ -23,6 +23,8 @@ Notable changes to Portfolio Dashboard are documented here. The project follows
 - Multi-portfolio rankings load after the selected dashboard and are hidden on
   single-profile installations.
 - Approximate proxy compositions are opt-in on fresh installations.
+- Public exposure and Berkshire reference data load without requiring a private
+  `asset_exposures.csv` file.
 - Fineco/BBVA tax reconstruction and the Sharpe risk-free rate are configurable.
 - The public CI gate now checks Python and JavaScript syntax, scoped lint, package
   types, tests, design tokens, and distribution builds.

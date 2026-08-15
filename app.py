@@ -3753,20 +3753,21 @@ def read_proxy_metadata() -> dict[str, dict[str, Any]]:
 
 def read_exposures(berkshire_mode: str = "stock", proxy_mode: str = "off") -> dict[str, list[dict[str, Any]]]:
     exposures: dict[str, list[dict[str, Any]]] = {}
-    if not EXPOSURES_CSV.exists():
-        return exposures
     documents = read_etf_documents() if proxy_mode == "on" else {}
 
-    with EXPOSURES_CSV.open(newline="", encoding="utf-8-sig") as handle:
-        for row in csv.DictReader(handle):
-            item = exposure_row_item(row)
-            if not item:
-                continue
-            asset_name = item["asset_name"]
-            isin = item["isin"]
-            exposures.setdefault(exposure_key(asset_name, isin), []).append(item)
-            if asset_name and isin:
-                exposures.setdefault(exposure_key(asset_name, ""), []).append(item)
+    # Private look-through rows are optional. Public Berkshire and proxy data must
+    # remain available on a clean installation with no asset_exposures.csv.
+    if EXPOSURES_CSV.exists():
+        with EXPOSURES_CSV.open(newline="", encoding="utf-8-sig") as handle:
+            for row in csv.DictReader(handle):
+                item = exposure_row_item(row)
+                if not item:
+                    continue
+                asset_name = item["asset_name"]
+                isin = item["isin"]
+                exposures.setdefault(exposure_key(asset_name, isin), []).append(item)
+                if asset_name and isin:
+                    exposures.setdefault(exposure_key(asset_name, ""), []).append(item)
 
     if berkshire_mode == "lookthrough":
         rows = load_berkshire_lookthrough_rows()

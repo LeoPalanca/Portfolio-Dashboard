@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -8,6 +11,27 @@ import app
 
 
 class DistributionAggregationTest(unittest.TestCase):
+    @staticmethod
+    def sample_trade() -> app.Trade:
+        return app.Trade(
+            asset="Example ETF",
+            isin="IE0000000001",
+            broker="Example Broker",
+            action="BUY",
+            currency_hint="EUR",
+            cash_currency="EUR",
+            date=date(2026, 1, 2),
+            price=Decimal("100"),
+            quantity=Decimal("1"),
+            quantity_diff=Decimal("1"),
+            total_spend=Decimal("100"),
+            fees=Decimal("0"),
+            tax=Decimal("0"),
+            grand_total=Decimal("100"),
+            grand_total_present=True,
+            source="synthetic_test",
+        )
+
     def test_canonical_holding_name_merges_issuer_name_variants(self) -> None:
         examples = {
             "NVIDIA CORP": "NVIDIA",
@@ -208,15 +232,36 @@ class DistributionAggregationTest(unittest.TestCase):
         self.assertIn("Other issuer holdings - Vanguard ETF", labels)
 
     def test_berkshire_mode_switches_between_stock_and_13f_lookthrough(self) -> None:
-        stock_rows = app.read_exposures(berkshire_mode="stock")[app.exposure_key("Berkshire Hathaway (B)", app.BERKSHIRE_ISIN)]
+        positions = [
+            {
+                "asset": "Berkshire Hathaway (B)",
+                "isin": app.BERKSHIRE_ISIN,
+                "is_open": True,
+                "market_value_eur": 100,
+                "symbol": "BRK-B",
+            }
+        ]
+        stock_distribution = app.calculate_distribution(
+            positions,
+            app.read_exposures(berkshire_mode="stock"),
+            berkshire_mode="stock",
+        )
         lookthrough_rows = app.read_exposures(berkshire_mode="lookthrough")[
             app.exposure_key("Berkshire Hathaway (B)", app.BERKSHIRE_ISIN)
         ]
 
-        self.assertEqual(len(stock_rows), 1)
         self.assertGreater(len(lookthrough_rows), 1)
-        self.assertEqual(stock_rows[0]["holding_name"], "Berkshire Hathaway")
+        self.assertEqual(len(stock_distribution["underlying"]), 1)
+        self.assertTrue(stock_distribution["underlying"][0]["holding"].startswith("Berkshire Hathaway"))
         self.assertTrue(any(row["holding_name"] == "APPLE INC" for row in lookthrough_rows))
+
+    def test_public_exposures_do_not_require_private_exposure_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, patch.object(
+            app, "EXPOSURES_CSV", Path(temporary) / "missing.csv"
+        ):
+            exposures = app.read_exposures(proxy_mode="on")
+
+        self.assertIn(app.exposure_key("FTSE All-World USD (Acc)", "IE00BK5BQT80"), exposures)
 
     def test_berkshire_lookthrough_distribution_uses_sec_source_metadata(self) -> None:
         positions = [
@@ -263,11 +308,34 @@ class DistributionAggregationTest(unittest.TestCase):
 
     def test_proxy_mode_does_not_replace_full_official_compositions(self) -> None:
         official_key = app.exposure_key("Core MSCI EM IMI USD (Acc)", "IE00BKM4GZ66")
-        proxy_exposures = app.read_exposures(proxy_mode="on")
-        official_exposures = app.read_exposures(proxy_mode="off")
+        proxy_row = {
+            "asset_name": "Core MSCI EM IMI USD (Acc)",
+            "isin": "IE00BKM4GZ66",
+            "holding_name": "Proxy Holding",
+            "holding_ticker": "PROXY",
+            "weight_pct": Decimal("100"),
+            "sector": "Unclassified",
+            "geo": "Unclassified",
+            "asset_class": "ETF underlying",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            private_exposures = Path(temporary) / "asset_exposures.csv"
+            private_exposures.write_text(
+                "asset_name,isin,holding_name,holding_ticker,weight_pct,sector,geo,asset_class\n"
+                "Core MSCI EM IMI USD (Acc),IE00BKM4GZ66,Official Holding,OFFICIAL,100,Technology,Global,ETF underlying\n",
+                encoding="utf-8",
+            )
+            with (
+                patch.object(app, "EXPOSURES_CSV", private_exposures),
+                patch.object(app, "read_etf_documents", return_value={"IE00BKM4GZ66": {"status": "ok"}}),
+                patch.object(app, "load_proxy_exposure_rows", return_value={"IE00BKM4GZ66": [proxy_row]}),
+            ):
+                proxy_exposures = app.read_exposures(proxy_mode="on")
+                official_exposures = app.read_exposures(proxy_mode="off")
 
         self.assertIn(official_key, official_exposures)
         self.assertEqual(len(proxy_exposures[official_key]), len(official_exposures[official_key]))
+        self.assertEqual(proxy_exposures[official_key][0]["holding_name"], "Official Holding")
 
         positions = [
             {
@@ -278,11 +346,16 @@ class DistributionAggregationTest(unittest.TestCase):
                 "symbol": "",
             }
         ]
-        distribution = app.calculate_distribution(
-            positions,
-            proxy_exposures,
-            proxy_mode="on",
-        )
+        with patch.object(
+            app,
+            "read_etf_documents",
+            return_value={"IE00BKM4GZ66": {"status": "ok", "rows": 1, "weight_sum": "100"}},
+        ):
+            distribution = app.calculate_distribution(
+                positions,
+                proxy_exposures,
+                proxy_mode="on",
+            )
 
         self.assertEqual(distribution["composition_sources"][0]["status"], "ok")
         self.assertEqual(distribution["composition_sources"][0]["rows"], len(official_exposures[official_key]))
@@ -329,6 +402,8 @@ class DistributionAggregationTest(unittest.TestCase):
         self.assertTrue(any(label == "NVIDIA" for label in labels))
 
     def test_mediolanum_proxy_exposures(self) -> None:
+        if not app.EXPOSURES_CSV.exists():
+            self.skipTest("optional private exposure catalog is not installed")
         positions = [
             {
                 "asset": "SMFI - Mediolanum Flessibile Futuro Italia LA PIR Acc EUR",
@@ -378,6 +453,8 @@ class DistributionAggregationTest(unittest.TestCase):
         self.assertTrue(sources["IE00B2NLMV86"]["rows"] > 1000)
 
     def test_eurizon_proxy_exposures(self) -> None:
+        if not app.EXPOSURES_CSV.exists():
+            self.skipTest("optional private exposure catalog is not installed")
         positions = [
             {
                 "asset": "Eurizon Obbligazioni Euro High Yield",
@@ -441,6 +518,8 @@ class DistributionAggregationTest(unittest.TestCase):
         self.assertEqual(Decimal(sources["LU0497415702"]["weight_sum"]), Decimal("100"))
 
     def test_configured_fund_proxy_exposures(self) -> None:
+        if not app.EXPOSURES_CSV.exists():
+            self.skipTest("optional private exposure catalog is not installed")
         positions = [
             {
                 "asset": "Anima Fondo Trading F",
@@ -604,14 +683,17 @@ class DistributionAggregationTest(unittest.TestCase):
         self.assertTrue(len(payload_live["positions"]) < len(payload_all["positions"]))
 
     def test_calculate_valuation_series_includes_dividends_and_interest(self) -> None:
-        trades, _ = app.read_trades()
+        trades = [self.sample_trade()]
         history_error = {"status": "history_error", "prices": {}}
         with (
             patch.object(app, "resolve_isin", return_value={}),
             patch.object(app, "fetch_history", return_value=history_error),
             patch.object(app, "fetch_eurostat_cpi", return_value={}),
+            patch.object(app, "read_portfolio_dividends", return_value=[]),
+            patch.object(app, "read_cash_interests", return_value=[]),
+            patch.object(app, "load_cash_histories", return_value=([], [], [])),
         ):
-            valuation = app.calculate_valuation_series(trades[:10], {}, refresh=False, person=app.PRIMARY_PORTFOLIO_ID)
+            valuation = app.calculate_valuation_series(trades, {}, refresh=False, person=app.PRIMARY_PORTFOLIO_ID)
         self.assertIn("series", valuation)
         if valuation["series"]:
             first_point = valuation["series"][0]
@@ -620,20 +702,22 @@ class DistributionAggregationTest(unittest.TestCase):
             self.assertIn("total_return_pct", first_point)
 
     def test_calculate_valuation_series_includes_cash_balances(self) -> None:
-        trades, _ = app.read_trades()
+        trades = [self.sample_trade()]
         history_error = {"status": "history_error", "prices": {}}
-        cash_date = min(trade.date for trade in trades[:20])
+        cash_date = trades[0].date
         with (
             patch.object(app, "resolve_isin", return_value={}),
             patch.object(app, "fetch_history", return_value=history_error),
             patch.object(app, "fetch_eurostat_cpi", return_value={}),
+            patch.object(app, "read_portfolio_dividends", return_value=[]),
+            patch.object(app, "read_cash_interests", return_value=[]),
             patch.object(
                 app,
                 "load_cash_histories",
                 return_value=([(cash_date, Decimal("100"), Decimal("100"))], [], []),
             ),
         ):
-            valuation = app.calculate_valuation_series(trades[:20], {}, refresh=False, person=app.PRIMARY_PORTFOLIO_ID, broker="all")
+            valuation = app.calculate_valuation_series(trades, {}, refresh=False, person=app.PRIMARY_PORTFOLIO_ID, broker="all")
         self.assertIn("series", valuation)
         if valuation["series"]:
             first_point = valuation["series"][0]
