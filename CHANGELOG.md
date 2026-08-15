@@ -3,6 +3,14 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.6.2 - 2026-08-15
+
+### Fixed
+
+- Fineco trade settlements, dividends, income, and transfers are no longer sent
+  to expense analytics. Fineco bank imports retain only actual spending,
+  withdrawals, and explicit fees or taxes.
+
 ## 0.6.1 - 2026-08-15
 
 ### Added

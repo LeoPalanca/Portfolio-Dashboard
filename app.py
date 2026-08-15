@@ -1375,13 +1375,15 @@ def fineco_bank_flow_kind(source_category: str, description: str, amount: Decima
         return "investment"
     if "preliev" in combined:
         return "cash_withdrawal"
-    if amount > ZERO:
-        return "income"
-    if any(
+    if amount < ZERO and any(
         term in combined
         for term in ("commission", "canone", "imposta", "riten", "interessi passivi", "spese", "bollo")
     ):
         return "fee"
+    if "dividend" in combined or "cedola" in combined:
+        return "investment"
+    if amount > ZERO:
+        return "income"
     return "spend"
 
 
@@ -1398,6 +1400,8 @@ def read_fineco_bank_expense_events(
         source_category = str(row.get("source_category") or "").strip()
         description = str(row.get("description") or source_category).strip()
         flow_kind = fineco_bank_flow_kind(source_category, description, amount)
+        if flow_kind not in {"spend", "cash_withdrawal", "fee"}:
+            continue
         merchant = source_category or description or "Fineco"
         if is_self_giroconto_expense(source_category, merchant, description, flow_kind):
             continue

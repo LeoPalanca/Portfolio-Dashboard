@@ -81,6 +81,17 @@ def fineco_bank_workbook() -> bytes:
             date(2026, 8, 2),
             date(2026, 8, 2),
             None,
+            -24.50,
+            "Pagamento carta",
+            "Pagamento carta esercente di esempio",
+            "Contabilizzato",
+        )
+    )
+    sheet.append(
+        (
+            date(2026, 8, 1),
+            date(2026, 8, 1),
+            None,
             -10,
             "Pagamento carta",
             "Pagamento ancora da contabilizzare",
@@ -102,7 +113,7 @@ class FinecoBankImportTest(unittest.TestCase):
             self.assertEqual(fineco_statement_kind(path), "bank")
             rows = read_fineco_bank_movements(path)
 
-        self.assertEqual(len(rows), 4)
+        self.assertEqual(len(rows), 5)
         self.assertEqual(str(rows[0]["amount"]), "-3.95")
         self.assertEqual(str(rows[2]["amount"]), "-1234.56")
         self.assertEqual(rows[0]["value_date"].isoformat(), "2026-07-31")
@@ -115,9 +126,10 @@ class FinecoBankImportTest(unittest.TestCase):
 
         by_category = {event["source_category"]: event for event in events}
         self.assertEqual(by_category["Canone Mensile Conto"]["flow_kind"], "fee")
-        self.assertEqual(by_category["Sconto Canone Mensile"]["flow_kind"], "income")
-        self.assertEqual(by_category["Bonifico Istantaneo"]["flow_kind"], "personal_transfer")
-        self.assertEqual(by_category["Compravendita Titoli"]["flow_kind"], "investment")
+        self.assertEqual(by_category["Pagamento carta"]["flow_kind"], "spend")
+        self.assertNotIn("Sconto Canone Mensile", by_category)
+        self.assertNotIn("Bonifico Istantaneo", by_category)
+        self.assertNotIn("Compravendita Titoli", by_category)
 
     def test_import_api_archives_and_normalizes_fineco_bank_export(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -139,8 +151,8 @@ class FinecoBankImportTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["source"], "fineco")
-        self.assertEqual(response.get_json()["movements"], 4)
-        self.assertEqual({row["event_type"] for row in rows}, {"fee", "income", "personal_transfer", "investment"})
+        self.assertEqual(response.get_json()["movements"], 2)
+        self.assertEqual({row["event_type"] for row in rows}, {"fee", "spend"})
         self.assertTrue(all(row["account"] == "fineco" for row in rows))
         self.assertEqual(archived_mode, 0o600)
 

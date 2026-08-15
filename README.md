@@ -87,7 +87,7 @@ layout compatible.
 | Source | Supported input | Notes |
 | --- | --- | --- |
 | Trade Republic | CSV | Account/activity export |
-| Fineco | XLSX | Securities workbook or current-account `Movimenti` export |
+| Fineco | XLSX | Securities workbook or current-account `Movimenti` export; investment settlements, dividends, income, and transfers are excluded from expenses |
 | Interactive Brokers | PDF | Trade-confirmation report; requires `pdftotext` |
 | eToro | XLSX | Account-statement workbook |
 | Revolut | CSV | Account statement, including supported foreign-currency rows |
