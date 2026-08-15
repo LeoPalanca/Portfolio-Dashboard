@@ -3,6 +3,21 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.6.1 - 2026-08-15
+
+### Added
+
+- Native Fineco current-account XLSX detection and import alongside the existing
+  Fineco securities workbook.
+- Booked-movement validation, European number parsing, and bank-flow classification
+  for Fineco fees, income, investments, transfers, withdrawals, and spending.
+- Owner-only permissions for retained raw statement audit copies.
+
+### Changed
+
+- Onboarding and supported-input documentation now distinguish Fineco securities
+  and current-account workbooks.
+
 ## 0.6.0 - 2026-08-15
 
 ### Added

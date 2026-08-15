@@ -1,6 +1,6 @@
 [project]
 name = "portfolio-dashboard"
-version = "0.6.0"
+version = "0.6.1"
 description = "A local-first dashboard for consolidating brokerage and cash-account data."
 readme = "README.md"
 license = "MIT"

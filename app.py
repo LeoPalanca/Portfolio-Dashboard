@@ -45,7 +45,9 @@ from src.portfolio_dashboard.imports import (
     SOURCE_EXTENSIONS,
     SOURCE_LABELS,
     detect_statement_source,
+    fineco_statement_kind,
     import_destination,
+    read_fineco_bank_movements,
     source_format_label,
 )
 from src.portfolio_dashboard.ingest import BrokerAdapter, FunctionBrokerAdapter
@@ -1352,6 +1354,72 @@ def make_expense_event(
     if extra:
         event.update(extra)
     return classify_expense_event(event, rules)
+
+
+def fineco_bank_flow_kind(source_category: str, description: str, amount: Decimal) -> str:
+    """Classify a signed Fineco current-account movement for expense analytics."""
+
+    combined = f"{source_category} {description}".casefold()
+    if any(term in combined for term in ("bonific", "girocont", "trasferiment")):
+        return "personal_transfer"
+    if any(
+        term in combined
+        for term in (
+            "compravendita titoli",
+            "acquisto titoli",
+            "vendita titoli",
+            "sottoscrizione titoli",
+            "rimborso titoli",
+        )
+    ):
+        return "investment"
+    if "preliev" in combined:
+        return "cash_withdrawal"
+    if amount > ZERO:
+        return "income"
+    if any(
+        term in combined
+        for term in ("commission", "canone", "imposta", "riten", "interessi passivi", "spese", "bollo")
+    ):
+        return "fee"
+    return "spend"
+
+
+def read_fineco_bank_expense_events(
+    path: Path,
+    rules: list[ExpenseRule] | None = None,
+) -> list[dict[str, Any]]:
+    """Convert a native Fineco current-account XLSX into classified ledger events."""
+
+    active_rules = rules if rules is not None else read_expense_category_rules()
+    events: list[dict[str, Any]] = []
+    for row in read_fineco_bank_movements(path):
+        amount = Decimal(str(row["amount"]))
+        source_category = str(row.get("source_category") or "").strip()
+        description = str(row.get("description") or source_category).strip()
+        flow_kind = fineco_bank_flow_kind(source_category, description, amount)
+        merchant = source_category or description or "Fineco"
+        if is_self_giroconto_expense(source_category, merchant, description, flow_kind):
+            continue
+        events.append(
+            make_expense_event(
+                event_date=row["date"],
+                source="fineco",
+                merchant=merchant,
+                description=description,
+                flow_kind=flow_kind,
+                amount_eur=abs(amount),
+                currency="EUR",
+                native_amount=amount,
+                rules=active_rules,
+                extra={
+                    "source_category": source_category,
+                    "value_date": row.get("value_date"),
+                    "source_state": row.get("state"),
+                },
+            )
+        )
+    return sorted(events, key=lambda item: (item["date"], item["source"], item["merchant"], item["native_amount"]))
 
 
 def revolut_expense_flow_kind(row: dict[str, str], cash_change_native: Decimal) -> str:
@@ -7045,6 +7113,8 @@ def normalize_expense_movement(event: dict[str, Any]) -> dict[str, Any]:
             "merchant": event.get("merchant"),
             "confidence": event.get("confidence"),
             "source_category": event.get("source_category"),
+            "value_date": event.get("value_date"),
+            "source_state": event.get("source_state"),
         },
     }
 
@@ -7214,9 +7284,13 @@ def parse_statement_movements(source: str, path: Path) -> list[dict[str, Any]]:
         interests = read_trade_republic_interests_from_path(path)
         cash_flows = [normalize_cash_flow_movement(item, "Trade Republic") for item in read_trade_republic_cash_flows(path)]
     elif source == "fineco":
-        trades = read_fineco_trades(path)
-        dividends = read_fineco_dividends(path)
-        frictions = read_fineco_friction_events(path)
+        fineco_kind = fineco_statement_kind(path)
+        if fineco_kind == "bank":
+            expenses = read_fineco_bank_expense_events(path)
+        elif fineco_kind == "securities":
+            trades = read_fineco_trades(path)
+            dividends = read_fineco_dividends(path)
+            frictions = read_fineco_friction_events(path)
     elif source == "interactive_brokers":
         trades = read_interactive_brokers_trades(path)
     elif source == "etoro":
@@ -7301,6 +7375,7 @@ def import_statement_path(
     copied = archive and destination.resolve() != path.resolve()
     if copied:
         shutil.copy2(path, destination)
+        destination.chmod(0o600)
     try:
         record = store.record_import(
             sha256=digest,

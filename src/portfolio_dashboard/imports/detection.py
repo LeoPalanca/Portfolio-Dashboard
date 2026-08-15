@@ -9,6 +9,8 @@ from pathlib import Path
 
 from openpyxl import load_workbook  # type: ignore[import-untyped]
 
+from .fineco import has_fineco_bank_headers
+
 ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx", ".pdf"}
 SOURCE_LABELS = {
     "trade_republic": "Trade Republic",
@@ -92,6 +94,8 @@ def detect_statement_source(path: Path, requested_source: str = "auto") -> str:
             return "intesa"
         for sheet in workbook.worksheets[:3]:
             for row in sheet.iter_rows(max_row=30, values_only=True):
+                if has_fineco_bank_headers(row):
+                    return "fineco"
                 values = {str(value).strip().casefold() for value in row if value is not None}
                 if PERSONAL_TRADE_REQUIRED_HEADERS.issubset(values):
                     return "manual"

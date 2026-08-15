@@ -34,6 +34,28 @@ class ImportDetectionTest(unittest.TestCase):
 
             self.assertEqual(detect_statement_source(path), "etoro")
 
+    def test_detects_fineco_current_account_headers_below_the_preamble(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "movements.xlsx"
+            workbook = Workbook()
+            workbook.active.title = "Movimenti"
+            workbook.active.append(("Conto Corrente: 1234567",))
+            workbook.active.append(())
+            workbook.active.append(
+                (
+                    "Data_Operazione",
+                    "Data_Valuta",
+                    "Entrate",
+                    "Uscite",
+                    "Descrizione",
+                    "Descrizione_Completa",
+                    "Stato",
+                )
+            )
+            workbook.save(path)
+
+            self.assertEqual(detect_statement_source(path), "fineco")
+
     def test_destination_matches_existing_discovery_layout(self) -> None:
         destination = import_destination(Path("/private/source"), "fineco", "a" * 64, "export.xlsx")
 
