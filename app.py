@@ -4713,6 +4713,9 @@ def compress_series(series: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [by_date[key] for key in sorted(by_date)]
 
 
+ISIN_PLACEHOLDER_SYMBOL = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}\d(?:\.[A-Z]+)?$")
+
+
 def extract_symbol(search_result: Any) -> dict[str, str] | None:
     quotes = getattr(search_result, "quotes", None)
     if quotes is None and isinstance(search_result, dict):
@@ -4720,14 +4723,21 @@ def extract_symbol(search_result: Any) -> dict[str, str] | None:
     if not quotes:
         return None
 
+    fallback: dict[str, str] | None = None
     for quote in quotes:
         symbol = quote.get("symbol") if isinstance(quote, dict) else getattr(quote, "symbol", "")
         if not symbol:
             continue
         name = quote.get("shortname") if isinstance(quote, dict) else getattr(quote, "shortname", "")
         exchange = quote.get("exchange") if isinstance(quote, dict) else getattr(quote, "exchange", "")
-        return {"symbol": symbol, "name": name or "", "exchange": exchange or ""}
-    return None
+        candidate = {"symbol": symbol, "name": name or "", "exchange": exchange or ""}
+        # Yahoo lists an instrument under its own ISIN when no venue ticker is indexed.
+        # Those entries carry no price history, so a real ticker in the same result wins.
+        if ISIN_PLACEHOLDER_SYMBOL.match(symbol.upper()):
+            fallback = fallback or candidate
+            continue
+        return candidate
+    return fallback
 
 
 def yahoo_symbol_from_mapping(ticker: str, exchange: str) -> str:

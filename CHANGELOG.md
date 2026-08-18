@@ -18,6 +18,9 @@ Notable changes to Portfolio Dashboard are documented here. The project follows
 - Historical valuation and statistics series restate pre-split share counts, so
   a position is not valued at half its real size on every date before the split
   now that its price history is back-adjusted.
+- ISIN lookups prefer a real venue ticker over the placeholder Yahoo lists an
+  instrument under when no venue is indexed. Those placeholders carry no price
+  history, which left the affected holdings unpriced.
 
 ## 0.6.2 - 2026-08-15
 
