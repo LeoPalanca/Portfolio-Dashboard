@@ -4897,6 +4897,41 @@ def get_history_store() -> HistoryStore:
     return _history_store
 
 
+# A split is only reflected in Yahoo's own closes once it reworks its history, which can
+# lag the event by days. Until then the raw series keeps its pre-split level and the drop
+# reads as a crash, so the pre-split closes are back-adjusted here when the observed gap
+# actually matches the announced ratio.
+SPLIT_RATIO_MATCH_TOLERANCE = 0.25
+
+
+def split_adjusted_prices(prices: dict[str, float], splits: Any) -> dict[str, float]:
+    if not prices or splits is None or len(splits) == 0:
+        return prices
+    adjusted = dict(prices)
+    for raw_date, raw_ratio in sorted(splits.items(), reverse=True):
+        try:
+            split_day = raw_date.date().isoformat()
+            ratio = float(raw_ratio)
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if ratio <= 0 or abs(ratio - 1.0) < 0.01:
+            continue
+        ordered = sorted(adjusted)
+        before = [day for day in ordered if day < split_day]
+        after = [day for day in ordered if day >= split_day]
+        if not before or not after:
+            continue
+        last_before = adjusted[before[-1]]
+        first_after = adjusted[after[0]]
+        if last_before <= 0 or first_after <= 0:
+            continue
+        if abs((last_before / first_after) / ratio - 1.0) > SPLIT_RATIO_MATCH_TOLERANCE:
+            continue
+        for day in before:
+            adjusted[day] = adjusted[day] / ratio
+    return adjusted
+
+
 def fetch_history(symbol: str, start: date, end: date, refresh: bool = False) -> dict[str, Any]:
     if not symbol:
         return {"status": "missing_symbol", "prices": {}}
@@ -4933,10 +4968,20 @@ def fetch_history(symbol: str, start: date, end: date, refresh: bool = False) ->
             "range_start": start.isoformat(),
             "range_end": end.isoformat(),
         }
+        splits = ticker.splits
     except Exception as exc:
         payload = {"symbol": symbol, "status": "history_error", "error": str(exc), "prices": {}, "fetched_at": now}
+        splits = None
 
-    return store.merge(symbol, payload, start, end)
+    merged = store.merge(symbol, payload, start, end)
+    # The whole stored series is re-adjusted, not just the fetched window: history older
+    # than the window was cached before the split and would keep its pre-split level.
+    if splits is not None and merged.get("status") == "priced":
+        adjusted = split_adjusted_prices(merged.get("prices", {}), splits)
+        if adjusted != merged.get("prices"):
+            store.replace_prices(symbol, adjusted)
+            merged["prices"] = adjusted
+    return merged
 
 
 _PRICE_LOOKUP_CACHE: dict[int, tuple[dict[str, float], int, tuple[date, ...], tuple[float, ...]]] = {}

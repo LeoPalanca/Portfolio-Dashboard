@@ -79,6 +79,16 @@ class HistoryStore:
             self._write(cache_key, record)
             return self._payload(record, start, end, fetched_at)
 
+    def replace_prices(self, cache_key: str, prices: dict[str, float]) -> None:
+        """Rewrite the whole stored series, for retroactive corrections such as splits."""
+
+        with self._lock:
+            record = dict(self._read(cache_key))
+            if record.get("status") != "priced":
+                return
+            record["prices"] = {str(day): float(price) for day, price in prices.items()}
+            self._write(cache_key, record)
+
     def latest_price(self, cache_key: str) -> dict[str, Any] | None:
         with self._lock:
             record = self._read(cache_key)

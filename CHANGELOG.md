@@ -11,6 +11,10 @@ Notable changes to Portfolio Dashboard are documented here. The project follows
   shares from a capital increase, splits, reverse splits). They adjust the
   position without touching the cost basis, so a split no longer reads as a
   large unrealized loss.
+- Cached price history is back-adjusted for splits the price provider has not
+  rebased yet, across the whole stored series rather than only the refetched
+  window. Movers and period variations no longer report the split drop as a
+  crash.
 
 ## 0.6.2 - 2026-08-15
 
