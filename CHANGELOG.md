@@ -15,6 +15,9 @@ Notable changes to Portfolio Dashboard are documented here. The project follows
   rebased yet, across the whole stored series rather than only the refetched
   window. Movers and period variations no longer report the split drop as a
   crash.
+- Historical valuation and statistics series restate pre-split share counts, so
+  a position is not valued at half its real size on every date before the split
+  now that its price history is back-adjusted.
 
 ## 0.6.2 - 2026-08-15
 

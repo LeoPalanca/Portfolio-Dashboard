@@ -19,6 +19,7 @@ import urllib.request
 import warnings
 import xml.etree.ElementTree as ET
 from bisect import bisect_right
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -5376,6 +5377,46 @@ def load_cash_histories_from_raw_files(person: str) -> tuple[list[tuple[date, De
     return tr_cash_history, bbva_cash_history, revolut_cash_history
 
 
+CORPORATE_ACTION_SOURCES = {"fineco_corporate_action"}
+
+
+def split_adjusted_trade_history(trades: list[Trade]) -> list[Trade]:
+    """Restate historical share counts so they line up with back-adjusted prices.
+
+    A split is booked on the day it happens, while price history is back-adjusted all
+    the way to the first quote. Valuing pre-split dates with the booked share count and
+    an adjusted price would halve every past valuation of the position, so the earlier
+    rows are rescaled and the split row itself drops out of the timeline.
+    """
+
+    if not any(trade.source in CORPORATE_ACTION_SOURCES for trade in trades):
+        return trades
+
+    adjusted: list[Trade] = []
+    quantities: dict[str, Decimal] = {}
+    for trade in sorted(trades, key=lambda item: item.date):
+        key = trade.isin or trade.asset
+        held = quantities.get(key, ZERO)
+        factor = (held + trade.quantity_diff) / held if held > ZERO else ZERO
+        if trade.source not in CORPORATE_ACTION_SOURCES or factor <= ZERO:
+            quantities[key] = held + trade.quantity_diff
+            adjusted.append(trade)
+            continue
+        adjusted = [
+            replace(
+                item,
+                quantity=item.quantity * factor,
+                quantity_diff=item.quantity_diff * factor,
+                price=item.price / factor if item.price else item.price,
+            )
+            if (item.isin or item.asset) == key
+            else item
+            for item in adjusted
+        ]
+        quantities[key] = held * factor
+    return adjusted
+
+
 def calculate_valuation_series(
     trades: list[Trade],
     mappings: dict[str, dict[str, str]],
@@ -5386,6 +5427,7 @@ def calculate_valuation_series(
     if not trades:
         return {"series": [], "status": "empty"}
 
+    trades = split_adjusted_trade_history(trades)
     start = min(trade.date for trade in trades)
     
     # Load dividends and cash interests to calculate Total Return series
@@ -5953,6 +5995,7 @@ def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID
 
     if not trades:
         return None
+    trades = split_adjusted_trade_history(trades)
     start_date = min(trade.date for trade in trades)
     end_date = date.today()
     if start_date >= end_date:

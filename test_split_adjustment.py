@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import app
@@ -71,6 +72,74 @@ class HistoryStoreReplacePricesTest(unittest.TestCase):
             store.replace_prices("MNST", {"2026-08-06": 47.0})
             self.assertIsNone(store.get_cached("MNST", date(2026, 8, 6), date(2026, 8, 6)))
 
+
+
+def trade(asset: str, action: str, day: str, quantity: str, amount: str, source: str = "fineco") -> app.Trade:
+    quantity_value = Decimal(quantity)
+    return app.Trade(
+        asset=asset,
+        isin="",
+        broker="Fineco",
+        action=action,
+        currency_hint="EUR",
+        cash_currency="EUR",
+        date=date.fromisoformat(day),
+        price=(Decimal(amount) / quantity_value) if quantity_value else Decimal(0),
+        quantity=abs(quantity_value),
+        quantity_diff=quantity_value,
+        total_spend=Decimal(amount),
+        fees=Decimal(0),
+        tax=Decimal(0),
+        grand_total=Decimal(amount),
+        grand_total_present=True,
+        source=source,
+    )
+
+
+class SplitAdjustedTradeHistoryTest(unittest.TestCase):
+    def test_earlier_rows_are_restated_and_the_split_row_drops_out(self) -> None:
+        history = [
+            trade("MONSTER", "Acquisto", "2024-01-23", "1", "-59.27"),
+            trade("MONSTER", "Assegnazione", "2026-08-11", "1", "0", source="fineco_corporate_action"),
+        ]
+        adjusted = app.split_adjusted_trade_history(history)
+
+        self.assertEqual(len(adjusted), 1)
+        self.assertEqual(adjusted[0].quantity_diff, Decimal(2))
+        self.assertEqual(adjusted[0].grand_total, Decimal("-59.27"))
+        self.assertEqual(adjusted[0].price, Decimal("-29.635"))
+
+    def test_only_the_affected_asset_is_restated(self) -> None:
+        history = [
+            trade("MONSTER", "Acquisto", "2024-01-23", "1", "-59.27"),
+            trade("APPLE", "Acquisto", "2024-02-01", "3", "-500"),
+            trade("MONSTER", "Assegnazione", "2026-08-11", "1", "0", source="fineco_corporate_action"),
+        ]
+        adjusted = {item.asset: item for item in app.split_adjusted_trade_history(history)}
+
+        self.assertEqual(adjusted["MONSTER"].quantity_diff, Decimal(2))
+        self.assertEqual(adjusted["APPLE"].quantity_diff, Decimal(3))
+
+    def test_a_reverse_split_shrinks_the_earlier_rows(self) -> None:
+        history = [
+            trade("SOME STOCK", "Acquisto", "2024-01-23", "10", "-100"),
+            trade("SOME STOCK", "Rettifica quantita", "2026-08-11", "-5", "0", source="fineco_corporate_action"),
+        ]
+        adjusted = app.split_adjusted_trade_history(history)
+
+        self.assertEqual(len(adjusted), 1)
+        self.assertEqual(adjusted[0].quantity_diff, Decimal(5))
+
+    def test_history_without_corporate_actions_is_returned_unchanged(self) -> None:
+        history = [trade("MONSTER", "Acquisto", "2024-01-23", "1", "-59.27")]
+        self.assertIs(app.split_adjusted_trade_history(history), history)
+
+    def test_a_split_with_no_prior_position_is_kept_as_booked(self) -> None:
+        history = [trade("MONSTER", "Assegnazione", "2026-08-11", "1", "0", source="fineco_corporate_action")]
+        adjusted = app.split_adjusted_trade_history(history)
+
+        self.assertEqual(len(adjusted), 1)
+        self.assertEqual(adjusted[0].quantity_diff, Decimal(1))
 
 if __name__ == "__main__":
     unittest.main()
