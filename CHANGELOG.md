@@ -3,6 +3,15 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.6.3 - 2026-08-18
+
+### Fixed
+
+- Fineco securities imports now record quantity-only corporate actions (free
+  shares from a capital increase, splits, reverse splits). They adjust the
+  position without touching the cost basis, so a split no longer reads as a
+  large unrealized loss.
+
 ## 0.6.2 - 2026-08-15
 
 ### Fixed

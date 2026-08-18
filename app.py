@@ -648,29 +648,64 @@ def fineco_capital_gain_tax_from_net_gain(net_gain: Decimal) -> Decimal:
     return gross_gain - net_gain
 
 
+FINECO_TRADE_DESCRIPTION = "compravendita titoli"
+# Corporate actions that only move quantity: free shares from a capital increase,
+# splits and reverse splits. Fineco books them with a zero controvalore, so they must
+# adjust the position without touching the cost basis, otherwise the halved price
+# after a split reads as a loss.
+FINECO_QUANTITY_EVENT_MARKERS = (
+    "aumento capitale",
+    "aumento di capitale",
+    "assegnazione",
+    "frazionamento",
+    "raggruppamento",
+    "split",
+)
+
+
+def fineco_row_event(description: Any) -> str:
+    text = " ".join(str(description or "").strip().casefold().split())
+    if text == FINECO_TRADE_DESCRIPTION:
+        return "trade"
+    if text and any(marker in text for marker in FINECO_QUANTITY_EVENT_MARKERS):
+        return "quantity_event"
+    return ""
+
+
 def read_fineco_trades(path: Path) -> list[Trade]:
     workbook = load_workbook(path, data_only=True, read_only=True)
     sheet = workbook["Movimenti Dossier Titoli"]
     trades: list[Trade] = []
 
     for row in sheet.iter_rows(min_row=8, values_only=True):
-        if not row or row[2] != "Compravendita titoli":
+        if not row:
+            continue
+        event = fineco_row_event(row[2])
+        if not event:
             continue
         sign = str(row[5] or "").strip().upper()
-        if sign not in {"A", "V"}:
+        if event == "trade" and sign not in {"A", "V"}:
             continue
 
         quantity = abs(fineco_decimal(row[6]))
+        if not quantity:
+            continue
         value_eur = fineco_decimal(row[10])
         commission = fineco_decimal(row[14])
-        is_buy = sign == "A"
+        is_buy = sign != "V"
         cash_effect = -(value_eur + commission) if is_buy else value_eur - commission
+        if event == "trade":
+            action = "Acquisto" if is_buy else "Vendita"
+            source = "fineco"
+        else:
+            action = "Assegnazione" if is_buy else "Rettifica quantita"
+            source = "fineco_corporate_action"
         trades.append(
             Trade(
                 asset=str(row[3]).strip(),
                 isin=str(row[4] or "").strip().upper(),
                 broker="Fineco",
-                action="Acquisto" if is_buy else "Vendita",
+                action=action,
                 currency_hint=str(row[7] or "EUR").strip().upper(),
                 cash_currency="EUR",
                 date=parse_fineco_date(row[0]),
@@ -682,7 +717,7 @@ def read_fineco_trades(path: Path) -> list[Trade]:
                 tax=ZERO,
                 grand_total=cash_effect,
                 grand_total_present=True,
-                source="fineco",
+                source=source,
             )
         )
 
