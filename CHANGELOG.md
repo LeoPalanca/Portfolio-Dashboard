@@ -3,6 +3,14 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.6.5 - 2026-08-30
+
+### Fixed
+
+- Documented that opening balances omitted by cash-account exports belong in the
+  private movement ledger, where they count as both cash and contributed capital.
+  Account-specific values remain outside the public repository.
+
 ## 0.6.4 - 2026-08-30
 
 ### Added

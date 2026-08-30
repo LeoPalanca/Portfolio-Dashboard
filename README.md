@@ -156,6 +156,12 @@ Additional portfolios are declared under `[portfolios.<id>]` in ignored
 transaction adjustments, friction events, tax-loss metadata, private action items,
 and opt-in features.
 
+If a private cash-account export begins after the account was funded, record the
+missing opening balance as a dated `cash_flow` in that edition's private movement
+ledger. Its amount and `contribution_change` must match so market value and return
+use the same capital basis. Account names, dates, and amounts must not be hardcoded
+or committed to the public edition.
+
 The package version follows semantic versioning, for example `0.6.0`. A private
 installation can add a display-only marker without forking package metadata:
 
