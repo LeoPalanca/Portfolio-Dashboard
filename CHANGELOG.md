@@ -3,6 +3,20 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.6.4 - 2026-08-30
+
+### Added
+
+- Per-browser automatic live-price refresh settings, defaulting to every 30
+  minutes while the dashboard is open. Setting the interval to zero disables it.
+- An opt-in refresh-on-login setting for users who prefer current prices despite
+  the longer initial load on slower devices.
+
+### Fixed
+
+- Version discovery falls back to project metadata when an editable installation
+  has an empty package-version record.
+
 ## 0.6.3 - 2026-08-18
 
 ### Fixed

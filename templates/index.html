@@ -48,13 +48,13 @@
       </button>
       <div class="settings-wrap">
         <button id="settings-toggle" type="button" aria-haspopup="true" aria-expanded="false"
-                aria-controls="settings-menu" aria-label="Display settings" title="Display settings">
+                aria-controls="settings-menu" aria-label="Dashboard settings" title="Dashboard settings">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
         </button>
-        <div id="settings-menu" class="settings-menu" role="dialog" aria-label="Display settings" hidden>
+        <div id="settings-menu" class="settings-menu" role="dialog" aria-label="Dashboard settings" hidden>
           <div class="settings-group">
             <div class="settings-label" id="settings-theme-label">Theme</div>
             <div class="settings-segmented" role="radiogroup" aria-labelledby="settings-theme-label">
@@ -68,6 +68,22 @@
               <input type="checkbox" id="setting-colourblind">
               <span class="settings-switch-title">Colour-blind-safe gains</span>
               <span class="settings-switch-hint">Use blue and orange instead of green and red</span>
+            </label>
+          </div>
+          <div class="settings-group">
+            <div class="settings-label" id="settings-refresh-label">Data refresh</div>
+            <label class="settings-number" for="setting-auto-refresh-minutes">
+              <span class="settings-number-title">Automatic refresh</span>
+              <span class="settings-number-control">
+                <input type="number" id="setting-auto-refresh-minutes" min="0" max="1440" step="5" inputmode="numeric" aria-describedby="setting-auto-refresh-hint">
+                <span>min</span>
+              </span>
+              <span class="settings-switch-hint" id="setting-auto-refresh-hint">Refresh live prices while this dashboard is open. Set to 0 to turn it off.</span>
+            </label>
+            <label class="settings-switch settings-refresh-login">
+              <input type="checkbox" id="setting-refresh-on-login">
+              <span class="settings-switch-title">Refresh prices on login</span>
+              <span class="settings-switch-hint">May make login take longer, especially on slower devices.</span>
             </label>
           </div>
           <div class="settings-group">

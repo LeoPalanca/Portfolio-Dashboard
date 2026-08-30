@@ -2292,7 +2292,9 @@ body.dashboard-redrawing .dashboard-refresh-overlay {
   top: calc(100% + var(--space-2));
   right: 0;
   z-index: var(--z-modal);
-  min-width: 260px;
+  width: min(300px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
   padding: var(--space-3);
   display: flex;
   flex-direction: column;
@@ -2359,6 +2361,37 @@ body.dashboard-redrawing .dashboard-refresh-overlay {
   color: var(--text-muted);
   line-height: 1.4;
 }
+
+.settings-number {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+.settings-number-title { font-size: var(--text-base); color: var(--text-primary); }
+.settings-number-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.settings-number-control input {
+  width: 72px;
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-primary);
+  background: var(--surface-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+.settings-number-control input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.settings-number .settings-switch-hint { grid-column: 1 / -1; }
+.settings-refresh-login { margin-top: var(--space-3); }
 
 /* ─── Variation cards get their own row ───
    They are a different kind of number from the value metrics above, and the

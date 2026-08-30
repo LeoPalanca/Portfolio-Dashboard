@@ -96,17 +96,33 @@ class FrontendAssetTest(unittest.TestCase):
         self.assertIsNone(PLACEHOLDER_RE.search(html))
         self.assertIsNone(PLACEHOLDER_RE.search(js))
 
-    def test_display_settings_menu_is_present_and_labelled(self) -> None:
+    def test_dashboard_settings_menu_is_present_and_labelled(self) -> None:
         html = render()
         self.assertIn('id="settings-toggle"', html)
         self.assertIn('id="settings-menu"', html)
         # the control must say what it does; an unlabelled icon does not
-        self.assertIn('aria-label="Display settings"', html)
+        self.assertIn('aria-label="Dashboard settings"', html)
         self.assertIn('aria-haspopup="true"', html)
         self.assertIn('role="radiogroup"', html)
         for choice in ("light", "dark", "system"):
             self.assertIn(f'data-theme-choice="{choice}"', html)
         self.assertIn('id="setting-colourblind"', html)
+
+    def test_refresh_preferences_default_to_thirty_minutes_without_login_refresh(self) -> None:
+        html = render()
+        self.assertIn('id="setting-auto-refresh-minutes"', html)
+        self.assertIn('id="setting-refresh-on-login"', html)
+        self.assertIn('Set to 0 to turn it off.', html)
+        self.assertIn('May make login take longer, especially on slower devices.', html)
+
+        with app.app.test_client() as client:
+            js = client.get("/static/app.js").get_data(as_text=True)
+
+        self.assertIn('const DEFAULT_AUTO_REFRESH_MINUTES = 30;', js)
+        self.assertIn('storedValue(REFRESH_ON_LOGIN_KEY) === "true"', js)
+        self.assertIn('load(refreshOnLogin, refreshOnLogin ?', js)
+        self.assertIn('.finally(scheduleAutoRefresh)', js)
+        self.assertIn('await load(true, "Automatically refreshing live prices");', js)
 
     def test_system_theme_is_reachable(self) -> None:
         """The two-state toggle this replaced had no way back to 'follow the OS'.

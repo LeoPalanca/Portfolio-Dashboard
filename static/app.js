@@ -3095,7 +3095,7 @@
       });
     });
     document.getElementById("refresh").addEventListener("click", () => {
-      load(true, "Refreshing live prices");
+      load(true, "Refreshing live prices").finally(scheduleAutoRefresh);
     });
     document.getElementById("export-button").addEventListener("click", exportDashboard);
 
@@ -3223,11 +3223,18 @@
     /* ─── Display settings ─── */
     const THEME_KEY = "theme";
     const PALETTE_KEY = "palette";
+    const AUTO_REFRESH_MINUTES_KEY = "autoRefreshMinutes";
+    const REFRESH_ON_LOGIN_KEY = "refreshOnLogin";
+    const DEFAULT_AUTO_REFRESH_MINUTES = 30;
+    const MAX_AUTO_REFRESH_MINUTES = 24 * 60;
     const root = document.documentElement;
     const settingsToggle = document.getElementById("settings-toggle");
     const settingsMenu = document.getElementById("settings-menu");
     const themeChoices = Array.from(document.querySelectorAll("[data-theme-choice]"));
     const colourblindInput = document.getElementById("setting-colourblind");
+    const autoRefreshInput = document.getElementById("setting-auto-refresh-minutes");
+    const refreshOnLoginInput = document.getElementById("setting-refresh-on-login");
+    let autoRefreshTimer = null;
 
     function storedValue(key) {
       try { return localStorage.getItem(key); } catch (e) { return null; }
@@ -3238,6 +3245,35 @@
         if (value === null) localStorage.removeItem(key);
         else localStorage.setItem(key, value);
       } catch (e) { /* private mode: setting applies for this page only */ }
+    }
+
+    function normalizeAutoRefreshMinutes(value) {
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isFinite(parsed)) return DEFAULT_AUTO_REFRESH_MINUTES;
+      return Math.min(MAX_AUTO_REFRESH_MINUTES, Math.max(0, parsed));
+    }
+
+    function autoRefreshMinutes() {
+      const stored = storedValue(AUTO_REFRESH_MINUTES_KEY);
+      return normalizeAutoRefreshMinutes(stored === null ? DEFAULT_AUTO_REFRESH_MINUTES : stored);
+    }
+
+    function refreshOnLoginEnabled() {
+      return storedValue(REFRESH_ON_LOGIN_KEY) === "true";
+    }
+
+    function scheduleAutoRefresh() {
+      if (autoRefreshTimer !== null) window.clearTimeout(autoRefreshTimer);
+      autoRefreshTimer = null;
+      const minutes = autoRefreshMinutes();
+      if (minutes === 0) return;
+      autoRefreshTimer = window.setTimeout(async () => {
+        try {
+          await load(true, "Automatically refreshing live prices");
+        } finally {
+          scheduleAutoRefresh();
+        }
+      }, minutes * 60 * 1000);
     }
 
     // "system" is the absence of an override, which is why it has to clear the
@@ -3290,6 +3326,21 @@
     });
     if (colourblindInput) {
       colourblindInput.addEventListener("change", () => applyPalette(colourblindInput.checked));
+    }
+    if (autoRefreshInput) {
+      autoRefreshInput.value = String(autoRefreshMinutes());
+      autoRefreshInput.addEventListener("change", () => {
+        const minutes = normalizeAutoRefreshMinutes(autoRefreshInput.value);
+        autoRefreshInput.value = String(minutes);
+        storeValue(AUTO_REFRESH_MINUTES_KEY, String(minutes));
+        scheduleAutoRefresh();
+      });
+    }
+    if (refreshOnLoginInput) {
+      refreshOnLoginInput.checked = refreshOnLoginEnabled();
+      refreshOnLoginInput.addEventListener("change", () => {
+        storeValue(REFRESH_ON_LOGIN_KEY, refreshOnLoginInput.checked ? "true" : null);
+      });
     }
 
     // reflect whatever the pre-paint boot script already applied
@@ -3429,4 +3480,6 @@
     initializeSectionIdentity();
     initializeSectionWrapButtons();
     checkImportOnboarding();
-    load(false, "Loading dashboard");
+    const refreshOnLogin = refreshOnLoginEnabled();
+    load(refreshOnLogin, refreshOnLogin ? "Refreshing live prices" : "Loading dashboard")
+      .finally(scheduleAutoRefresh);
