@@ -2909,7 +2909,12 @@ def family_dashboard_payload(
         if pos["asset"] in snapshot_values:
             pos["market_value_eur"] = float(snapshot_values[pos["asset"]])
 
-    priced = enrich_positions(summary["positions"], mappings, refresh=refresh)
+    priced = enrich_positions(
+        summary["positions"],
+        mappings,
+        refresh=refresh,
+        split_events=corporate_action_split_events(fake_trades),
+    )
     distribution = calculate_distribution(
         priced["positions"],
         read_exposures(berkshire_mode=berkshire_mode, proxy_mode=proxy_mode),
@@ -5001,41 +5006,91 @@ def split_adjusted_prices(prices: dict[str, float], splits: Any) -> dict[str, fl
     if not prices or splits is None or len(splits) == 0:
         return prices
     adjusted = dict(prices)
-    for raw_date, raw_ratio in sorted(splits.items(), reverse=True):
+    normalized_splits: dict[str, float] = {}
+    for raw_date, raw_ratio in splits.items():
         try:
-            split_day = raw_date.date().isoformat()
+            if isinstance(raw_date, datetime):
+                split_day = raw_date.date().isoformat()
+            elif isinstance(raw_date, date):
+                split_day = raw_date.isoformat()
+            else:
+                split_day = date.fromisoformat(str(raw_date)[:10]).isoformat()
             ratio = float(raw_ratio)
-        except (AttributeError, TypeError, ValueError):
+        except (TypeError, ValueError):
             continue
         if ratio <= 0 or abs(ratio - 1.0) < 0.01:
             continue
+        normalized_splits[split_day] = ratio
+
+    for split_day, ratio in sorted(normalized_splits.items(), reverse=True):
         ordered = sorted(adjusted)
         before = [day for day in ordered if day < split_day]
         after = [day for day in ordered if day >= split_day]
         if not before or not after:
             continue
-        last_before = adjusted[before[-1]]
-        first_after = adjusted[after[0]]
-        if last_before <= 0 or first_after <= 0:
-            continue
-        if abs((last_before / first_after) / ratio - 1.0) > SPLIT_RATIO_MATCH_TOLERANCE:
-            continue
-        for day in before:
-            adjusted[day] = adjusted[day] / ratio
+        reference = adjusted[after[0]]
+        expected_jump = max(ratio, 1.0 / ratio)
+        for day in reversed(before):
+            value = adjusted[day]
+            if value <= 0 or reference <= 0:
+                reference = value
+                continue
+            observed_jump = max(value, reference) / min(value, reference)
+            if abs(observed_jump / expected_jump - 1.0) <= SPLIT_RATIO_MATCH_TOLERANCE:
+                candidates = (value * ratio, value / ratio)
+                value = min(candidates, key=lambda candidate: abs(candidate / reference - 1.0))
+                adjusted[day] = value
+            reference = value
     return adjusted
 
 
-def fetch_history(symbol: str, start: date, end: date, refresh: bool = False) -> dict[str, Any]:
+def corporate_action_split_events(trades: list[Trade]) -> dict[str, dict[str, float]]:
+    """Return split factors recorded by quantity-only broker corporate actions."""
+
+    quantities: dict[str, Decimal] = {}
+    events: dict[str, dict[str, float]] = {}
+    for trade in sorted(trades, key=lambda item: item.date):
+        key = trade.isin or trade.asset
+        held = quantities.get(key, ZERO)
+        updated = held + trade.quantity_diff
+        if trade.source in CORPORATE_ACTION_SOURCES and held > ZERO and updated > ZERO:
+            factor = updated / held
+            events.setdefault(key, {})[trade.date.isoformat()] = float(factor)
+        quantities[key] = updated
+    return events
+
+
+def apply_history_splits(
+    store: HistoryStore,
+    symbol: str,
+    payload: dict[str, Any],
+    splits: Any,
+) -> dict[str, Any]:
+    if not splits or payload.get("status") != "priced":
+        return payload
+    adjusted = split_adjusted_prices(payload.get("prices", {}), splits)
+    if adjusted != payload.get("prices"):
+        store.replace_prices(symbol, adjusted)
+        payload["prices"] = adjusted
+    return payload
+
+
+def fetch_history(
+    symbol: str,
+    start: date,
+    end: date,
+    refresh: bool = False,
+    known_splits: Any = None,
+) -> dict[str, Any]:
     if not symbol:
         return {"status": "missing_symbol", "prices": {}}
-    if yf is None:
-        return {"status": "yfinance_missing", "prices": {}}
-
     store = get_history_store()
     now = int(time.time())
     cached = None if refresh else store.get_cached(symbol, start, end)
     if cached:
-        return cached
+        return apply_history_splits(store, symbol, cached, known_splits)
+    if yf is None:
+        return {"status": "yfinance_missing", "prices": {}}
 
     try:
         ticker = yf.Ticker(symbol)
@@ -5061,20 +5116,17 @@ def fetch_history(symbol: str, start: date, end: date, refresh: bool = False) ->
             "range_start": start.isoformat(),
             "range_end": end.isoformat(),
         }
-        splits = ticker.splits
+        splits = dict(ticker.splits.items())
     except Exception as exc:
         payload = {"symbol": symbol, "status": "history_error", "error": str(exc), "prices": {}, "fetched_at": now}
         splits = None
 
     merged = store.merge(symbol, payload, start, end)
+    combined_splits = dict(splits or {})
+    combined_splits.update(dict(known_splits or {}))
     # The whole stored series is re-adjusted, not just the fetched window: history older
     # than the window was cached before the split and would keep its pre-split level.
-    if splits is not None and merged.get("status") == "priced":
-        adjusted = split_adjusted_prices(merged.get("prices", {}), splits)
-        if adjusted != merged.get("prices"):
-            store.replace_prices(symbol, adjusted)
-            merged["prices"] = adjusted
-    return merged
+    return apply_history_splits(store, symbol, merged, combined_splits)
 
 
 _PRICE_LOOKUP_CACHE: dict[int, tuple[dict[str, float], int, tuple[date, ...], tuple[float, ...]]] = {}
@@ -5519,6 +5571,7 @@ def calculate_valuation_series(
     if not trades:
         return {"series": [], "status": "empty"}
 
+    split_events = corporate_action_split_events(trades)
     trades = split_adjusted_trade_history(trades)
     start = min(trade.date for trade in trades)
     
@@ -5539,11 +5592,17 @@ def calculate_valuation_series(
 
     histories: dict[str, dict[str, Any]] = {}
     currencies: set[str] = set()
-    for ref in refs.values():
+    for key, ref in refs.items():
         symbol = ref.get("symbol", "")
         if not symbol:
             continue
-        history = fetch_history(symbol, start, end, refresh=refresh)
+        history = fetch_history(
+            symbol,
+            start,
+            end,
+            refresh=refresh,
+            known_splits=split_events.get(key),
+        )
         histories[symbol] = history
         if history.get("status") == "priced":
             currencies.add(normalize_currency_code(history.get("currency") or "EUR"))
@@ -5830,7 +5889,8 @@ def compute_position_variations(
     quantity: Decimal,
     current_value_eur: Decimal,
     is_crypto_wallet: bool,
-    refresh: bool = False
+    refresh: bool = False,
+    known_splits: Any = None,
 ) -> dict[str, dict[str, float]]:
     res = {
         "1d": {"pct": 0.0, "amount": 0.0},
@@ -5853,7 +5913,7 @@ def compute_position_variations(
         else:
             if not symbol:
                 return res
-            h = fetch_history(symbol, start_date, today, refresh=refresh)
+            h = fetch_history(symbol, start_date, today, refresh=refresh, known_splits=known_splits)
             prices = h.get("prices", {})
             currency = normalize_currency_code(currency or h.get("currency") or "EUR")
             if currency != "EUR":
@@ -5883,7 +5943,12 @@ def compute_position_variations(
     return res
 
 
-def enrich_positions(positions: list[dict[str, Any]], mappings: dict[str, dict[str, str]], refresh: bool = False) -> dict[str, Any]:
+def enrich_positions(
+    positions: list[dict[str, Any]],
+    mappings: dict[str, dict[str, str]],
+    refresh: bool = False,
+    split_events: dict[str, dict[str, float]] | None = None,
+) -> dict[str, Any]:
     exposures = read_exposures()
     enriched = []
     market_value = ZERO
@@ -5896,6 +5961,7 @@ def enrich_positions(positions: list[dict[str, Any]], mappings: dict[str, dict[s
         quantity = Decimal(str(position["quantity"]))
         cost = Decimal(str(position["cost_basis_eur"]))
         position_isin = position.get("isin", "")
+        known_splits = (split_events or {}).get(position_isin or asset)
         mapping = mapping_for(asset, position_isin, mappings)
         isin = position_isin or mapping.get("isin", "")
         
@@ -5968,7 +6034,8 @@ def enrich_positions(positions: list[dict[str, Any]], mappings: dict[str, dict[s
                 quantity=quantity,
                 current_value_eur=value,
                 is_crypto_wallet=True,
-                refresh=refresh
+                refresh=refresh,
+                known_splits=known_splits,
             )
             row["variations"] = pos_vars
 
@@ -6000,7 +6067,8 @@ def enrich_positions(positions: list[dict[str, Any]], mappings: dict[str, dict[s
                     quantity=quantity,
                     current_value_eur=Decimal(str(snapshot_val)),
                     is_crypto_wallet=is_crypto,
-                    refresh=refresh
+                    refresh=refresh,
+                    known_splits=known_splits,
                 )
                 row["variations"] = pos_vars
             else:
@@ -6063,7 +6131,8 @@ def enrich_positions(positions: list[dict[str, Any]], mappings: dict[str, dict[s
             quantity=quantity,
             current_value_eur=value,
             is_crypto_wallet=False,
-            refresh=refresh
+            refresh=refresh,
+            known_splits=known_splits,
         )
         row["variations"] = pos_vars
 
@@ -6468,7 +6537,12 @@ def _build_dashboard_payload(
         if broker == "crypto wallet" and wallet_positions
         else summarize_net_contributions(trades)
     )
-    priced = enrich_positions(summary["positions"], mappings, refresh=refresh)
+    priced = enrich_positions(
+        summary["positions"],
+        mappings,
+        refresh=refresh,
+        split_events=corporate_action_split_events(trades),
+    )
     distribution = calculate_distribution(
         priced["positions"],
         read_exposures(berkshire_mode=berkshire_mode, proxy_mode=proxy_mode),

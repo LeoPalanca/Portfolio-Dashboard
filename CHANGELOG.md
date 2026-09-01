@@ -3,6 +3,15 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.6.7 - 2026-09-02
+
+### Fixed
+
+- Split-adjusted price caches now repair mixed overlapping ranges instead of
+  applying the split factor twice to already-adjusted dates. Broker-recorded
+  corporate actions also self-heal cached history, keeping mover percentages
+  and euro changes consistent after a split.
+
 ## 0.6.6 - 2026-09-01
 
 ### Added

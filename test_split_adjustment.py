@@ -33,6 +33,24 @@ class SplitAdjustedPricesTest(unittest.TestCase):
         twice = app.split_adjusted_prices(once, split_events)
         self.assertEqual(once, twice)
 
+    def test_repairs_mixed_double_adjusted_cache_blocks(self) -> None:
+        prices = {
+            "2026-07-30": 48.82,
+            "2026-07-31": 24.09,
+            "2026-08-03": 46.77,
+            "2026-08-05": 47.23,
+            "2026-08-06": 23.54,
+            "2026-08-07": 45.18,
+            "2026-08-11": 45.53,
+        }
+        split_events = splits({"2026-08-11": 2.0})
+
+        adjusted = app.split_adjusted_prices(prices, split_events)
+
+        self.assertAlmostEqual(adjusted["2026-07-31"], 48.18)
+        self.assertAlmostEqual(adjusted["2026-08-06"], 47.08)
+        self.assertEqual(app.split_adjusted_prices(adjusted, split_events), adjusted)
+
     def test_leaves_history_alone_when_the_gap_does_not_match_the_ratio(self) -> None:
         prices = {"2026-08-06": 94.0, "2026-08-07": 90.0, "2026-08-11": 88.0, "2026-08-12": 89.0}
         adjusted = app.split_adjusted_prices(prices, splits({"2026-08-11": 2.0}))
@@ -71,6 +89,34 @@ class HistoryStoreReplacePricesTest(unittest.TestCase):
             store = HistoryStore(Path(folder))
             store.replace_prices("MNST", {"2026-08-06": 47.0})
             self.assertIsNone(store.get_cached("MNST", date(2026, 8, 6), date(2026, 8, 6)))
+
+    def test_cached_history_self_heals_from_known_broker_split(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            store = HistoryStore(Path(folder))
+            store.merge(
+                "MNST",
+                {
+                    "symbol": "MNST",
+                    "currency": "USD",
+                    "status": "priced",
+                    "prices": {"2026-08-06": 23.54, "2026-08-07": 45.18, "2026-08-11": 45.53},
+                    "fetched_at": 1,
+                },
+                date(2026, 8, 6),
+                date(2026, 8, 11),
+            )
+
+            payload = app.apply_history_splits(
+                store,
+                "MNST",
+                store.get_cached("MNST", date(2026, 8, 6), date(2026, 8, 11)),
+                {"2026-08-11": 2.0},
+            )
+
+            self.assertAlmostEqual(payload["prices"]["2026-08-06"], 47.08)
+            store.clear_memory()
+            persisted = store.get_cached("MNST", date(2026, 8, 6), date(2026, 8, 11))
+            self.assertAlmostEqual(persisted["prices"]["2026-08-06"], 47.08)
 
 
 
