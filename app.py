@@ -160,6 +160,7 @@ NEWS_CACHE = SETTINGS.cache_path("news.json")
 DASHBOARD_CACHE_DIR = SETTINGS.cache_dir / "dashboard-payloads"
 DASHBOARD_CACHE_FORMAT_VERSION = 1
 _DASHBOARD_CACHE_LOCK = threading.Lock()
+_DASHBOARD_MEMORY_CACHE: dict[Path, tuple[str, dict[str, Any], bytes]] = {}
 PRICE_TTL_SECONDS = 15 * 60
 HISTORY_TTL_SECONDS = 12 * 60 * 60
 NEWS_TTL_SECONDS = 60 * 60
@@ -266,14 +267,35 @@ def dashboard_cache_path(
 
 
 def read_dashboard_cache(path: Path, signature: str) -> dict[str, Any] | None:
+    memory = _DASHBOARD_MEMORY_CACHE.get(path)
+    if memory is not None and memory[0] == signature:
+        return memory[1]
     cached = load_json(path)
     if cached.get("signature") != signature or not isinstance(cached.get("payload"), dict):
         return None
-    return cached["payload"]
+    payload = cached["payload"]
+    remember_dashboard_payload(path, signature, payload)
+    return payload
 
 
 def write_dashboard_cache(path: Path, signature: str, payload: dict[str, Any]) -> None:
+    remember_dashboard_payload(path, signature, payload)
     save_json(path, {"signature": signature, "payload": payload})
+
+
+def remember_dashboard_payload(path: Path, signature: str, payload: dict[str, Any]) -> bytes:
+    encoded = app.json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    if len(_DASHBOARD_MEMORY_CACHE) >= 32 and path not in _DASHBOARD_MEMORY_CACHE:
+        _DASHBOARD_MEMORY_CACHE.clear()
+    _DASHBOARD_MEMORY_CACHE[path] = (signature, payload, encoded)
+    return encoded
+
+
+def dashboard_response_bytes(path: Path, payload: dict[str, Any]) -> bytes:
+    memory = _DASHBOARD_MEMORY_CACHE.get(path)
+    if memory is not None and memory[1] is payload:
+        return memory[2]
+    return remember_dashboard_payload(path, dashboard_source_signature(), payload)
 
 
 def configured_path_label(path: Path) -> str:
@@ -8157,7 +8179,25 @@ def api_portfolio():
     broker = request.args.get("broker", "all")
     live_only = request.args.get("live_only", "off")
     try:
-        return jsonify(dashboard_payload(refresh=refresh, person=person, berkshire_mode=berkshire_mode, proxy_mode=proxy_mode, broker=broker, live_only=live_only))
+        payload = dashboard_payload(
+            refresh=refresh,
+            person=person,
+            berkshire_mode=berkshire_mode,
+            proxy_mode=proxy_mode,
+            broker=broker,
+            live_only=live_only,
+        )
+        path = dashboard_cache_path(
+            configured_portfolio_id(person),
+            normalize_berkshire_mode(berkshire_mode),
+            normalize_proxy_mode(proxy_mode),
+            (broker or "all").strip().lower(),
+            "on" if live_only == "on" else "off",
+        )
+        return app.response_class(
+            dashboard_response_bytes(path, payload),
+            mimetype="application/json",
+        )
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 

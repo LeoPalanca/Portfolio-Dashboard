@@ -22,6 +22,8 @@ class DashboardPayloadCacheTest(unittest.TestCase):
                 patch.object(app, "_build_dashboard_payload", side_effect=builds) as build,
             ):
                 first = app.dashboard_payload(person=app.PRIMARY_PORTFOLIO_ID)
+                cache_file = next(cache_dir.glob("*.json"))
+                cache_file.unlink()
                 cached = app.dashboard_payload(person=app.PRIMARY_PORTFOLIO_ID)
                 refreshed = app.dashboard_payload(refresh=True, person=app.PRIMARY_PORTFOLIO_ID)
                 cached_after_refresh = app.dashboard_payload(person=app.PRIMARY_PORTFOLIO_ID)
