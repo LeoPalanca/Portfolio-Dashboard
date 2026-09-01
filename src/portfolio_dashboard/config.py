@@ -101,7 +101,7 @@ class Settings(BaseSettings):
     primary_portfolio_name: str = "Primary Portfolio"
     portfolios: dict[str, PortfolioProfile] = Field(default_factory=dict)
     self_transfer_names: tuple[str, ...] = ()
-    since_2024_portfolio_ids: tuple[str, ...] = ()
+    default_custom_period_start: Date | None = None
 
     manual_trades_file: str = "Spreadsheet - Trades.csv"
     trade_republic_pattern: str = "broker_exports/*/*trade_republic*.csv"

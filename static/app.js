@@ -188,7 +188,7 @@
       document.getElementById("app-config").textContent
     );
     const PRIMARY_PORTFOLIO_ID = APP_CONFIG.primaryPortfolioId;
-    const SINCE_2024_PORTFOLIO_IDS = new Set(APP_CONFIG.since2024PortfolioIds);
+    const DEFAULT_CUSTOM_PERIOD_START = APP_CONFIG.defaultCustomPeriodStart || "";
     const APP_VERSION = APP_CONFIG.appVersion;
     const HAS_MULTIPLE_PORTFOLIOS = APP_CONFIG.hasMultiplePortfolios;
     const PORTFOLIO_FEATURES = APP_CONFIG.portfolioFeatures || {};
@@ -200,8 +200,29 @@
     const importDropzone = document.getElementById("import-dropzone");
     const importStatus = document.getElementById("import-status");
     const importSubmit = document.getElementById("import-submit");
+    const CUSTOM_PERIOD_START_KEY = "customPeriodStart";
+    const SELECTED_PERIOD_KEY = "selectedPeriod";
+    const VALID_PERIODS = new Set(["1w", "1m", "ytd", "1y", "custom", "all"]);
+
+    function normalizedIsoDate(value) {
+      const text = String(value || "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return "";
+      const parsed = new Date(`${text}T00:00:00`);
+      return Number.isNaN(parsed.getTime()) ? "" : text;
+    }
+    function customPeriodStart() {
+      return normalizedIsoDate(storedValue(CUSTOM_PERIOD_START_KEY))
+        || normalizedIsoDate(DEFAULT_CUSTOM_PERIOD_START)
+        || `${new Date().getFullYear()}-01-01`;
+    }
+    function preferredPeriod() {
+      const stored = storedValue(SELECTED_PERIOD_KEY);
+      if (VALID_PERIODS.has(stored)) return stored;
+      return DEFAULT_CUSTOM_PERIOD_START ? "custom" : "all";
+    }
+
     let selectedPerson = PRIMARY_PORTFOLIO_ID;
-    let selectedPeriod = SINCE_2024_PORTFOLIO_IDS.has(PRIMARY_PORTFOLIO_ID) ? "since24" : "all";
+    let selectedPeriod = preferredPeriod();
     let selectedBerkshireMode = "stock";
     let selectedProxyMode = APP_CONFIG.defaultProxyMode;
     let selectedLiveMode = "all";
@@ -547,7 +568,10 @@
     function filterByPeriod(series) {
       if (!series || !series.length) return series || [];
       if (selectedPeriod === "all") return series || [];
-      if (selectedPeriod === "since24") return series.filter(p => new Date(p.date) >= new Date("2024-01-11"));
+      if (selectedPeriod === "custom") {
+        const start = new Date(`${customPeriodStart()}T00:00:00`);
+        return series.filter(p => new Date(p.date) >= start);
+      }
       
       const end = new Date(series[series.length - 1].date);
       const start = new Date(end);
@@ -566,25 +590,23 @@
       if (selectedPeriod === "1m") return "Last 1 month";
       if (selectedPeriod === "ytd") return "Year to date";
       if (selectedPeriod === "1y") return "Last 1 year";
-      if (selectedPeriod === "since24") return "Since Jan 2024";
+      if (selectedPeriod === "custom") {
+        const start = new Date(`${customPeriodStart()}T00:00:00`);
+        return `Since ${new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(start)}`;
+      }
       return "All time";
     }
-    function canUseSince24Window() {
-      return SINCE_2024_PORTFOLIO_IDS.has(selectedPerson) && selectedBroker === "all";
-    }
-    function defaultPeriodForSelection() {
-      return canUseSince24Window() ? "since24" : "all";
-    }
-    function normalizeSelectedPeriod() {
-      if (selectedPeriod === "since24" && !canUseSince24Window()) {
-        selectedPeriod = "all";
-      }
+    function updateCustomPeriodLabel() {
+      const label = document.getElementById("custom-period-label");
+      const button = document.querySelector('#periods button[data-period="custom"]');
+      const start = new Date(`${customPeriodStart()}T00:00:00`);
+      const compact = new Intl.DateTimeFormat(undefined, { month: "short", year: "2-digit" }).format(start);
+      if (label) label.textContent = compact;
+      if (button) button.title = selectedWindowLabel();
     }
     function updatePeriodButtons() {
-      normalizeSelectedPeriod();
+      updateCustomPeriodLabel();
       document.querySelectorAll("#periods button").forEach(button => {
-        const isSince24 = button.dataset.period === "since24";
-        button.style.display = isSince24 && !canUseSince24Window() ? "none" : "";
         button.classList.toggle("active", selectedPeriod === button.dataset.period);
       });
     }
@@ -1694,6 +1716,7 @@
       const format = formatEl ? formatEl.value : "pdf";
       const params = currentQueryParams();
       params.set("period", selectedPeriod);
+      if (selectedPeriod === "custom") params.set("period_start", customPeriodStart());
       params.set("format", format);
       window.location.href = `/api/export?${params.toString()}`;
     }
@@ -2382,7 +2405,7 @@
     }
     function periodStartDate(data) {
       if (selectedPeriod === "all") return null;
-      if (selectedPeriod === "since24") return new Date("2024-01-11");
+      if (selectedPeriod === "custom") return new Date(`${customPeriodStart()}T00:00:00`);
       const valueSeries = data.valuation_series || [];
       const endValue = valueSeries.length ? valueSeries[valueSeries.length - 1].date : data.date_range.end;
       const start = new Date(endValue || Date.now());
@@ -3028,9 +3051,9 @@
     }
     document.querySelectorAll("#periods button").forEach(button => {
       button.addEventListener("click", () => {
-        if (button.dataset.period === "since24" && !canUseSince24Window()) return;
         if (selectedPeriod === button.dataset.period) return;
         selectedPeriod = button.dataset.period;
+        storeValue(SELECTED_PERIOD_KEY, selectedPeriod);
         updatePeriodButtons();
         if (dashboardData) withRedrawVeil("Redrawing selected window", () => renderDashboard(dashboardData));
       });
@@ -3041,7 +3064,6 @@
         selectedPerson = button.dataset.person;
         selectedBroker = "all";
         resetHoldingsView();
-        selectedPeriod = defaultPeriodForSelection();
         updatePeriodButtons();
         document.querySelectorAll("#persons button").forEach(item => item.classList.toggle("active", item === button));
         load(false, `Switching to ${selectorButtonLabel(button)}`);
@@ -3232,6 +3254,7 @@
     const settingsMenu = document.getElementById("settings-menu");
     const themeChoices = Array.from(document.querySelectorAll("[data-theme-choice]"));
     const colourblindInput = document.getElementById("setting-colourblind");
+    const customPeriodInput = document.getElementById("setting-custom-period-start");
     const autoRefreshInput = document.getElementById("setting-auto-refresh-minutes");
     const refreshOnLoginInput = document.getElementById("setting-refresh-on-login");
     let autoRefreshTimer = null;
@@ -3326,6 +3349,21 @@
     });
     if (colourblindInput) {
       colourblindInput.addEventListener("change", () => applyPalette(colourblindInput.checked));
+    }
+    if (customPeriodInput) {
+      customPeriodInput.value = customPeriodStart();
+      customPeriodInput.addEventListener("change", () => {
+        const start = normalizedIsoDate(customPeriodInput.value);
+        if (!start) {
+          customPeriodInput.value = customPeriodStart();
+          return;
+        }
+        storeValue(CUSTOM_PERIOD_START_KEY, start);
+        selectedPeriod = "custom";
+        storeValue(SELECTED_PERIOD_KEY, selectedPeriod);
+        updatePeriodButtons();
+        if (dashboardData) withRedrawVeil("Applying custom window", () => renderDashboard(dashboardData));
+      });
     }
     if (autoRefreshInput) {
       autoRefreshInput.value = String(autoRefreshMinutes());
@@ -3480,6 +3518,7 @@
     initializeSectionIdentity();
     initializeSectionWrapButtons();
     checkImportOnboarding();
+    updatePeriodButtons();
     const refreshOnLogin = refreshOnLoginEnabled();
     load(refreshOnLogin, refreshOnLogin ? "Refreshing live prices" : "Loading dashboard")
       .finally(scheduleAutoRefresh);

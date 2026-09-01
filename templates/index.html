@@ -71,6 +71,16 @@
             </label>
           </div>
           <div class="settings-group">
+            <div class="settings-label" id="settings-window-label">Performance window</div>
+            <label class="settings-number settings-date" for="setting-custom-period-start">
+              <span class="settings-number-title">Custom start date</span>
+              <span class="settings-number-control">
+                <input type="date" id="setting-custom-period-start" aria-describedby="setting-custom-period-hint">
+              </span>
+              <span class="settings-switch-hint" id="setting-custom-period-hint">Used by the custom timeline and saved on this device.</span>
+            </label>
+          </div>
+          <div class="settings-group">
             <div class="settings-label" id="settings-refresh-label">Data refresh</div>
             <label class="settings-number" for="setting-auto-refresh-minutes">
               <span class="settings-number-title">Automatic refresh</span>
@@ -126,7 +136,10 @@
             <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="selector-label">1Y</span></span>
             <span class="time-scale" aria-hidden="true"><span></span></span>
           </button>
-          {{ since_2024_button|safe }}
+          <button type="button" data-period="custom" style="--time-fill:.76;--time-width:84px" title="Custom start date">
+            <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3v3M17 3v3M4 9h16"/><rect x="4" y="5" width="16" height="15" rx="2"/></svg></span><span class="selector-label" id="custom-period-label">Custom</span></span>
+            <span class="time-scale" aria-hidden="true"><span></span></span>
+          </button>
           <button type="button" data-period="all" style="--time-fill:1;--time-width:88px" title="All time">
             <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="selector-label">All</span></span>
             <span class="time-scale" aria-hidden="true"><span></span></span>

@@ -376,9 +376,11 @@ class ExpenseSummaryTest(unittest.TestCase):
 
         all_rows = app.export_period_rows_by_date(rows, "all")
         one_month_rows = app.export_period_rows_by_date(rows, "1m")
+        custom_rows = app.export_period_rows_by_date(rows, "custom", date(2026, 1, 15))
 
         self.assertEqual(len(all_rows), 2)
         self.assertEqual(one_month_rows, [rows[1]])
+        self.assertEqual(custom_rows, [rows[1]])
 
 
 class BBVAExpenseExtractionTest(unittest.TestCase):

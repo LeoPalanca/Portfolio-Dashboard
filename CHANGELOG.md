@@ -3,6 +3,19 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.6.6 - 2026-09-01
+
+### Added
+
+- A custom performance window with an editable start date. The selected window
+  and date persist on the current device; private editions can provide a default.
+
+### Performance
+
+- Normal dashboard opens reuse the last computed payload from a persistent local
+  cache. Explicit price refreshes rebuild it, and ledger or configuration changes
+  invalidate it automatically.
+
 ## 0.6.5 - 2026-08-30
 
 ### Fixed

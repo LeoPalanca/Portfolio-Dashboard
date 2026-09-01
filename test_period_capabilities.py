@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import unittest
+from datetime import date
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
@@ -29,20 +30,19 @@ class PeriodCapabilityTest(unittest.TestCase):
 
         self.assertNotIn("Family Rankings", html)
 
-    def test_fresh_install_omits_since_2024_button(self) -> None:
-        with patch.object(app, "SINCE_2024_PORTFOLIO_IDS", set()), app.app.test_client() as client:
+    def test_fresh_install_offers_custom_window_without_a_private_default(self) -> None:
+        with patch.object(app, "DEFAULT_CUSTOM_PERIOD_START", None), app.app.test_client() as client:
             html = client.get("/").get_data(as_text=True)
 
-        self.assertNotIn('data-period="since24"', html)
-        self.assertEqual(app_config(html)["since2024PortfolioIds"], [])
-        self.assertNotIn("__SINCE_2024_PORTFOLIO_IDS__", html)
+        self.assertIn('data-period="custom"', html)
+        self.assertIsNone(app_config(html)["defaultCustomPeriodStart"])
 
-    def test_configured_portfolio_receives_since_2024_button(self) -> None:
-        with patch.object(app, "SINCE_2024_PORTFOLIO_IDS", {app.PRIMARY_PORTFOLIO_ID}), app.app.test_client() as client:
+    def test_private_default_custom_start_is_sent_to_the_browser(self) -> None:
+        with patch.object(app, "DEFAULT_CUSTOM_PERIOD_START", date(2024, 1, 1)), app.app.test_client() as client:
             html = client.get("/").get_data(as_text=True)
 
-        self.assertIn('data-period="since24"', html)
-        self.assertEqual(app_config(html)["since2024PortfolioIds"], [app.PRIMARY_PORTFOLIO_ID])
+        self.assertIn('data-period="custom"', html)
+        self.assertEqual(app_config(html)["defaultCustomPeriodStart"], "2024-01-01")
 
 
 if __name__ == "__main__":

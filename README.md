@@ -156,6 +156,11 @@ Additional portfolios are declared under `[portfolios.<id>]` in ignored
 transaction adjustments, friction events, tax-loss metadata, private action items,
 and opt-in features.
 
+The Custom performance window has an editable start date in Dashboard Settings.
+Both the chosen window and date persist in the browser. A private installation can
+provide its initial date with `default_custom_period_start = "YYYY-MM-DD"`; public
+installations have no account-specific default.
+
 If a private cash-account export begins after the account was funded, record the
 missing opening balance as a dated `cash_flow` in that edition's private movement
 ledger. Its amount and `contribution_change` must match so market value and return
@@ -174,8 +179,10 @@ Personal paths, adjustments, and feature flags remain in ignored configuration.
 
 ## Market data, network access, and caches
 
-Routine dashboard loads are cache-first. `Refresh Prices` performs a synchronous
-market update. Depending on the enabled feature, the application may contact:
+Routine dashboard loads reuse the last computed local snapshot, including across
+service restarts. A statement import, configuration change, or other source-data
+change invalidates the snapshot. `Refresh Prices` performs a synchronous market
+update and replaces it. Depending on the enabled feature, the application may contact:
 
 - Yahoo Finance through `yfinance` for prices, currency metadata, benchmarks, and
   Yahoo RSS headlines.

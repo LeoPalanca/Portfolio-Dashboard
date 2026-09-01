@@ -67,7 +67,6 @@ annual_risk_free_rate = 0.03
 
 primary_portfolio_id = "primary"
 primary_portfolio_name = "Primary Portfolio"
-since_2024_portfolio_ids = []
 
 trade_republic_pattern = "broker_exports/*/*trade_republic*.csv"
 fineco_pattern = "broker_exports/*/*fineco*.xlsx"

@@ -67,7 +67,7 @@ APP_DIR = SETTINGS.project_dir
 ROOT_DIR = SETTINGS.source_dir
 PRIMARY_PORTFOLIO_ID = SETTINGS.primary_portfolio_id.lower()
 PRIMARY_PORTFOLIO_NAME = SETTINGS.primary_portfolio_name
-SINCE_2024_PORTFOLIO_IDS = {portfolio_id.strip().lower() for portfolio_id in SETTINGS.since_2024_portfolio_ids}
+DEFAULT_CUSTOM_PERIOD_START = SETTINGS.default_custom_period_start
 TRADES_CSV = ROOT_DIR / SETTINGS.manual_trades_file
 PERSONAL_TRADE_COLUMNS = (
     "date",
@@ -157,6 +157,9 @@ PRICE_CACHE = SETTINGS.cache_path("prices.json")
 HISTORY_CACHE = SETTINGS.cache_path("history.json")
 HISTORY_CACHE_DIR = SETTINGS.cache_dir / "history"
 NEWS_CACHE = SETTINGS.cache_path("news.json")
+DASHBOARD_CACHE_DIR = SETTINGS.cache_dir / "dashboard-payloads"
+DASHBOARD_CACHE_FORMAT_VERSION = 1
+_DASHBOARD_CACHE_LOCK = threading.Lock()
 PRICE_TTL_SECONDS = 15 * 60
 HISTORY_TTL_SECONDS = 12 * 60 * 60
 NEWS_TTL_SECONDS = 60 * 60
@@ -214,6 +217,63 @@ def save_json(path: Path, payload: Any) -> None:
                     tmp_path.unlink()
                 except OSError:
                     pass
+
+
+def dashboard_source_signature() -> str:
+    """Fingerprint local inputs that make a cached dashboard payload obsolete."""
+
+    inputs = (
+        SETTINGS.project_dir / "config.toml",
+        MOVEMENT_DATABASE,
+        MAPPINGS_CSV,
+        EXPOSURES_CSV,
+        CRYPTO_WALLET_POSITIONS_CSV,
+        CRYPTO_WALLET_TRANSACTIONS_CSV,
+        ETF_DOCUMENTS_JSON,
+        BERKSHIRE_HOLDINGS_CSV,
+        PROXY_EXPOSURES_CSV,
+    )
+    file_state = []
+    for path in inputs:
+        try:
+            stat = path.stat()
+            file_state.append((str(path), stat.st_mtime_ns, stat.st_size))
+        except OSError:
+            file_state.append((str(path), None, None))
+    encoded = json.dumps(
+        {
+            "format": DASHBOARD_CACHE_FORMAT_VERSION,
+            "version": APP_VERSION,
+            "files": file_state,
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def dashboard_cache_path(
+    person: str,
+    berkshire_mode: str,
+    proxy_mode: str,
+    broker: str,
+    live_only: str,
+) -> Path:
+    encoded = json.dumps(
+        [person, berkshire_mode, proxy_mode, broker, live_only],
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return DASHBOARD_CACHE_DIR / f"{hashlib.sha256(encoded).hexdigest()}.json"
+
+
+def read_dashboard_cache(path: Path, signature: str) -> dict[str, Any] | None:
+    cached = load_json(path)
+    if cached.get("signature") != signature or not isinstance(cached.get("payload"), dict):
+        return None
+    return cached["payload"]
+
+
+def write_dashboard_cache(path: Path, signature: str, payload: dict[str, Any]) -> None:
+    save_json(path, {"signature": signature, "payload": payload})
 
 
 def configured_path_label(path: Path) -> str:
@@ -6300,7 +6360,7 @@ def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID
     }
 
 
-def dashboard_payload(
+def _build_dashboard_payload(
     refresh: bool = False,
     person: str = PRIMARY_PORTFOLIO_ID,
     berkshire_mode: str = "stock",
@@ -6492,6 +6552,46 @@ def dashboard_payload(
     return payload
 
 
+def dashboard_payload(
+    refresh: bool = False,
+    person: str = PRIMARY_PORTFOLIO_ID,
+    berkshire_mode: str = "stock",
+    proxy_mode: str = "off",
+    broker: str = "all",
+    live_only: str = "off",
+) -> dict[str, Any]:
+    """Return a persistent snapshot unless the caller explicitly refreshes it."""
+
+    person = configured_portfolio_id(person)
+    berkshire_mode = normalize_berkshire_mode(berkshire_mode)
+    proxy_mode = normalize_proxy_mode(proxy_mode)
+    broker = (broker or "all").strip().lower()
+    live_only = "on" if live_only == "on" else "off"
+    path = dashboard_cache_path(person, berkshire_mode, proxy_mode, broker, live_only)
+    signature = dashboard_source_signature()
+    if not refresh:
+        cached = read_dashboard_cache(path, signature)
+        if cached is not None:
+            return cached
+
+    with _DASHBOARD_CACHE_LOCK:
+        signature = dashboard_source_signature()
+        if not refresh:
+            cached = read_dashboard_cache(path, signature)
+            if cached is not None:
+                return cached
+        payload = _build_dashboard_payload(
+            refresh=refresh,
+            person=person,
+            berkshire_mode=berkshire_mode,
+            proxy_mode=proxy_mode,
+            broker=broker,
+            live_only=live_only,
+        )
+        write_dashboard_cache(path, dashboard_source_signature(), payload)
+        return payload
+
+
 NEWS_SYMBOL_EXCLUDE = {"", "USD", "EUR", "GBP", "USDC-USD", "BTC-USD", "ETH-USD", "TON-USD", "TON11419-USD"}
 
 
@@ -6639,12 +6739,14 @@ EXPORT_PERIOD_LABELS = {
     "1m": "Last 1 month",
     "ytd": "Year to date",
     "1y": "Last 1 year",
-    "since24": "Since Jan 2024",
+    "custom": "Custom range",
     "all": "All time",
 }
 
 
-def export_period_label(period: str) -> str:
+def export_period_label(period: str, custom_start: date | None = None) -> str:
+    if (period or "").lower() == "custom" and custom_start is not None:
+        return f"Since {custom_start.strftime('%d %b %Y').lstrip('0')}"
     return EXPORT_PERIOD_LABELS.get((period or "all").lower(), "All time")
 
 
@@ -6715,12 +6817,13 @@ def dashboard_export_context(
     broker: str,
     live_only: str,
     period: str,
+    custom_start: date | None = None,
 ) -> list[list[Any]]:
     totals = payload.get("totals", {})
     date_range = payload.get("date_range", {})
     toggles = [
         f"Person: {payload.get('person_name') or person}",
-        f"Window: {export_period_label(period)}",
+        f"Window: {export_period_label(period, custom_start)}",
         f"Broker: {broker}",
         f"Berkshire: {'13F look-through' if berkshire_mode == 'lookthrough' else 'stock'}",
         f"Composition: {'proxy gaps on' if proxy_mode == 'on' else 'official only'}",
@@ -6731,7 +6834,7 @@ def dashboard_export_context(
     return [
         ["Generated at", payload.get("generated_at")],
         ["Person", payload.get("person_name") or person],
-        ["Window", export_period_label(period)],
+        ["Window", export_period_label(period, custom_start)],
         ["Broker", broker],
         ["Berkshire mode", berkshire_mode],
         ["Proxy mode", proxy_mode],
@@ -6750,7 +6853,11 @@ def dashboard_export_context(
     ]
 
 
-def export_period_series(series: list[dict[str, Any]], period: str) -> list[dict[str, Any]]:
+def export_period_series(
+    series: list[dict[str, Any]],
+    period: str,
+    custom_start: date | None = None,
+) -> list[dict[str, Any]]:
     if not series:
         return []
     period = (period or "all").lower()
@@ -6765,14 +6872,18 @@ def export_period_series(series: list[dict[str, Any]], period: str) -> list[dict
         start = end - timedelta(days=30)
     elif period == "1y":
         start = end.replace(year=end.year - 1)
-    elif period == "since24":
-        start = date(2024, 1, 11)
+    elif period == "custom":
+        start = custom_start or date.min
     else:
         start = date.min
     return [row for row in series if date.fromisoformat(row["date"]) >= start]
 
 
-def export_period_rows_by_date(rows: list[dict[str, Any]], period: str) -> list[dict[str, Any]]:
+def export_period_rows_by_date(
+    rows: list[dict[str, Any]],
+    period: str,
+    custom_start: date | None = None,
+) -> list[dict[str, Any]]:
     if not rows:
         return []
     period = (period or "all").lower()
@@ -6795,8 +6906,8 @@ def export_period_rows_by_date(rows: list[dict[str, Any]], period: str) -> list[
         start = end - timedelta(days=30)
     elif period == "1y":
         start = end.replace(year=end.year - 1)
-    elif period == "since24":
-        start = date(2024, 1, 11)
+    elif period == "custom":
+        start = custom_start or date.min
     else:
         start = date.min
     output: list[dict[str, Any]] = []
@@ -6845,8 +6956,12 @@ def normalized_return_delta(first: dict[str, Any], last: dict[str, Any], key: st
     return round(((1 + last_val / 100) / base - 1) * 100, 2)
 
 
-def benchmark_export_rows(payload: dict[str, Any], period: str) -> list[dict[str, Any]]:
-    series = export_period_series(payload.get("valuation_series", []) or [], period)
+def benchmark_export_rows(
+    payload: dict[str, Any],
+    period: str,
+    custom_start: date | None = None,
+) -> list[dict[str, Any]]:
+    series = export_period_series(payload.get("valuation_series", []) or [], period, custom_start)
     if not series:
         return []
     first = series[0]
@@ -6866,17 +6981,22 @@ def benchmark_export_rows(payload: dict[str, Any], period: str) -> list[dict[str
     ]
 
 
-def build_export_tables(payload: dict[str, Any], context_rows: list[list[Any]], period: str) -> dict[str, list[list[Any]]]:
+def build_export_tables(
+    payload: dict[str, Any],
+    context_rows: list[list[Any]],
+    period: str,
+    custom_start: date | None = None,
+) -> dict[str, list[list[Any]]]:
     distribution = payload.get("distribution", {})
     dividends = payload.get("dividends", {})
     contributions = payload.get("net_contributions", {})
     frictions = payload.get("frictions", {})
     expenses = payload.get("expenses", {})
-    expense_rows = export_period_rows_by_date(expenses.get("rows", []) or [], period)
+    expense_rows = export_period_rows_by_date(expenses.get("rows", []) or [], period, custom_start)
     expense_credit_rows = [row for row in expense_rows if expense_row_kind(row) == "credits"]
     return {
         "Overview": [["Field", "Value"], *context_rows],
-        "Benchmark Comparison": export_rows_from_dicts(benchmark_export_rows(payload, period), [
+        "Benchmark Comparison": export_rows_from_dicts(benchmark_export_rows(payload, period, custom_start), [
             ("metric", "Metric"),
             ("value_pct", "Value %"),
             ("comparison", "Comparison"),
@@ -8189,6 +8309,12 @@ def api_export():
     broker = request.args.get("broker", "all")
     live_only = request.args.get("live_only", "off")
     period = (request.args.get("period") or "all").lower()
+    custom_start = DEFAULT_CUSTOM_PERIOD_START
+    if period == "custom" and request.args.get("period_start"):
+        try:
+            custom_start = date.fromisoformat(request.args["period_start"])
+        except ValueError:
+            return jsonify({"error": "Custom period start must use YYYY-MM-DD."}), 400
     try:
         payload = dashboard_payload(
             refresh=False,
@@ -8198,13 +8324,25 @@ def api_export():
             broker=broker,
             live_only=live_only,
         )
-        context_rows = dashboard_export_context(payload, person, berkshire_mode, proxy_mode, broker, live_only, period)
-        tables = build_export_tables(payload, context_rows, period)
+        context_rows = dashboard_export_context(
+            payload,
+            person,
+            berkshire_mode,
+            proxy_mode,
+            broker,
+            live_only,
+            period,
+            custom_start,
+        )
+        tables = build_export_tables(payload, context_rows, period, custom_start)
         filename = export_filename(person, period, fmt)
         if fmt == "xlsx":
             output = build_xlsx_export(tables)
             return send_file(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", as_attachment=True, download_name=filename)
-        output = build_pdf_export(tables, f"Portfolio Report - {payload.get('person_name') or person} - {export_period_label(period)}")
+        output = build_pdf_export(
+            tables,
+            f"Portfolio Report - {payload.get('person_name') or person} - {export_period_label(period, custom_start)}",
+        )
         return send_file(output, mimetype="application/pdf", as_attachment=True, download_name=filename)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
@@ -8228,18 +8366,14 @@ def index():
             f'<span class="user-avatar" aria-hidden="true">{icon}</span>'
             f'<span class="selector-label">{safe_name}</span></button>'
         )
-    since_2024_button = ""
-    if SINCE_2024_PORTFOLIO_IDS:
-        active = ' class="active"' if PRIMARY_PORTFOLIO_ID in SINCE_2024_PORTFOLIO_IDS else ""
-        since_2024_button = f"""
-          <button type="button" data-period="since24"{active} style="--time-fill:.76;--time-width:82px" title="Since January 2024">
-            <span class="time-main"><span class="time-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="selector-label">'24</span></span>
-            <span class="time-scale" aria-hidden="true"><span></span></span>
-          </button>"""
     app_config = json.dumps(
         {
             "primaryPortfolioId": PRIMARY_PORTFOLIO_ID,
-            "since2024PortfolioIds": sorted(SINCE_2024_PORTFOLIO_IDS),
+            "defaultCustomPeriodStart": (
+                DEFAULT_CUSTOM_PERIOD_START.isoformat()
+                if DEFAULT_CUSTOM_PERIOD_START is not None
+                else None
+            ),
             "appVersion": DISPLAY_VERSION,
             "defaultProxyMode": DEFAULT_PROXY_MODE,
             "hasMultiplePortfolios": len(profiles) > 1,
@@ -8257,7 +8391,6 @@ def index():
         "index.html",
         portfolio_buttons="".join(buttons),
         show_rankings=len(profiles) > 1,
-        since_2024_button=since_2024_button,
         app_version=DISPLAY_VERSION,
         app_config=app_config,
     )

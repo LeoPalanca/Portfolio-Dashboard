@@ -77,7 +77,12 @@ class FrontendAssetTest(unittest.TestCase):
         config: dict[str, Any] = json.loads(match.group(1).replace("\\u003c", "<"))
 
         self.assertEqual(config["primaryPortfolioId"], app.PRIMARY_PORTFOLIO_ID)
-        self.assertEqual(config["since2024PortfolioIds"], sorted(app.SINCE_2024_PORTFOLIO_IDS))
+        self.assertEqual(
+            config["defaultCustomPeriodStart"],
+            app.DEFAULT_CUSTOM_PERIOD_START.isoformat()
+            if app.DEFAULT_CUSTOM_PERIOD_START is not None
+            else None,
+        )
         self.assertEqual(config["appVersion"], app.DISPLAY_VERSION)
         self.assertEqual(config["defaultProxyMode"], app.DEFAULT_PROXY_MODE)
         self.assertEqual(config["hasMultiplePortfolios"], len(app.SETTINGS.portfolios) > 0)
@@ -123,6 +128,21 @@ class FrontendAssetTest(unittest.TestCase):
         self.assertIn('load(refreshOnLogin, refreshOnLogin ?', js)
         self.assertIn('.finally(scheduleAutoRefresh)', js)
         self.assertIn('await load(true, "Automatically refreshing live prices");', js)
+
+    def test_custom_period_is_editable_and_persists_across_login(self) -> None:
+        html = render()
+        self.assertIn('data-period="custom"', html)
+        self.assertIn('id="setting-custom-period-start"', html)
+        self.assertNotIn('data-period="since24"', html)
+
+        with app.app.test_client() as client:
+            js = client.get("/static/app.js").get_data(as_text=True)
+
+        self.assertIn('const CUSTOM_PERIOD_START_KEY = "customPeriodStart";', js)
+        self.assertIn('const SELECTED_PERIOD_KEY = "selectedPeriod";', js)
+        self.assertIn('storeValue(SELECTED_PERIOD_KEY, selectedPeriod);', js)
+        self.assertIn('params.set("period_start", customPeriodStart())', js)
+        self.assertNotIn("2024-01-11", js)
 
     def test_system_theme_is_reachable(self) -> None:
         """The two-state toggle this replaced had no way back to 'follow the OS'.
