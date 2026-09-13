@@ -39,6 +39,26 @@ class HistoryStore:
                     return self._payload(record, start, end, fetched_at)
         return None
 
+    def get_covered(self, cache_key: str, start: date, end: date) -> dict[str, Any] | None:
+        """Return stale history only when a recorded fetch covers the requested range."""
+
+        with self._lock:
+            record = self._read(cache_key)
+            if record.get("status") != "priced" or not record.get("prices"):
+                return None
+            for coverage in record.get("ranges", []):
+                try:
+                    covered_start = date.fromisoformat(str(coverage["start"]))
+                    covered_end = date.fromisoformat(str(coverage["end"]))
+                    fetched_at = int(coverage["fetched_at"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if covered_start <= start and covered_end >= end:
+                    payload = self._payload(record, start, end, fetched_at)
+                    payload["cache_stale"] = True
+                    return payload
+        return None
+
     def get_cached(self, cache_key: str, start: date, end: date) -> dict[str, Any] | None:
         """Return the latest stored series even when its coverage or TTL is stale."""
 

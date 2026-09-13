@@ -90,6 +90,29 @@ class HistoryStoreTest(unittest.TestCase):
         self.assertEqual(cached["prices"], {"2024-01-02": 10.0})
         self.assertTrue(cached["cache_stale"])
 
+    def test_get_covered_rejects_a_partial_range(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = HistoryStore(Path(temporary) / "history")
+            store.merge(
+                "ABC",
+                {
+                    "symbol": "ABC",
+                    "currency": "EUR",
+                    "status": "priced",
+                    "fetched_at": 100,
+                    "prices": {"2026-07-16": 10},
+                },
+                date(2026, 7, 16),
+                date(2026, 8, 30),
+            )
+
+            partial = store.get_covered("ABC", date(2024, 1, 1), date(2026, 8, 30))
+            covered = store.get_covered("ABC", date(2026, 7, 16), date(2026, 8, 30))
+
+        self.assertIsNone(partial)
+        self.assertEqual(covered["prices"], {"2026-07-16": 10.0})
+        self.assertTrue(covered["cache_stale"])
+
 
 if __name__ == "__main__":
     unittest.main()

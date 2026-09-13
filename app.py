@@ -5086,10 +5086,13 @@ def fetch_history(
         return {"status": "missing_symbol", "prices": {}}
     store = get_history_store()
     now = int(time.time())
-    cached = None if refresh else store.get_cached(symbol, start, end)
+    stale = store.get_cached(symbol, start, end)
+    cached = None if refresh else store.get_covered(symbol, start, end)
     if cached:
         return apply_history_splits(store, symbol, cached, known_splits)
     if yf is None:
+        if stale:
+            return apply_history_splits(store, symbol, stale, known_splits)
         return {"status": "yfinance_missing", "prices": {}}
 
     try:
@@ -5120,6 +5123,9 @@ def fetch_history(
     except Exception as exc:
         payload = {"symbol": symbol, "status": "history_error", "error": str(exc), "prices": {}, "fetched_at": now}
         splits = None
+
+    if payload.get("status") != "priced" and stale:
+        return apply_history_splits(store, symbol, stale, known_splits)
 
     merged = store.merge(symbol, payload, start, end)
     combined_splits = dict(splits or {})

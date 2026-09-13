@@ -372,7 +372,7 @@
     };
     const returnVisibility = {
       return_pct: true,
-      msci_return_pct: false,
+      msci_return_pct: true,
       xeon_return_pct: false,
       inflation_return_pct: false,
       weighted_score: false,
@@ -622,9 +622,6 @@
         totals.historical_profit = totals.historical_total_profit;
         totals.market_value = totals.total_market_value || totals.market_value;
       }
-      const isPrimaryAll = (selectedPerson === PRIMARY_PORTFOLIO_ID && selectedPeriod === "all");
-      if (selectedPeriod === "all" && !isPrimaryAll) return totals;
-
       const values = filterByPeriod(data.valuation_series || []);
       const cash = filterByPeriod(data.series || []);
       if (values.length >= 2) {
@@ -633,12 +630,8 @@
         const p_last = Number(selectedReturnMode === "total" ? last.total_profit : last.profit || 0);
         const p_first = Number(selectedReturnMode === "total" ? first.total_profit : first.profit || 0);
         const periodProfit = p_last - p_first;
-        const isTotal = (selectedReturnMode === "total");
-        const periodContributions = Number(isTotal ? last.total_net_contributions : last.net_contributions || 0) - Number(isTotal ? first.total_net_contributions : first.net_contributions || 0);
-        const startVal = Number(isTotal ? first.total_market_value : first.market_value || 0);
-        const capitalAtWork = Math.max(0.01, startVal + Math.max(0, periodContributions));
-        totals.market_value = Number(isTotal ? last.total_market_value : last.market_value || 0);
-        totals.return_pct = periodProfit / capitalAtWork * 100;
+        const timeWeighted = portfolioTimeWeightedReturns(values);
+        totals.return_pct = Number(timeWeighted[timeWeighted.length - 1]?.return_pct || 0);
         totals.historical_profit = periodProfit;
       }
       if (cash.length >= 2) {
@@ -897,27 +890,47 @@
         });
       });
     }
+    function portfolioTimeWeightedReturns(series) {
+      if (!series || !series.length) return [];
+      const isTotal = (selectedReturnMode === "total");
+      const valueKey = isTotal ? "total_market_value" : "market_value";
+      const contributionKey = isTotal ? "total_net_contributions" : "net_contributions";
+      let growth = 1;
+      return series.map((point, index) => {
+        if (index > 0) {
+          const previous = series[index - 1];
+          const previousValue = Number(previous[valueKey] || 0);
+          const currentValue = Number(point[valueKey] || 0);
+          const cashFlow = Number(point[contributionKey] || 0) - Number(previous[contributionKey] || 0);
+          const coverageChanged = Number(point.priced_positions || 0) !== Number(previous.priced_positions || 0);
+          if (!coverageChanged && previousValue > 0 && Number.isFinite(currentValue) && Number.isFinite(cashFlow)) {
+            const intervalFactor = (currentValue - cashFlow) / previousValue;
+            if (Number.isFinite(intervalFactor) && intervalFactor >= 0) growth *= intervalFactor;
+          }
+        }
+        return { ...point, return_pct: (growth - 1) * 100 };
+      });
+    }
+
     function normalizeReturnSeries(series) {
       if (!series || !series.length) return [];
+      const portfolioReturns = portfolioTimeWeightedReturns(series);
       const p0 = series[0];
-      const r0 = Number(selectedReturnMode === "total" ? p0.total_return_pct : p0.return_pct || 0);
       const m0 = Number(p0.msci_return_pct || 0);
       const xeon0 = Number(p0.xeon_return_pct || 0);
       const inf0 = Number(p0.inflation_return_pct || 0);
-      const mapped = series.map(p => {
-        const r_t = Number(selectedReturnMode === "total" ? p.total_return_pct : p.return_pct || 0);
+      const mapped = series.map((p, index) => {
         const m_t = Number(p.msci_return_pct || 0);
         const xeon_t = Number(p.xeon_return_pct || 0);
         const inf_t = Number(p.inflation_return_pct || 0);
         
-        const norm_r = Math.abs(1 + r0 / 100) > 1e-6 ? ((1 + r_t / 100) / (1 + r0 / 100) - 1) * 100 : 0;
         const norm_m = Math.abs(1 + m0 / 100) > 1e-6 ? ((1 + m_t / 100) / (1 + m0 / 100) - 1) * 100 : 0;
         const norm_xeon = Math.abs(1 + xeon0 / 100) > 1e-6 ? ((1 + xeon_t / 100) / (1 + xeon0 / 100) - 1) * 100 : 0;
         const norm_inf = Math.abs(1 + inf0 / 100) > 1e-6 ? ((1 + inf_t / 100) / (1 + inf0 / 100) - 1) * 100 : 0;
         
         return {
           ...p,
-          return_pct: norm_r,
+          return_pct: Number(portfolioReturns[index]?.return_pct || 0),
           msci_return_pct: norm_m,
           xeon_return_pct: norm_xeon,
           inflation_return_pct: norm_inf

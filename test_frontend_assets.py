@@ -144,6 +144,15 @@ class FrontendAssetTest(unittest.TestCase):
         self.assertIn('params.set("period_start", customPeriodStart())', js)
         self.assertNotIn("2024-01-11", js)
 
+    def test_period_returns_are_cash_flow_adjusted_and_show_msci(self) -> None:
+        with app.app.test_client() as client:
+            js = client.get("/static/app.js").get_data(as_text=True)
+
+        self.assertIn("function portfolioTimeWeightedReturns(series)", js)
+        self.assertIn("const intervalFactor = (currentValue - cashFlow) / previousValue;", js)
+        self.assertIn("const coverageChanged =", js)
+        self.assertIn("msci_return_pct: true", js)
+
     def test_system_theme_is_reachable(self) -> None:
         """The two-state toggle this replaced had no way back to 'follow the OS'.
 

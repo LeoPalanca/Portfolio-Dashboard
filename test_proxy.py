@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 import app
+import pandas as pd
 
 
 class PriceHistoryLookupTest(unittest.TestCase):
@@ -31,10 +32,60 @@ class PriceHistoryLookupTest(unittest.TestCase):
             def get_cached(self, *args):
                 return payload
 
+            def get_covered(self, *args):
+                return payload
+
         with patch.object(app, "get_history_store", return_value=FakeStore()), patch.object(app, "yf", object()):
             result = app.fetch_history("ABC", date(2024, 6, 1), date(2024, 6, 30))
 
         self.assertIs(result, payload)
+
+    def test_fetch_history_fills_a_missing_cached_range(self) -> None:
+        partial = {
+            "symbol": "ABC",
+            "currency": "EUR",
+            "status": "priced",
+            "fetched_at": 1,
+            "prices": {"2026-07-16": 42.0},
+        }
+
+        class FakeStore:
+            merged = None
+
+            def get_cached(self, *args):
+                return partial
+
+            def get_covered(self, *args):
+                return None
+
+            def merge(self, _symbol, payload, _start, _end):
+                self.merged = payload
+                return payload
+
+            def replace_prices(self, *_args):
+                raise AssertionError("no split rewrite expected")
+
+        class FakeTicker:
+            fast_info = {"currency": "EUR"}
+            splits = {}
+
+            def history(self, **_kwargs):
+                return pd.DataFrame(
+                    {"Close": [40.0, 42.0]},
+                    index=pd.to_datetime(["2024-06-03", "2026-07-16"]),
+                )
+
+        class FakeYFinance:
+            @staticmethod
+            def Ticker(_symbol):
+                return FakeTicker()
+
+        store = FakeStore()
+        with patch.object(app, "get_history_store", return_value=store), patch.object(app, "yf", FakeYFinance()):
+            result = app.fetch_history("ABC", date(2024, 6, 1), date(2026, 8, 30))
+
+        self.assertEqual(result["prices"]["2024-06-03"], 40.0)
+        self.assertIsNotNone(store.merged)
 
     def test_london_tickers_keep_pence_currency_fallback(self) -> None:
         self.assertEqual(app.infer_currency("IWQU.L"), "GBp")

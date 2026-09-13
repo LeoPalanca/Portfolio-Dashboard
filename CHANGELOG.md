@@ -3,6 +3,21 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.6.8 - 2026-09-02
+
+### Fixed
+
+- Historical valuation now rejects partial price caches that do not cover the
+  requested timeline and fills the missing range when the provider is available.
+  Stale partial data remains an offline fallback instead of masquerading as full
+  history.
+- Period performance uses cash-flow-adjusted, time-weighted returns. Changes in
+  pricing coverage are excluded from performance, preventing a newly available
+  quote from appearing as an investment gain.
+- The MSCI World comparison is visible by default, and changing the timeline no
+  longer replaces the accurate live headline value with a partial historical
+  valuation.
+
 ## 0.6.7 - 2026-09-02
 
 ### Fixed
