@@ -36,6 +36,24 @@
       </div>
     </div>
     <div class="topbar-actions">
+      <div class="update-wrap" id="update-wrap" hidden>
+        <button id="update-toggle" type="button" aria-expanded="false" aria-controls="update-panel">
+          <span class="update-signal" aria-hidden="true"></span>
+          <span id="update-label">Update available</span>
+        </button>
+        <div id="update-panel" class="update-panel" role="dialog" aria-label="Dashboard update" hidden>
+          <div class="update-panel-heading">
+            <span class="update-eyebrow">GitHub release</span>
+            <strong id="update-version"></strong>
+          </div>
+          <p id="update-message" class="update-message"></p>
+          <pre id="update-changelog" class="update-changelog"></pre>
+          <div class="update-panel-actions">
+            <a id="update-release-link" href="https://github.com/LeoPalanca/Portfolio-Dashboard/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+            <button id="update-install" type="button">Install update</button>
+          </div>
+        </div>
+      </div>
       <button id="import-data" type="button" aria-haspopup="dialog">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M8 8l4-4 4 4"/><path d="M5 14v5h14v-5"/></svg>
         <span>Import data</span>
@@ -100,6 +118,10 @@
             <div class="settings-label" id="settings-sections-label">Sections</div>
             <ul class="settings-sections" id="settings-sections" aria-labelledby="settings-sections-label"></ul>
             <button type="button" class="settings-reset" id="settings-sections-reset">Reset to default</button>
+          </div>
+          <div class="settings-group settings-credits">
+            <div class="settings-label">Credits</div>
+            <a href="https://ellep.it" target="_blank" rel="noopener noreferrer">Created by Leonardo · ellep.it</a>
           </div>
         </div>
       </div>

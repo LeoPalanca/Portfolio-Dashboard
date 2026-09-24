@@ -7,6 +7,7 @@ import_max_bytes = 52428800
 # Explicit opt-in for legacy automatic discovery in ~/Downloads.
 scan_downloads = false
 edition_suffix = ""
+auto_update_enabled = false # Enable only after installing the protected host-side updater.
 # Approximate compositions are opt-in on public/fresh installations.
 default_proxy_mode = "off"
 # Defaults used only when a statement supplies a net amount without explicit tax.

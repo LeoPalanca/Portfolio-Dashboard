@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for Portfolio Dashboard update requests
+
+[Path]
+PathExists=/var/lib/portfolio-dashboard/update/request.json
+Unit=portfolio-dashboard-update.service
+
+[Install]
+WantedBy=multi-user.target

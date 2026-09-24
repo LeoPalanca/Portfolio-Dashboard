@@ -1,0 +1,15 @@
+[Unit]
+Description=Install a verified Portfolio Dashboard GitHub update
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/portfolio-dashboard
+ExecStart=/opt/portfolio-dashboard/.venv/bin/python /opt/portfolio-dashboard/scripts/install_github_update.py
+TimeoutStartSec=900
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/portfolio-dashboard /opt/portfolio-dashboard-source /var/lib/portfolio-dashboard/update

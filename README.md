@@ -78,6 +78,24 @@ For local background operation:
 ./dashboard.sh stop
 ```
 
+### Optional GitHub update control
+
+The top bar checks GitHub main for a newer semantic version and displays the
+new release notes. The check does not modify local files. The **Install update**
+button is disabled unless `auto_update_enabled = true` is configured and the
+restricted host-side updater is installed. Do not enable it on an exposed,
+unauthenticated web deployment; the app is intended to remain loopback-only.
+
+For the Pi systemd deployment, the updater uses a separate Git checkout at
+`/opt/portfolio-dashboard-source`. Commit any Pi-only code customizations on
+that checkout's local branch before enabling updates, and write its deployed
+commit hash to `/var/lib/portfolio-dashboard/update/deployed-head`. Install
+the two units in `deploy/systemd/`, enable `portfolio-dashboard-update.path`,
+and set `PORTFOLIO_AUTO_UPDATE_ENABLED=true` for the dashboard service. The
+updater merges GitHub main, refuses conflicts or drift in installed code,
+copies only changed tracked files (never private `data/` or `config.toml`),
+and restarts the service with rollback on a failed startup.
+
 ## Supported inputs
 
 Platform exports are not interchangeable. Select the matching source and use the

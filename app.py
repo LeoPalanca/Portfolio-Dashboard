@@ -9,6 +9,7 @@ import json
 import math
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import tempfile
@@ -31,6 +32,7 @@ from openpyxl import Workbook, load_workbook
 from werkzeug.utils import secure_filename
 
 from src.portfolio_dashboard import APP_VERSION, display_version
+from src.portfolio_dashboard.updates import github_release_status
 from src.portfolio_dashboard.cache import HistoryStore
 from src.portfolio_dashboard.config import get_settings
 from src.portfolio_dashboard.domain import (
@@ -164,6 +166,10 @@ _DASHBOARD_CACHE_LOCK = threading.Lock()
 _DASHBOARD_MEMORY_CACHE: dict[Path, tuple[str, dict[str, Any], bytes]] = {}
 _PRICE_REFRESH_JOBS_LOCK = threading.Lock()
 _PRICE_REFRESH_JOBS: dict[Path, dict[str, Any]] = {}
+_UPDATE_STATUS_LOCK = threading.Lock()
+_UPDATE_STATUS_CACHE: dict[str, Any] = {"fetched_at": 0, "release": None}
+_UPDATE_TOKEN = secrets.token_urlsafe(32)
+UPDATE_STATE_DIR = SETTINGS.data_path("update")
 PRICE_TTL_SECONDS = 15 * 60
 HISTORY_TTL_SECONDS = 12 * 60 * 60
 NEWS_TTL_SECONDS = 60 * 60
@@ -175,6 +181,30 @@ _CACHE_WRITE_LOCK = threading.RLock()
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = SETTINGS.import_max_bytes
 app.jinja_env.keep_trailing_newline = True
+
+
+def update_release_status() -> dict[str, Any]:
+    with _UPDATE_STATUS_LOCK:
+        if _UPDATE_STATUS_CACHE["release"] is None or time.time() - _UPDATE_STATUS_CACHE["fetched_at"] > 600:
+            _UPDATE_STATUS_CACHE["release"] = github_release_status(APP_VERSION)
+            _UPDATE_STATUS_CACHE["fetched_at"] = time.time()
+        return dict(_UPDATE_STATUS_CACHE["release"])
+
+
+def update_job_status() -> dict[str, Any]:
+    path = UPDATE_STATE_DIR / "status.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else {"state": "idle"}
+    except (OSError, ValueError):
+        return {"state": "idle"}
+
+
+def write_update_job_status(value: dict[str, Any]) -> None:
+    UPDATE_STATE_DIR.mkdir(parents=True, exist_ok=True)
+    temporary = UPDATE_STATE_DIR / "status.tmp"
+    temporary.write_text(json.dumps(value), encoding="utf-8")
+    os.replace(temporary, UPDATE_STATE_DIR / "status.json")
 
 
 @app.errorhandler(413)
@@ -8794,6 +8824,45 @@ def api_export():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.get("/api/update")
+def api_update_status():
+    try:
+        release = update_release_status()
+    except (OSError, ValueError, KeyError) as exc:
+        return jsonify({"error": f"Could not check GitHub for updates: {exc}", "job": update_job_status()}), 503
+    can_install = SETTINGS.auto_update_enabled and (UPDATE_STATE_DIR / "deployed-head").exists()
+    return jsonify({**release, "can_install": can_install, "job": update_job_status()})
+
+
+@app.post("/api/update")
+def api_request_update():
+    if not SETTINGS.auto_update_enabled or not (UPDATE_STATE_DIR / "deployed-head").exists():
+        return jsonify({"error": "Automatic updates are not configured on this installation."}), 403
+    token = request.headers.get("X-Update-Token", "")
+    if not secrets.compare_digest(token, _UPDATE_TOKEN):
+        return jsonify({"error": "Update authorization failed. Reload the page and try again."}), 403
+    origin = request.headers.get("Origin")
+    if origin and urllib.parse.urlsplit(origin).netloc != request.host:
+        return jsonify({"error": "Update requests must come from this dashboard."}), 403
+    try:
+        release = update_release_status()
+    except (OSError, ValueError, KeyError) as exc:
+        return jsonify({"error": f"Could not verify the GitHub release: {exc}"}), 503
+    if not release["available"]:
+        return jsonify({"error": "This dashboard is already up to date."}), 409
+    if update_job_status().get("state") in {"queued", "running"} or (UPDATE_STATE_DIR / "request.json").exists():
+        return jsonify({"error": "An update is already in progress."}), 409
+    try:
+        UPDATE_STATE_DIR.mkdir(parents=True, exist_ok=True)
+        write_update_job_status({"state": "queued", "version": release["latest_version"]})
+        temporary = UPDATE_STATE_DIR / "request.tmp"
+        temporary.write_text(json.dumps({"requested_at": datetime.now(timezone.utc).isoformat()}), encoding="utf-8")
+        os.replace(temporary, UPDATE_STATE_DIR / "request.json")
+    except OSError as exc:
+        return jsonify({"error": f"Could not queue the update: {exc}"}), 500
+    return jsonify({"state": "queued", "latest_version": release["latest_version"]}), 202
+
+
 @app.get("/")
 def index():
     profiles = [(PRIMARY_PORTFOLIO_ID, PRIMARY_PORTFOLIO_NAME)] + [
@@ -8821,6 +8890,7 @@ def index():
                 else None
             ),
             "appVersion": DISPLAY_VERSION,
+            "updateToken": _UPDATE_TOKEN,
             "defaultProxyMode": DEFAULT_PROXY_MODE,
             "hasMultiplePortfolios": len(profiles) > 1,
             "annualRiskFreeRate": SETTINGS.annual_risk_free_rate,

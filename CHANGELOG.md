@@ -3,6 +3,19 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.8.0 - 2026-09-24
+
+### Added
+
+- The options menu credits Leonardo and links to ellep.it.
+- A top-bar update box appears when GitHub main has a newer version and shows
+  the intervening release changelog. An opt-in, CSRF-protected update action
+  queues a host-side Git merge and deployment, preserving local customizations
+  and refusing conflicting or locally modified files.
+- A restricted systemd updater for Pi installations stages only changed code,
+  verifies startup, reports progress, and rolls back installed files if the new
+  service fails its health check.
+
 ## 0.7.0 - 2026-09-24
 
 ### Added

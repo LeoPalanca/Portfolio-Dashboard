@@ -92,6 +92,7 @@ class Settings(BaseSettings):
     import_max_bytes: int = 50 * 1024 * 1024
     scan_downloads: bool = False
     edition_suffix: str = ""
+    auto_update_enabled: bool = False
     default_proxy_mode: Literal["off", "on"] = "off"
     fineco_withholding_tax_rate: Decimal = Field(default=Decimal("0.26"), ge=0, lt=1)
     bbva_interest_tax_rate: Decimal = Field(default=Decimal("0.26"), ge=0, lt=1)

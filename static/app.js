@@ -3698,6 +3698,85 @@
 
     initializeSectionIdentity();
     initializeSectionWrapButtons();
+    const updateWrap = document.getElementById("update-wrap");
+    const updateToggle = document.getElementById("update-toggle");
+    const updatePanel = document.getElementById("update-panel");
+    const updateInstall = document.getElementById("update-install");
+    let updatePending = false;
+    let updatePoll = null;
+    async function checkForDashboardUpdate() {
+      try {
+        const response = await fetch("/api/update", { cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not check GitHub for updates.");
+        if (updatePending && data.job?.state === "done") {
+          window.location.reload();
+          return;
+        }
+        if (data.job?.state === "error") updatePending = false;
+        if (!data.available && !updatePending) {
+          updateWrap.hidden = true;
+          return;
+        }
+        updateWrap.hidden = false;
+        document.getElementById("update-label").textContent = data.available
+          ? `Update v${data.latest_version}` : "Updating dashboard";
+        document.getElementById("update-version").textContent = `v${data.current_version} → v${data.latest_version}`;
+        document.getElementById("update-changelog").textContent = data.changelog || "No release notes were published for this version.";
+        const job = data.job || {};
+        const busy = updatePending || job.state === "queued" || job.state === "running";
+        updateInstall.disabled = !data.can_install || busy;
+        updateInstall.textContent = busy ? "Installing…" : "Install update";
+        document.getElementById("update-message").textContent = job.state === "error"
+          ? `Update stopped: ${job.error || "check the updater log."}`
+          : busy ? (job.message || "The dashboard will restart when installation finishes.")
+            : data.can_install ? "Review the release notes, then install from GitHub. Your local data stays in place."
+              : "This installation has no automatic updater configured.";
+        if (busy && !updatePoll) updatePoll = window.setInterval(checkForDashboardUpdate, 5000);
+        if (!busy && updatePoll) { window.clearInterval(updatePoll); updatePoll = null; }
+      } catch (error) {
+        if (updatePending) {
+          document.getElementById("update-message").textContent = "Dashboard is restarting. Checking again shortly…";
+        }
+      }
+    }
+    updateToggle.addEventListener("click", () => {
+      const opened = updatePanel.hidden;
+      updatePanel.hidden = !opened;
+      updateToggle.setAttribute("aria-expanded", String(opened));
+    });
+    document.addEventListener("click", event => {
+      if (!updateWrap.contains(event.target)) {
+        updatePanel.hidden = true;
+        updateToggle.setAttribute("aria-expanded", "false");
+      }
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        updatePanel.hidden = true;
+        updateToggle.setAttribute("aria-expanded", "false");
+      }
+    });
+    updateInstall.addEventListener("click", async () => {
+      if (!window.confirm("Install this GitHub release and restart the dashboard?")) return;
+      updateInstall.disabled = true;
+      try {
+        const response = await fetch("/api/update", {
+          method: "POST",
+          headers: { "X-Update-Token": APP_CONFIG.updateToken || "" }
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not start the update.");
+        updatePending = true;
+        document.getElementById("update-message").textContent = "Update queued. The dashboard will restart after installation.";
+        checkForDashboardUpdate();
+      } catch (error) {
+        updateInstall.disabled = false;
+        document.getElementById("update-message").textContent = error.message;
+      }
+    });
+    checkForDashboardUpdate();
+    window.setInterval(checkForDashboardUpdate, 15 * 60 * 1000);
     checkImportOnboarding();
     updatePeriodButtons();
     const refreshOnLogin = refreshOnLoginEnabled();
