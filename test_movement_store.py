@@ -46,6 +46,7 @@ class MovementStoreTest(unittest.TestCase):
         self.assertEqual(second.duplicate_count, 1)
         self.assertEqual(summary["imports"], 2)
         self.assertEqual(summary["movements"], 1)
+        self.assertEqual(summary["sources"][0]["last_imported_at"], second.imported_at)
 
     def test_finds_an_existing_import_by_file_hash(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -87,11 +88,15 @@ class MovementStoreTest(unittest.TestCase):
 
             primary_rows = store.movements("primary")
             partner_rows = store.movements("partner")
+            primary_summary = store.summary("primary")
+            partner_summary = store.summary("partner")
 
         self.assertEqual(primary.movement_count, 1)
         self.assertEqual(partner.movement_count, 1)
         self.assertEqual(len(primary_rows), 1)
         self.assertEqual(len(partner_rows), 1)
+        self.assertEqual(primary_summary["sources"][0]["last_imported_at"], primary.imported_at)
+        self.assertEqual(partner_summary["sources"][0]["last_imported_at"], partner.imported_at)
 
     def test_migrates_v1_database_to_configured_primary_portfolio(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

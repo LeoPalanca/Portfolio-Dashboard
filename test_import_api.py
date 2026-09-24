@@ -43,6 +43,10 @@ class ImportApiTest(unittest.TestCase):
         self.assertEqual(first.get_json()["movements"], 2)
         self.assertEqual(second.get_json()["status"], "duplicate")
         self.assertEqual(status.get_json()["movements"], 2)
+        self.assertRegex(
+            status.get_json()["sources"][0]["last_imported_at"],
+            r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$",
+        )
         supported = {item["id"]: item["format"] for item in status.get_json()["supported_sources"]}
         self.assertEqual(supported["trade_republic"], "CSV")
         self.assertEqual(supported["interactive_brokers"], "PDF")

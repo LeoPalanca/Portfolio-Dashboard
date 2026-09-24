@@ -6,7 +6,6 @@ import unittest
 from unittest.mock import patch
 
 import app
-import pandas as pd
 
 
 class PriceHistoryLookupTest(unittest.TestCase):
@@ -58,6 +57,9 @@ class PriceHistoryLookupTest(unittest.TestCase):
             def get_covered(self, *args):
                 return None
 
+            def has_start_coverage(self, *args):
+                return False
+
             def merge(self, _symbol, payload, _start, _end):
                 self.merged = payload
                 return payload
@@ -65,27 +67,145 @@ class PriceHistoryLookupTest(unittest.TestCase):
             def replace_prices(self, *_args):
                 raise AssertionError("no split rewrite expected")
 
-        class FakeTicker:
-            fast_info = {"currency": "EUR"}
-            splits = {}
-
-            def history(self, **_kwargs):
-                return pd.DataFrame(
-                    {"Close": [40.0, 42.0]},
-                    index=pd.to_datetime(["2024-06-03", "2026-07-16"]),
-                )
-
-        class FakeYFinance:
-            @staticmethod
-            def Ticker(_symbol):
-                return FakeTicker()
-
         store = FakeStore()
-        with patch.object(app, "get_history_store", return_value=store), patch.object(app, "yf", FakeYFinance()):
+        chart = {
+            "symbol": "ABC",
+            "currency": "EUR",
+            "prices": {"2024-06-03": 40.0, "2026-07-16": 42.0},
+            "splits": {},
+        }
+        with patch.object(app, "get_history_store", return_value=store), patch.object(
+            app, "fetch_yahoo_chart", return_value=chart
+        ):
             result = app.fetch_history("ABC", date(2024, 6, 1), date(2026, 8, 30))
 
         self.assertEqual(result["prices"]["2024-06-03"], 40.0)
         self.assertIsNotNone(store.merged)
+
+    def test_stale_latest_price_is_refreshed_with_actual_market_date(self) -> None:
+        cache = {
+            "ABC": {
+                "symbol": "ABC",
+                "currency": "EUR",
+                "price": 40.0,
+                "price_date": "2026-08-27",
+                "status": "priced",
+                "fetched_at": 1,
+            }
+        }
+        chart = {
+            "symbol": "ABC",
+            "currency": "EUR",
+            "prices": {"2026-09-11": 49.0, "2026-09-14": 50.0},
+            "splits": {},
+        }
+        with (
+            patch.object(app, "get_price_cache", return_value=cache),
+            patch.object(app, "fetch_yahoo_chart", return_value=chart),
+            patch.object(app, "save_json"),
+        ):
+            result = app.fetch_price("ABC")
+
+        self.assertEqual(result["price"], 50.0)
+        self.assertEqual(result["price_date"], "2026-09-14")
+        self.assertEqual(result["source"], "yahoo_chart")
+
+    def test_forced_quote_refresh_reuses_history_and_skips_other_assets(self) -> None:
+        cache = {
+            "ABC": {
+                "symbol": "ABC",
+                "currency": "EUR",
+                "price": 40.0,
+                "price_date": "2026-09-15",
+                "status": "priced",
+                "fetched_at": int(time.time()),
+            }
+        }
+        chart = {
+            "symbol": "ABC",
+            "currency": "EUR",
+            "prices": {"2026-09-16": 50.0},
+            "splits": {},
+        }
+        with (
+            patch.object(app, "get_price_cache", return_value=cache),
+            patch.object(app, "fetch_yahoo_chart", return_value=chart) as fetch,
+            patch.object(app, "get_history_store") as history_store,
+            patch.object(app, "save_json"),
+        ):
+            app.refresh_price_cache({"ABC"}, force=True)
+
+        fetch.assert_called_once_with("ABC", range_period="1mo")
+        history_store.return_value.merge.assert_called_once()
+        self.assertEqual(cache["ABC"]["price"], 50.0)
+        self.assertEqual(cache["ABC"]["price_date"], "2026-09-16")
+
+    def test_failed_refresh_does_not_relabel_old_history_as_fresh(self) -> None:
+        fallback = {
+            "symbol": "ABC",
+            "currency": "EUR",
+            "price": 40.0,
+            "price_date": "2026-08-27",
+            "status": "priced",
+            "fetched_at": 123,
+            "source": "history_cache",
+        }
+        with (
+            patch.object(app, "get_price_cache", return_value={}),
+            patch.object(app, "fetch_yahoo_chart", side_effect=TimeoutError("timed out")),
+            patch.object(app, "latest_cached_history_price", return_value=fallback),
+        ):
+            result = app.fetch_price("ABC", refresh=True)
+
+        self.assertEqual(result["fetched_at"], 123)
+        self.assertEqual(result["price_date"], "2026-08-27")
+        self.assertTrue(result["cache_stale"])
+        self.assertEqual(result["refresh_error"], "timed out")
+
+    def test_refresh_keeps_resolved_symbol_when_lookup_fails(self) -> None:
+        cached = {
+            "US0079031078": {
+                "isin": "US0079031078",
+                "symbol": "AMD",
+                "status": "resolved",
+                "resolved_at": 1,
+            }
+        }
+
+        class FailingYFinance:
+            @staticmethod
+            def Search(*_args, **_kwargs):
+                raise RuntimeError("temporary lookup failure")
+
+        with (
+            patch.object(app, "get_symbol_cache", return_value=cached),
+            patch.object(app, "save_json") as save,
+            patch.object(app, "yf", FailingYFinance()),
+        ):
+            result = app.resolve_isin("US0079031078", refresh=True)
+
+        self.assertEqual(result["symbol"], "AMD")
+        self.assertEqual(result["status"], "resolved")
+        self.assertTrue(result["cache_stale"])
+        self.assertEqual(result["refresh_error"], "temporary lookup failure")
+        self.assertEqual(cached["US0079031078"]["symbol"], "AMD")
+        save.assert_not_called()
+
+    def test_missing_yfinance_reuses_resolved_symbol(self) -> None:
+        cached = {
+            "US0079031078": {
+                "isin": "US0079031078",
+                "symbol": "AMD",
+                "status": "resolved",
+            }
+        }
+
+        with patch.object(app, "get_symbol_cache", return_value=cached), patch.object(app, "yf", None):
+            result = app.resolve_isin("US0079031078", refresh=True)
+
+        self.assertEqual(result["symbol"], "AMD")
+        self.assertEqual(result["status"], "resolved")
+        self.assertTrue(result["cache_stale"])
 
     def test_london_tickers_keep_pence_currency_fallback(self) -> None:
         self.assertEqual(app.infer_currency("IWQU.L"), "GBp")

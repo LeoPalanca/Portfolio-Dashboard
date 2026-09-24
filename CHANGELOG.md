@@ -3,6 +3,27 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.6.9 - 2026-09-24
+
+### Added
+
+- The statement import dialog shows the latest import time for each platform
+  with data in the selected portfolio.
+
+### Fixed
+
+- The selected-window comparison now shows the portfolio’s return gap against
+  MSCI World in percentage points and both window returns, alongside clearly
+  labeled time and area ahead percentages.
+- Time-weighted portfolio returns retain intervals with buys and sells; only a
+  change in quote coverage for the same number of holdings is excluded. This
+  corrects understated returns when the portfolio added or closed positions.
+- Current portfolio prices refresh through a background job while the existing
+  dashboard remains available, with progress shown in the refresh button.
+- Quote fetching, partial history repair, and cached valuation rebuilds keep
+  current prices and historical performance in sync without forcing a full
+  history download on each manual price refresh.
+
 ## 0.6.8 - 2026-09-02
 
 ### Fixed

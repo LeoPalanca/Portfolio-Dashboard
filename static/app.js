@@ -200,6 +200,10 @@
     const importDropzone = document.getElementById("import-dropzone");
     const importStatus = document.getElementById("import-status");
     const importSubmit = document.getElementById("import-submit");
+    const importLatest = document.getElementById("import-latest");
+    const importLatestList = document.getElementById("import-latest-list");
+    const importDateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+    let importHistoryRequestId = 0;
     const CUSTOM_PERIOD_START_KEY = "customPeriodStart";
     const SELECTED_PERIOD_KEY = "selectedPeriod";
     const VALID_PERIODS = new Set(["1w", "1m", "ytd", "1y", "custom", "all"]);
@@ -244,18 +248,61 @@
       statsInfo.innerHTML = `<strong>Volatility & Risk Summary:</strong> Daily variance, standard deviation (volatility), and annualized volatility are calculated using the strictly daily business-day return series of the portfolio and the MSCI World index. Sharpe ratio is annualized assuming a ${pct}% risk-free rate.`;
     }
 
-    function openImportDialog(firstRun = false) {
+    function renderImportHistory(status) {
+      importLatestList.replaceChildren();
+      const labels = new Map((status.supported_sources || []).map(source => [source.id, source.label]));
+      const sources = (status.sources || [])
+        .filter(source => labels.has(source.source) && source.last_imported_at && Number.isFinite(Date.parse(source.last_imported_at)))
+        .sort((left, right) => left.source.localeCompare(right.source));
+      for (const source of sources) {
+        const item = document.createElement("li");
+        const label = document.createElement("span");
+        const date = document.createElement("time");
+        label.textContent = labels.get(source.source);
+        date.dateTime = source.last_imported_at;
+        date.textContent = importDateFormatter.format(new Date(source.last_imported_at));
+        item.append(label, date);
+        importLatestList.append(item);
+      }
+      importLatest.hidden = sources.length === 0;
+    }
+
+    async function loadImportHistory() {
+      const requestId = ++importHistoryRequestId;
+      const person = selectedPerson;
+      try {
+        const response = await fetch(`/api/imports/status?portfolio_id=${encodeURIComponent(person)}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("Import history unavailable");
+        const status = await response.json();
+        if (requestId === importHistoryRequestId && person === selectedPerson && importModal.classList.contains("open")) {
+          renderImportHistory(status);
+        }
+      } catch (error) {
+        if (requestId === importHistoryRequestId) importLatest.hidden = true;
+        console.warn("Import history unavailable:", error);
+      }
+    }
+
+    function openImportDialog(firstRun = false, initialStatus = null) {
       document.getElementById("import-title").textContent = firstRun ? "Welcome — import your first statement" : "Import your statements";
       document.getElementById("import-intro").textContent = firstRun
         ? "Start with any supported broker or bank export. It stays on this computer and is normalized into a private SQLite ledger."
         : "Upload the platform’s native export format. Files stay on this computer and are normalized into the local SQLite movement ledger.";
       importStatus.textContent = "";
       importStatus.className = "import-status";
+      importLatest.hidden = true;
       importModal.classList.add("open");
+      if (initialStatus) {
+        ++importHistoryRequestId;
+        renderImportHistory(initialStatus);
+      } else {
+        void loadImportHistory();
+      }
       window.setTimeout(() => importFile.focus(), 80);
     }
 
     function closeImportDialog() {
+      ++importHistoryRequestId;
       importModal.classList.remove("open");
     }
 
@@ -267,7 +314,7 @@
       try {
         const response = await fetch(`/api/imports/status?portfolio_id=${encodeURIComponent(selectedPerson)}`);
         const status = await response.json();
-        if (response.ok && !status.ready && status.imports === 0) openImportDialog(true);
+        if (response.ok && !status.ready && status.imports === 0) openImportDialog(true, status);
       } catch (error) {
         console.warn("Import status unavailable:", error);
       }
@@ -313,6 +360,7 @@
           : `${result.source_label}: ${result.movements} new movement${result.movements === 1 ? "" : "s"} stored${result.duplicates ? `, ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} skipped` : ""}.`;
         importForm.reset();
         updateSelectedImportFile();
+        void loadImportHistory();
         window.setTimeout(() => {
           closeImportDialog();
           load(false, "Loading imported data");
@@ -902,7 +950,13 @@
           const previousValue = Number(previous[valueKey] || 0);
           const currentValue = Number(point[valueKey] || 0);
           const cashFlow = Number(point[contributionKey] || 0) - Number(previous[contributionKey] || 0);
-          const coverageChanged = Number(point.priced_positions || 0) !== Number(previous.priced_positions || 0);
+          const previousPriced = Number(previous.priced_positions || 0);
+          const currentPriced = Number(point.priced_positions || 0);
+          const previousHoldings = previousPriced + Number(previous.unpriced_positions || 0);
+          const currentHoldings = currentPriced + Number(point.unpriced_positions || 0);
+          // A buy or sale changes the holdings count, not quote coverage. Cash-flow
+          // adjustment already accounts for that trade, so retain its return interval.
+          const coverageChanged = previousHoldings === currentHoldings && previousPriced !== currentPriced;
           if (!coverageChanged && previousValue > 0 && Number.isFinite(currentValue) && Number.isFinite(cashFlow)) {
             const intervalFactor = (currentValue - cashFlow) / previousValue;
             if (Number.isFinite(intervalFactor) && intervalFactor >= 0) growth *= intervalFactor;
@@ -1017,15 +1071,25 @@
       const outperformanceScores = timeWeightedOutperformanceScores(normalizedReturns);
       const scoreFreq = outperformanceScores.timeScore;
       const scoreWeighted = outperformanceScores.areaScore;
+      const finalReturns = normalizedReturns.length >= 2 ? normalizedReturns[normalizedReturns.length - 1] : null;
+      const returnGap = finalReturns ? finalReturns.return_pct - finalReturns.msci_return_pct : null;
+      const returnGapLabel = returnGap === null ? "—" : `${returnGap > 0 ? "+" : ""}${returnGap.toFixed(1)} pp`;
+      const windowReturnLabel = finalReturns
+        ? `Window ${isTotal ? "total" : "price"} return: Portfolio ${finalReturns.return_pct.toFixed(1)}% · MSCI ETF ${finalReturns.msci_return_pct.toFixed(1)}%`
+        : "Select a window with at least two dates to compare returns.";
 
       const scorePills = `
-        <button type="button" id="freq-pill" class="score-pill teal ${returnVisibility.freq_score ? "active" : ""}" title="Toggle time-weighted outperformance line">
-          <span class="score-pill-label">Time > MSCI</span>
-          <span class="score-pill-value" style="color: ${scoreFreq >= 50 ? 'var(--positive)' : 'var(--negative)'};">${scoreFreq.toFixed(1)}%</span>
+        <span class="score-pill return-gap" title="Portfolio return minus MSCI World return in the selected window">
+          <span class="score-pill-label">Return gap</span>
+          <span class="score-pill-value" style="color: ${returnGap === null ? 'var(--text-muted)' : returnGap >= 0 ? 'var(--positive)' : 'var(--negative)'};">${returnGapLabel}</span>
+        </span>
+        <button type="button" id="freq-pill" class="score-pill teal ${returnVisibility.freq_score ? "active" : ""}" title="Toggle the line showing the percentage of time the portfolio return was above MSCI World">
+          <span class="score-pill-label">Time ahead</span>
+          <span class="score-pill-value" style="color: ${scoreFreq >= 50 ? 'var(--positive)' : 'var(--negative)'};">${normalizedReturns.length >= 2 ? `${scoreFreq.toFixed(1)}%` : "—"}</span>
         </button>
-        <button type="button" id="weighted-pill" class="score-pill violet ${returnVisibility.weighted_score ? "active" : ""}" title="Toggle area-weighted outperformance line">
-          <span class="score-pill-label">Area</span>
-          <span class="score-pill-value" style="color: ${scoreWeighted >= 50 ? 'var(--positive)' : 'var(--negative)'};">${scoreWeighted.toFixed(1)}%</span>
+        <button type="button" id="weighted-pill" class="score-pill violet ${returnVisibility.weighted_score ? "active" : ""}" title="Toggle the line showing the share of return-gap area where the portfolio was above MSCI World">
+          <span class="score-pill-label">Area ahead</span>
+          <span class="score-pill-value" style="color: ${scoreWeighted >= 50 ? 'var(--positive)' : 'var(--negative)'};">${normalizedReturns.length >= 2 ? `${scoreWeighted.toFixed(1)}%` : "—"}</span>
         </button>
       `;
 
@@ -1064,8 +1128,9 @@
             <div class="chart-control-items">${retHtml.join("")}</div>
           </div>
           <div class="chart-control-group">
-            <div class="chart-control-title">Outperformance</div>
+            <div class="chart-control-title">Against MSCI World</div>
             <div class="chart-control-items">${scorePills}</div>
+            <div class="chart-control-note">${windowReturnLabel}</div>
           </div>
           <div class="chart-control-group">
             <div class="chart-control-title">Events</div>
@@ -3032,6 +3097,8 @@
       }
     }
 
+    let priceRefreshBusy = false;
+
     async function load(refresh = false, label = "Updating dashboard") {
       const requestId = ++loadRequestId;
       const button = document.getElementById("refresh");
@@ -3039,27 +3106,74 @@
       button.disabled = true;
       error.style.display = "none";
       setDashboardBusy(true, label);
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 120000);
       try {
         const params = currentQueryParams();
         if (refresh) params.set("refresh", "1");
-        const portfolioRes = await fetch(`/api/portfolio?${params.toString()}`);
+        const portfolioRes = await fetch(`/api/portfolio?${params.toString()}`, { signal: controller.signal });
         const data = await portfolioRes.json();
         if (!portfolioRes.ok) throw new Error(data.error || "Dashboard request failed.");
         if (requestId !== loadRequestId) return;
         dashboardData = data;
         renderDashboard(data);
-        loadNews(refresh, data.news_symbols || []);
-        loadWatchlist(refresh);
-        if (HAS_MULTIPLE_PORTFOLIOS) void loadRankings(params, requestId);
+        loadNews(false, data.news_symbols || []);
+        loadWatchlist(false);
+        if (HAS_MULTIPLE_PORTFOLIOS) {
+          params.delete("refresh");
+          void loadRankings(params, requestId);
+        }
       } catch (err) {
         if (requestId !== loadRequestId) return;
+        error.textContent = err.name === "AbortError"
+          ? "Price refresh timed out. Your last saved portfolio is still available; please try again."
+          : err.message;
+        error.style.display = "block";
+      } finally {
+        window.clearTimeout(timeout);
+        if (requestId === loadRequestId) {
+          button.disabled = priceRefreshBusy;
+          setDashboardBusy(false);
+        }
+      }
+    }
+
+    async function refreshPricesInBackground() {
+      if (priceRefreshBusy) return;
+      priceRefreshBusy = true;
+      const button = document.getElementById("refresh");
+      const buttonLabel = button.querySelector("span:last-child");
+      const error = document.getElementById("error");
+      const startedAt = Date.now();
+      const params = currentQueryParams();
+      const url = `/api/portfolio/refresh-prices?${params.toString()}`;
+      button.disabled = true;
+      error.style.display = "none";
+      try {
+        const startResponse = await fetch(url, { method: "POST" });
+        const started = await startResponse.json();
+        if (!startResponse.ok) throw new Error(started.error || "Could not start price refresh.");
+        while (Date.now() - startedAt < 6 * 60 * 1000) {
+          const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+          buttonLabel.textContent = `Refreshing prices · ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`;
+          await new Promise(resolve => window.setTimeout(resolve, 4000));
+          const statusResponse = await fetch(url, { cache: "no-store" });
+          const status = await statusResponse.json();
+          if (!statusResponse.ok) throw new Error(status.error || "Could not check price refresh.");
+          if (status.status === "error") throw new Error(status.error || "Price refresh failed.");
+          if (status.status === "done") {
+            await load(false, "Applying refreshed prices");
+            return;
+          }
+        }
+        throw new Error("Price refresh is taking unusually long. It is still running; try again shortly.");
+      } catch (err) {
         error.textContent = err.message;
         error.style.display = "block";
       } finally {
-        if (requestId === loadRequestId) {
-          button.disabled = false;
-          setDashboardBusy(false);
-        }
+        priceRefreshBusy = false;
+        button.disabled = false;
+        buttonLabel.textContent = "Refresh Prices";
       }
     }
     document.querySelectorAll("#periods button").forEach(button => {
@@ -3130,7 +3244,7 @@
       });
     });
     document.getElementById("refresh").addEventListener("click", () => {
-      load(true, "Refreshing live prices").finally(scheduleAutoRefresh);
+      refreshPricesInBackground().finally(scheduleAutoRefresh);
     });
     document.getElementById("export-button").addEventListener("click", exportDashboard);
 
@@ -3305,7 +3419,7 @@
       if (minutes === 0) return;
       autoRefreshTimer = window.setTimeout(async () => {
         try {
-          await load(true, "Automatically refreshing live prices");
+          await refreshPricesInBackground();
         } finally {
           scheduleAutoRefresh();
         }
@@ -3533,5 +3647,6 @@
     checkImportOnboarding();
     updatePeriodButtons();
     const refreshOnLogin = refreshOnLoginEnabled();
-    load(refreshOnLogin, refreshOnLogin ? "Refreshing live prices" : "Loading dashboard")
+    load(false, "Loading dashboard")
+      .then(() => refreshOnLogin ? refreshPricesInBackground() : undefined)
       .finally(scheduleAutoRefresh);

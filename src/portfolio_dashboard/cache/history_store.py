@@ -59,6 +59,23 @@ class HistoryStore:
                     return payload
         return None
 
+    def has_start_coverage(self, cache_key: str, start: date) -> bool:
+        """Whether any successful fetch began no later than the requested start."""
+
+        with self._lock:
+            record = self._read(cache_key)
+            if record.get("status") != "priced" or not record.get("prices"):
+                return False
+            for coverage in record.get("ranges", []):
+                try:
+                    covered_start = date.fromisoformat(str(coverage["start"]))
+                    covered_end = date.fromisoformat(str(coverage["end"]))
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if covered_start <= start <= covered_end:
+                    return True
+        return False
+
     def get_cached(self, cache_key: str, start: date, end: date) -> dict[str, Any] | None:
         """Return the latest stored series even when its coverage or TTL is stale."""
 
@@ -121,6 +138,7 @@ class HistoryStore:
                 "currency": record.get("currency") or "",
                 "price": float(prices[latest_date]),
                 "price_date": latest_date,
+                "fetched_at": int(record.get("updated_at", 0)),
             }
 
     def clear_memory(self) -> None:

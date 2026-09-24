@@ -391,10 +391,15 @@ class MovementStore:
             movement_where = where.replace("i.portfolio_id", "m.portfolio_id")
             movements = int(connection.execute(f"SELECT COUNT(*) FROM movements m {movement_where}", parameters).fetchone()[0])
             sources = [
-                {"source": row[0], "imports": int(row[1]), "movements": int(row[2] or 0)}
+                {
+                    "source": row[0],
+                    "imports": int(row[1]),
+                    "movements": int(row[2] or 0),
+                    "last_imported_at": row[3],
+                }
                 for row in connection.execute(
                     f"""
-                    SELECT i.source_kind, COUNT(DISTINCT i.id), COUNT(m.id)
+                    SELECT i.source_kind, COUNT(DISTINCT i.id), COUNT(m.id), MAX(i.imported_at)
                     FROM imports i LEFT JOIN movements m ON m.import_id = i.id
                     {where}
                     GROUP BY i.source_kind ORDER BY i.source_kind

@@ -125,9 +125,10 @@ class FrontendAssetTest(unittest.TestCase):
 
         self.assertIn('const DEFAULT_AUTO_REFRESH_MINUTES = 30;', js)
         self.assertIn('storedValue(REFRESH_ON_LOGIN_KEY) === "true"', js)
-        self.assertIn('load(refreshOnLogin, refreshOnLogin ?', js)
+        self.assertIn('load(false, "Loading dashboard")', js)
+        self.assertIn('refreshOnLogin ? refreshPricesInBackground()', js)
         self.assertIn('.finally(scheduleAutoRefresh)', js)
-        self.assertIn('await load(true, "Automatically refreshing live prices");', js)
+        self.assertIn('await refreshPricesInBackground();', js)
 
     def test_custom_period_is_editable_and_persists_across_login(self) -> None:
         html = render()

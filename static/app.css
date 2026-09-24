@@ -322,6 +322,8 @@ h1 {
 .import-modal.open { opacity: 1; pointer-events: auto; }
 .import-card {
   width: min(560px, 100%);
+  max-height: calc(100vh - 2 * var(--space-5));
+  overflow-y: auto;
   border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
   border-radius: var(--radius-lg);
   padding: var(--space-5);
@@ -351,6 +353,12 @@ h1 {
 .import-file-name { margin-top: var(--space-2); color: var(--accent); font-size: var(--text-sm); }
 .import-supported { padding: var(--space-3) var(--space-3); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--text-muted) 6%, transparent); }
 .import-supported strong { color: var(--text-secondary); }
+.import-latest { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.import-latest[hidden] { display: none; }
+.import-latest h3 { margin: 0; color: var(--text-secondary); font-size: var(--text-sm); font-weight: 600; }
+.import-latest ul { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.import-latest li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-3); font-size: var(--text-sm); }
+.import-latest time { color: var(--text-muted); }
 .import-templates { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); }
 .import-templates a {
   padding: var(--space-1) var(--space-2);
@@ -1234,6 +1242,7 @@ svg { width: 100%; height: 100%; display: block; }
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+.chart-control-note { color: var(--text-muted); font-size: var(--text-xs); line-height: 1.4; }
 .chart-control-items {
   display: flex;
   flex-wrap: wrap;
@@ -1265,6 +1274,7 @@ svg { width: 100%; height: 100%; display: block; }
   user-select: none;
   backdrop-filter: blur(10px);
 }
+.score-pill.return-gap { cursor: default; }
 .score-pill.active {
   color: var(--text-primary);
   box-shadow: var(--elev-glow);

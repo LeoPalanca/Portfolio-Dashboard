@@ -113,6 +113,46 @@ class HistoryStoreTest(unittest.TestCase):
         self.assertEqual(covered["prices"], {"2026-07-16": 10.0})
         self.assertTrue(covered["cache_stale"])
 
+    def test_latest_price_preserves_the_real_fetch_timestamp(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = HistoryStore(Path(temporary) / "history")
+            store.merge(
+                "ABC",
+                {
+                    "symbol": "ABC",
+                    "currency": "EUR",
+                    "status": "priced",
+                    "fetched_at": 123,
+                    "prices": {"2026-08-27": 40},
+                },
+                date(2026, 8, 1),
+                date(2026, 8, 27),
+            )
+
+            latest = store.latest_price("ABC")
+
+        self.assertEqual(latest["price_date"], "2026-08-27")
+        self.assertEqual(latest["fetched_at"], 123)
+
+    def test_start_coverage_survives_a_recent_incremental_merge(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = HistoryStore(Path(temporary) / "history")
+            store.merge(
+                "ABC",
+                {"symbol": "ABC", "currency": "EUR", "status": "priced", "fetched_at": 1, "prices": {"2024-01-02": 10}},
+                date(2024, 1, 1),
+                date(2026, 8, 27),
+            )
+            store.merge(
+                "ABC",
+                {"symbol": "ABC", "currency": "EUR", "status": "priced", "fetched_at": 2, "prices": {"2026-09-15": 11}},
+                date(2026, 9, 1),
+                date(2026, 9, 15),
+            )
+
+            self.assertTrue(store.has_start_coverage("ABC", date(2024, 1, 1)))
+            self.assertFalse(store.has_start_coverage("ABC", date(2023, 1, 1)))
+
 
 if __name__ == "__main__":
     unittest.main()

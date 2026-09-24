@@ -45,6 +45,7 @@ portfolio-dashboard-*.pdf
 portfolio-dashboard-*.xlsx
 
 # Editor/OS/session metadata
+/AGENTS.md
 .DS_Store
 .nodeterm/
 scratch/

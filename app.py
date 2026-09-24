@@ -19,6 +19,7 @@ import urllib.request
 import warnings
 import xml.etree.ElementTree as ET
 from bisect import bisect_right
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -161,6 +162,8 @@ DASHBOARD_CACHE_DIR = SETTINGS.cache_dir / "dashboard-payloads"
 DASHBOARD_CACHE_FORMAT_VERSION = 1
 _DASHBOARD_CACHE_LOCK = threading.Lock()
 _DASHBOARD_MEMORY_CACHE: dict[Path, tuple[str, dict[str, Any], bytes]] = {}
+_PRICE_REFRESH_JOBS_LOCK = threading.Lock()
+_PRICE_REFRESH_JOBS: dict[Path, dict[str, Any]] = {}
 PRICE_TTL_SECONDS = 15 * 60
 HISTORY_TTL_SECONDS = 12 * 60 * 60
 NEWS_TTL_SECONDS = 60 * 60
@@ -266,16 +269,35 @@ def dashboard_cache_path(
     return DASHBOARD_CACHE_DIR / f"{hashlib.sha256(encoded).hexdigest()}.json"
 
 
-def read_dashboard_cache(path: Path, signature: str) -> dict[str, Any] | None:
+def read_dashboard_cache(path: Path, signature: str, allow_expired: bool = False) -> dict[str, Any] | None:
     memory = _DASHBOARD_MEMORY_CACHE.get(path)
-    if memory is not None and memory[0] == signature:
+    if memory is not None and (allow_expired or memory[0] == signature) and (allow_expired or dashboard_snapshot_is_fresh(memory[1])):
         return memory[1]
     cached = load_json(path)
-    if cached.get("signature") != signature or not isinstance(cached.get("payload"), dict):
+    if (not allow_expired and cached.get("signature") != signature) or not isinstance(cached.get("payload"), dict):
         return None
     payload = cached["payload"]
+    if not allow_expired and not dashboard_snapshot_is_fresh(payload):
+        return None
     remember_dashboard_payload(path, signature, payload)
     return payload
+
+
+def dashboard_snapshot_is_fresh(payload: dict[str, Any]) -> bool:
+    """Expire generated snapshots so callers eventually receive fresh quotes."""
+
+    try:
+        generated_at = datetime.fromisoformat(str(payload["generated_at"]))
+    except (KeyError, TypeError, ValueError):
+        # Keep compatibility with older/test snapshots that have no parseable timestamp.
+        return True
+    now = datetime.now(generated_at.tzinfo) if generated_at.tzinfo else datetime.now()
+    return (now - generated_at).total_seconds() < PRICE_TTL_SECONDS
+
+
+def price_refresh_running(path: Path) -> bool:
+    with _PRICE_REFRESH_JOBS_LOCK:
+        return _PRICE_REFRESH_JOBS.get(path, {}).get("status") == "running"
 
 
 def write_dashboard_cache(path: Path, signature: str, payload: dict[str, Any]) -> None:
@@ -2909,10 +2931,11 @@ def family_dashboard_payload(
         if pos["asset"] in snapshot_values:
             pos["market_value_eur"] = float(snapshot_values[pos["asset"]])
 
+    refresh_price_cache(position_price_symbols(summary["positions"], mappings), force=refresh)
     priced = enrich_positions(
         summary["positions"],
         mappings,
-        refresh=refresh,
+        refresh=False,
         split_events=corporate_action_split_events(fake_trades),
     )
     distribution = calculate_distribution(
@@ -2921,7 +2944,7 @@ def family_dashboard_payload(
         berkshire_mode=berkshire_mode,
         proxy_mode=proxy_mode,
     )
-    valuation = calculate_valuation_series(fake_trades, mappings, refresh=refresh, person=person, broker=broker)
+    valuation = calculate_valuation_series(fake_trades, mappings, refresh=False, person=person, broker=broker)
     
     trade_assets = {trade.asset for trade in fake_trades}
     mapped_assets = set(mappings)
@@ -4884,13 +4907,15 @@ def resolve_isin(isin: str, refresh: bool = False, direct_symbol: str = "") -> d
         return {"isin": isin, "symbol": direct_symbol, "status": "resolved", "source": "mapping"}
     if not isin:
         return {"status": "missing_isin"}
-    if yf is None:
-        return {"status": "yfinance_missing"}
 
     cache = get_symbol_cache()
     cached = cache.get(isin)
     if cached and not refresh:
         return {**cached, "status": cached.get("status", "resolved")}
+    if yf is None:
+        if cached and cached.get("symbol"):
+            return {**cached, "status": cached.get("status", "resolved"), "cache_stale": True}
+        return {"status": "yfinance_missing"}
 
     try:
         result = yf.Search(
@@ -4912,6 +4937,15 @@ def resolve_isin(isin: str, refresh: bool = False, direct_symbol: str = "") -> d
             payload = {"isin": isin, "status": "unresolved", "resolved_at": int(time.time())}
     except Exception as exc:
         payload = {"isin": isin, "status": "lookup_error", "error": str(exc), "resolved_at": int(time.time())}
+
+    # A refresh is best-effort. Transient Yahoo/DNS failures must not replace a
+    # previously resolved ISIN with an unusable cache entry: doing so drops the
+    # holding from both the current valuation and every later cached refresh.
+    if cached and cached.get("symbol") and payload.get("status") != "resolved":
+        fallback = {**cached, "status": cached.get("status", "resolved"), "cache_stale": True}
+        if payload.get("error"):
+            fallback["refresh_error"] = payload["error"]
+        return fallback
 
     cache[isin] = payload
     save_json(SYMBOL_CACHE, cache)
@@ -4938,46 +4972,186 @@ def infer_currency(symbol: str) -> str:
     return "USD"
 
 
+def fetch_yahoo_chart(
+    symbol: str,
+    *,
+    start: date | None = None,
+    end: date | None = None,
+    range_period: str = "1mo",
+    timeout: int = 12,
+) -> dict[str, Any]:
+    """Fetch daily closes from Yahoo's lightweight chart JSON endpoint."""
+
+    params: dict[str, str | int] = {"interval": "1d", "events": "div,splits"}
+    if start is not None and end is not None:
+        params["period1"] = int(datetime.combine(start, datetime.min.time(), tzinfo=timezone.utc).timestamp())
+        params["period2"] = int(
+            datetime.combine(end + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc).timestamp()
+        )
+    else:
+        params["range"] = range_period
+    encoded_symbol = urllib.parse.quote(symbol, safe="")
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{encoded_symbol}?{urllib.parse.urlencode(params)}"
+    request_data = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(request_data, timeout=timeout) as response:
+        document = json.loads(response.read().decode("utf-8"))
+
+    chart = document.get("chart") or {}
+    if chart.get("error"):
+        error = chart["error"]
+        raise ValueError(error.get("description") or error.get("code") or "Yahoo chart request failed.")
+    results = chart.get("result") or []
+    if not results:
+        raise ValueError("No Yahoo chart result returned.")
+    result = results[0]
+    timestamps = result.get("timestamp") or []
+    closes = ((result.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
+    prices = {
+        datetime.fromtimestamp(int(timestamp), tz=timezone.utc).date().isoformat(): float(close)
+        for timestamp, close in zip(timestamps, closes)
+        if close is not None and not math.isnan(float(close))
+    }
+    if not prices:
+        raise ValueError("No Yahoo closing prices returned.")
+
+    splits: dict[str, float] = {}
+    for event in ((result.get("events") or {}).get("splits") or {}).values():
+        try:
+            event_date = datetime.fromtimestamp(int(event["date"]), tz=timezone.utc).date().isoformat()
+            numerator = float(event.get("numerator") or 0)
+            denominator = float(event.get("denominator") or 0)
+            if numerator > 0 and denominator > 0:
+                splits[event_date] = numerator / denominator
+        except (KeyError, TypeError, ValueError, OverflowError):
+            continue
+    return {
+        "symbol": symbol,
+        "currency": normalize_currency_code((result.get("meta") or {}).get("currency") or infer_currency(symbol)),
+        "prices": prices,
+        "splits": splits,
+    }
+
+
+def refresh_price_cache(symbols: set[str], max_workers: int = 6, force: bool = False) -> None:
+    """Refresh stale latest prices concurrently and persist one coherent cache."""
+
+    cache = get_price_cache()
+    now = int(time.time())
+    due = sorted(
+        symbol
+        for symbol in symbols
+        if symbol
+        and (
+            force
+            or cache.get(symbol, {}).get("status") != "priced"
+            or now - int(cache.get(symbol, {}).get("fetched_at", 0)) >= PRICE_TTL_SECONDS
+        )
+    )
+    if not due:
+        return
+
+    charts: dict[str, dict[str, Any]] = {}
+    errors: dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(due))) as executor:
+        futures = {executor.submit(fetch_yahoo_chart, symbol, range_period="1mo"): symbol for symbol in due}
+        for future in as_completed(futures):
+            symbol = futures[future]
+            try:
+                charts[symbol] = future.result()
+            except Exception as exc:
+                errors[symbol] = str(exc)
+
+    for symbol, chart in charts.items():
+        price_date = max(chart["prices"])
+        cache[symbol] = {
+            "symbol": symbol,
+            "price": float(chart["prices"][price_date]),
+            "currency": chart["currency"],
+            "status": "priced",
+            "fetched_at": now,
+            "price_date": price_date,
+            "source": "yahoo_chart",
+        }
+        history_start = date.fromisoformat(min(chart["prices"]))
+        history_end = date.fromisoformat(price_date)
+        get_history_store().merge(
+            symbol,
+            {
+                "symbol": symbol,
+                "currency": chart["currency"],
+                "prices": chart["prices"],
+                "status": "priced",
+                "fetched_at": now,
+            },
+            history_start,
+            history_end,
+        )
+    for symbol, error in errors.items():
+        if cache.get(symbol, {}).get("status") == "priced":
+            cache[symbol]["refresh_attempted_at"] = now
+            cache[symbol]["refresh_error"] = error
+    if charts or errors:
+        save_json(PRICE_CACHE, cache)
+
+
+def position_price_symbols(
+    positions: list[dict[str, Any]], mappings: dict[str, dict[str, str]]
+) -> set[str]:
+    """Return asset and FX symbols needed to value the open positions."""
+
+    symbols: set[str] = set()
+    for position in positions:
+        if not position.get("is_open"):
+            continue
+        position_symbol = str(position.get("symbol") or "")
+        if str(position.get("broker") or "").lower() == "crypto wallet":
+            symbol = position_symbol
+        else:
+            mapping = mapping_for(position.get("asset", ""), position.get("isin", ""), mappings)
+            symbol = yahoo_symbol_from_mapping(mapping.get("ticker", ""), mapping.get("exchange", ""))
+            if not symbol:
+                lookup = resolve_isin(position.get("isin") or position_symbol, direct_symbol=position_symbol)
+                symbol = str(lookup.get("symbol") or "")
+        if not symbol:
+            continue
+        symbols.add(symbol)
+        currency = fx_base_currency(infer_currency(symbol))
+        if currency != "EUR":
+            fx_symbol, _ = fx_symbol_for(currency)
+            symbols.add(fx_symbol)
+    return symbols
+
+
 def fetch_price(symbol: str, refresh: bool = False) -> dict[str, Any]:
     if not symbol:
         return {"status": "missing_symbol"}
-    if yf is None:
-        return {"status": "yfinance_missing"}
 
     cache = get_price_cache()
     cached = cache.get(symbol)
     now = int(time.time())
     if cached and cached.get("status") == "priced" and not refresh:
-        return {**cached, "cache_stale": now - int(cached.get("fetched_at", 0)) >= PRICE_TTL_SECONDS}
+        stale = now - int(cached.get("fetched_at", 0)) >= PRICE_TTL_SECONDS
+        if not stale:
+            return {**cached, "cache_stale": False}
+        if now - int(cached.get("refresh_attempted_at", 0)) < PRICE_TTL_SECONDS:
+            return {**cached, "cache_stale": True}
 
     try:
-        ticker = yf.Ticker(symbol)
-        currency = infer_currency(symbol)
-        try:
-            info = ticker.fast_info
-            price = fast_info_value(info, "last_price") or fast_info_value(info, "lastPrice")
-            currency = fast_info_value(info, "currency") or currency
-        except Exception:
-            price = None
-        if price is None or (isinstance(price, float) and math.isnan(price)):
-            history = ticker.history(period="10d")
-            if history.empty:
-                raise ValueError("No last price returned.")
-            price = float(history["Close"].dropna().iloc[-1])
+        chart = fetch_yahoo_chart(symbol, range_period="1mo")
+        price_date = max(chart["prices"])
         payload = {
             "symbol": symbol,
-            "price": float(price),
-            "currency": normalize_currency_code(currency),
+            "price": float(chart["prices"][price_date]),
+            "currency": chart["currency"],
             "status": "priced",
             "fetched_at": now,
-            "price_date": date.today().isoformat(),
+            "price_date": price_date,
+            "source": "yahoo_chart",
         }
     except Exception as exc:
         fallback = latest_cached_history_price(symbol)
         if fallback:
-            cache[symbol] = fallback
-            save_json(PRICE_CACHE, cache)
-            return fallback
+            return {**fallback, "cache_stale": True, "refresh_error": str(exc)}
         payload = {"symbol": symbol, "status": "price_error", "error": str(exc), "fetched_at": now}
 
     cache[symbol] = payload
@@ -5090,36 +5264,26 @@ def fetch_history(
     cached = None if refresh else store.get_covered(symbol, start, end)
     if cached:
         return apply_history_splits(store, symbol, cached, known_splits)
-    if yf is None:
-        if stale:
-            return apply_history_splits(store, symbol, stale, known_splits)
-        return {"status": "yfinance_missing", "prices": {}}
-
+    if (
+        not refresh
+        and stale
+        and store.has_start_coverage(symbol, start)
+        and stale.get("prices")
+        and max(stale["prices"]) >= (end - timedelta(days=4)).isoformat()
+    ):
+        return apply_history_splits(store, symbol, stale, known_splits)
     try:
-        ticker = yf.Ticker(symbol)
-        history = ticker.history(start=start.isoformat(), end=(end + timedelta(days=1)).isoformat(), auto_adjust=False)
-        if history.empty:
-            raise ValueError("No historical prices returned.")
-        prices = {
-            idx.date().isoformat(): float(value)
-            for idx, value in history["Close"].dropna().items()
-            if value is not None and not math.isnan(float(value))
-        }
-        try:
-            info = ticker.fast_info
-            currency = normalize_currency_code(fast_info_value(info, "currency") or infer_currency(symbol))
-        except Exception:
-            currency = infer_currency(symbol)
+        chart = fetch_yahoo_chart(symbol, start=start, end=end)
         payload = {
             "symbol": symbol,
-            "currency": currency,
-            "prices": prices,
+            "currency": chart["currency"],
+            "prices": chart["prices"],
             "status": "priced",
             "fetched_at": now,
             "range_start": start.isoformat(),
             "range_end": end.isoformat(),
         }
-        splits = dict(ticker.splits.items())
+        splits = chart["splits"]
     except Exception as exc:
         payload = {"symbol": symbol, "status": "history_error", "error": str(exc), "prices": {}, "fetched_at": now}
         splits = None
@@ -5315,7 +5479,7 @@ def latest_cached_history_price(symbol: str) -> dict[str, Any] | None:
         "price": float(cached["price"]),
         "currency": normalize_currency_code(cached.get("currency") or infer_currency(symbol)),
         "status": "priced",
-        "fetched_at": int(time.time()),
+        "fetched_at": int(cached.get("fetched_at", 0)),
         "source": "history_cache",
         "price_date": cached["price_date"],
     }
@@ -5598,20 +5762,30 @@ def calculate_valuation_series(
 
     histories: dict[str, dict[str, Any]] = {}
     currencies: set[str] = set()
-    for key, ref in refs.items():
-        symbol = ref.get("symbol", "")
-        if not symbol:
-            continue
-        history = fetch_history(
-            symbol,
-            start,
-            end,
-            refresh=refresh,
-            known_splits=split_events.get(key),
-        )
-        histories[symbol] = history
-        if history.get("status") == "priced":
-            currencies.add(normalize_currency_code(history.get("currency") or "EUR"))
+    history_requests = [
+        (key, ref["symbol"])
+        for key, ref in refs.items()
+        if ref.get("symbol")
+    ]
+    if history_requests:
+        with ThreadPoolExecutor(max_workers=min(6, len(history_requests))) as executor:
+            futures = {
+                executor.submit(
+                    fetch_history,
+                    symbol,
+                    start,
+                    end,
+                    refresh=refresh,
+                    known_splits=split_events.get(key),
+                ): symbol
+                for key, symbol in history_requests
+            }
+            for future in as_completed(futures):
+                symbol = futures[future]
+                history = future.result()
+                histories[symbol] = history
+                if history.get("status") == "priced":
+                    currencies.add(normalize_currency_code(history.get("currency") or "EUR"))
 
     fx_histories: dict[str, dict[str, Any]] = {}
     for currency in currencies:
@@ -5998,6 +6172,7 @@ def enrich_positions(
             pricing_status = "crypto_wallet"
             price_currency = "EUR"
             fetched_at = None
+            price_date = None
 
             # Try to fetch live price dynamically
             if position_symbol:
@@ -6012,6 +6187,7 @@ def enrich_positions(
                             pricing_status = "priced"
                             price_currency = price_data.get("currency", "EUR")
                             fetched_at = price_data.get("fetched_at")
+                            price_date = price_data.get("price_date")
                 except Exception:
                     pass
 
@@ -6027,6 +6203,7 @@ def enrich_positions(
                     "display_pl_eur": money(value - cost),
                     "display_pl_pct": float(((value - cost) / cost * Decimal("100")).quantize(Decimal("0.01"))) if cost > ZERO else None,
                     "pricing_status": pricing_status,
+                    "price_date": price_date,
                 }
             )
             if fetched_at:
@@ -6126,6 +6303,7 @@ def enrich_positions(
                 "display_pl_pct": float(((value - cost) / cost * Decimal("100")).quantize(Decimal("0.01"))) if cost > ZERO else None,
                 "pricing_status": "priced",
                 "fetched_at": price_data.get("fetched_at"),
+                "price_date": price_data.get("price_date"),
             }
         )
 
@@ -6537,6 +6715,7 @@ def _build_dashboard_payload(
             summary["totals"]["invested"] = money(wallet_net)
             summary["totals"]["net_contributions"] = money(wallet_net)
             summary["totals"]["open_cost_basis"] = money(wallet_net)
+    refresh_price_cache(position_price_symbols(summary["positions"], mappings), force=refresh)
     dividend_summary = summarize_dividends(dividends)
     contribution_summary = (
         crypto_wallet_contributions(wallet_positions)
@@ -6546,7 +6725,7 @@ def _build_dashboard_payload(
     priced = enrich_positions(
         summary["positions"],
         mappings,
-        refresh=refresh,
+        refresh=False,
         split_events=corporate_action_split_events(trades),
     )
     distribution = calculate_distribution(
@@ -6558,7 +6737,7 @@ def _build_dashboard_payload(
     valuation = (
         crypto_wallet_valuation(wallet_positions)
         if broker == "crypto wallet" and wallet_positions
-        else calculate_valuation_series(trades, mappings, refresh=refresh, person=person, broker=broker)
+        else calculate_valuation_series(trades, mappings, refresh=False, person=person, broker=broker)
     )
 
     extra_frictions = read_ledger_frictions(person)
@@ -6650,6 +6829,12 @@ def _build_dashboard_payload(
             history_context=valuation.get("_history_context", {}),
         ),
     }
+    open_price_dates = [
+        str(position["price_date"])
+        for position in payload["positions"]
+        if position.get("is_open") and position.get("pricing_status") == "priced" and position.get("price_date")
+    ]
+    payload["pricing_as_of"] = min(open_price_dates) if open_price_dates else None
     payload["news_symbols"] = news_symbols_from_payload(payload)
     return payload
 
@@ -6672,14 +6857,14 @@ def dashboard_payload(
     path = dashboard_cache_path(person, berkshire_mode, proxy_mode, broker, live_only)
     signature = dashboard_source_signature()
     if not refresh:
-        cached = read_dashboard_cache(path, signature)
+        cached = read_dashboard_cache(path, signature, allow_expired=price_refresh_running(path))
         if cached is not None:
             return cached
 
     with _DASHBOARD_CACHE_LOCK:
         signature = dashboard_source_signature()
         if not refresh:
-            cached = read_dashboard_cache(path, signature)
+            cached = read_dashboard_cache(path, signature, allow_expired=price_refresh_running(path))
             if cached is not None:
                 return cached
         payload = _build_dashboard_payload(
@@ -6692,6 +6877,26 @@ def dashboard_payload(
         )
         write_dashboard_cache(path, dashboard_source_signature(), payload)
         return payload
+
+
+def run_portfolio_price_refresh(path: Path, options: dict[str, Any]) -> None:
+    """Rebuild a dashboard without holding an HTTP request open for minutes."""
+
+    try:
+        payload = dashboard_payload(refresh=True, **options)
+    except Exception as exc:
+        update = {"status": "error", "error": str(exc)}
+    else:
+        update = {
+            "status": "done",
+            "generated_at": payload.get("generated_at"),
+            "pricing_as_of": payload.get("pricing_as_of"),
+        }
+    with _PRICE_REFRESH_JOBS_LOCK:
+        job = _PRICE_REFRESH_JOBS.get(path)
+        if job is not None:
+            job.update(update)
+            job["finished_at"] = datetime.now().isoformat(timespec="seconds")
 
 
 NEWS_SYMBOL_EXCLUDE = {"", "USD", "EUR", "GBP", "USDC-USD", "BTC-USD", "ETH-USD", "TON-USD", "TON11419-USD"}
@@ -8248,6 +8453,56 @@ def api_modify_watchlist():
         return jsonify({"status": "success", "tickers": tickers, "watchlist": fetch_watchlist_data(refresh=True)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/portfolio/refresh-prices", methods=["GET", "POST"])
+def api_portfolio_refresh_prices():
+    try:
+        options = {
+            "person": configured_portfolio_id(request.args.get("person", PRIMARY_PORTFOLIO_ID)),
+            "berkshire_mode": normalize_berkshire_mode(request.args.get("berkshire", "stock")),
+            "proxy_mode": normalize_proxy_mode(request.args.get("proxy", DEFAULT_PROXY_MODE)),
+            "broker": request.args.get("broker", "all").strip().lower(),
+            "live_only": "on" if request.args.get("live_only") == "on" else "off",
+        }
+        path = dashboard_cache_path(
+            options["person"],
+            options["berkshire_mode"],
+            options["proxy_mode"],
+            options["broker"],
+            options["live_only"],
+        )
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    with _PRICE_REFRESH_JOBS_LOCK:
+        job = _PRICE_REFRESH_JOBS.get(path)
+        if request.method == "POST" and (job is None or job["status"] != "running"):
+            job = {
+                "status": "running",
+                "started_at": datetime.now().isoformat(timespec="seconds"),
+            }
+            if len(_PRICE_REFRESH_JOBS) >= 32:
+                for stale_path, stale_job in list(_PRICE_REFRESH_JOBS.items()):
+                    if stale_job.get("status") != "running":
+                        del _PRICE_REFRESH_JOBS[stale_path]
+                    if len(_PRICE_REFRESH_JOBS) < 32:
+                        break
+            if len(_PRICE_REFRESH_JOBS) >= 32:
+                return jsonify({"error": "Too many price refreshes are already running."}), 503
+            _PRICE_REFRESH_JOBS[path] = job
+            worker = threading.Thread(
+                target=run_portfolio_price_refresh,
+                args=(path, options),
+                daemon=True,
+                name="portfolio-price-refresh",
+            )
+        else:
+            worker = None
+        response = dict(job) if job is not None else {"status": "idle"}
+    if worker is not None:
+        worker.start()
+    return jsonify(response), 202 if request.method == "POST" else 200
 
 
 @app.get("/api/portfolio")
