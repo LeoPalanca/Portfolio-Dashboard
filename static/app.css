@@ -1197,6 +1197,7 @@ svg { width: 100%; height: 100%; display: block; }
 .series-market { stroke: var(--positive); }
 .series-profit { stroke: var(--series-violet); }
 .series-return { stroke: var(--negative); }
+.series-equity { stroke: var(--series-teal); stroke-width: 2.5; }
 .series-msci { stroke: var(--series-cyan); stroke-dasharray: 4 4; }
 .series-xeon { stroke: var(--series-pink); stroke-dasharray: 3 3; }
 .series-inflation { stroke: var(--warning); stroke-dasharray: 2 2; }

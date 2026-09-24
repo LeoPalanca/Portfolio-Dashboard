@@ -419,7 +419,8 @@
       realized_pl: true
     };
     const returnVisibility = {
-      return_pct: true,
+      return_pct: false,
+      equity_return_pct: true,
       msci_return_pct: true,
       xeon_return_pct: false,
       inflation_return_pct: false,
@@ -429,7 +430,8 @@
     let showTransactions = true;
     let showAllTransactions = false;
     const returnDefs = [
-      ["return_pct", "Return %", "series-return"],
+      ["return_pct", "Portfolio mode %", "series-return"],
+      ["equity_return_pct", "Equity total return %", "series-equity"],
       ["msci_return_pct", "MSCI World %", "series-msci"],
       ["xeon_return_pct", "XEON (Cash) %", "series-xeon"],
       ["inflation_return_pct", "Inflation %", "series-inflation"],
@@ -691,7 +693,16 @@
       return totals;
     }
     function pointPath(points, key, xScale, yScale) {
-      return points.map((p, i) => `${i ? "L" : "M"}${xScale(p.date).toFixed(2)} ${yScale(Number(p[key] || 0)).toFixed(2)}`).join(" ");
+      let drawing = false;
+      return points.map(p => {
+        if (p[key] === null || p[key] === undefined || !Number.isFinite(Number(p[key]))) {
+          drawing = false;
+          return "";
+        }
+        const command = drawing ? "L" : "M";
+        drawing = true;
+        return `${command}${xScale(p.date).toFixed(2)} ${yScale(Number(p[key])).toFixed(2)}`;
+      }).join(" ");
     }
     function xTicks(series, count = 6) {
       if (series.length <= count) return series.map(p => p.date);
@@ -802,7 +813,7 @@
             }
           }
         }
-        const labelText = `${nearest.date}  ${defs.map(([key, name]) => `${name}: ${valueFormatter(Number(nearest[key] || 0), key)}`).join("  ·  ")}${flowText}`;
+        const labelText = `${nearest.date}  ${defs.map(([key, name]) => `${name}: ${nearest[key] === null || nearest[key] === undefined ? "—" : valueFormatter(Number(nearest[key]), key)}`).join("  ·  ")}${flowText}`;
         label.textContent = labelText;
         /* Keep label inside chart */
         const textLen = label.getComputedTextLength ? label.getComputedTextLength() : 200;
@@ -824,7 +835,10 @@
       const left = 60, right = 20, top = 22, bottom = 36;
       const dates = series.map(p => new Date(p.date).getTime());
       const values = [];
-      series.forEach(p => defs.forEach(([key]) => values.push(Number(p[key] || 0))));
+      series.forEach(p => defs.forEach(([key]) => {
+        if (p[key] !== null && p[key] !== undefined && Number.isFinite(Number(p[key]))) values.push(Number(p[key]));
+      }));
+      if (!values.length) return;
       const minX = Math.min(...dates), maxX = Math.max(...dates);
       /* Auto-scale Y to data range — only force zero for "all" period or when data crosses 0 */
       const rawMin = Math.min(...values), rawMax = Math.max(...values);
@@ -920,6 +934,7 @@
       if (klass.includes("market")) return getComputedStyle(document.documentElement).getPropertyValue("--positive");
       if (klass.includes("invested")) return getComputedStyle(document.documentElement).getPropertyValue("--accent");
       if (klass.includes("profit")) return getComputedStyle(document.documentElement).getPropertyValue("--series-violet");
+      if (klass.includes("equity")) return getComputedStyle(document.documentElement).getPropertyValue("--series-teal");
       if (klass.includes("return")) return getComputedStyle(document.documentElement).getPropertyValue("--negative");
       if (klass.includes("msci")) return getComputedStyle(document.documentElement).getPropertyValue("--series-cyan");
       if (klass.includes("xeon")) return getComputedStyle(document.documentElement).getPropertyValue("--series-pink");
@@ -966,9 +981,36 @@
       });
     }
 
+    function equityTimeWeightedReturns(series) {
+      if (!series || !series.length || !series.every(point =>
+        point.equity_market_value !== undefined && point.equity_net_contributions !== undefined &&
+        point.equity_dividends !== undefined && Number(point.equity_unpriced_positions || 0) === 0 &&
+        Number(point.equity_market_value) > 0
+      )) return series.map(() => null);
+      let growth = 1;
+      return series.map((point, index) => {
+        if (index > 0) {
+          const previous = series[index - 1];
+          const previousValue = Number(previous.equity_market_value);
+          const currentValue = Number(point.equity_market_value);
+          // Purchases and sale proceeds are external flows; net dividends are
+          // investment return even when the broker pays them into a cash account.
+          const tradeFlow = Number(point.equity_net_contributions) - Number(previous.equity_net_contributions);
+          const dividendFlow = Number(point.equity_dividends) - Number(previous.equity_dividends);
+          if (previousValue > 0) {
+            const factor = (currentValue - tradeFlow + dividendFlow) / previousValue;
+            if (!Number.isFinite(factor) || factor < 0) return null;
+            growth *= factor;
+          }
+        }
+        return (growth - 1) * 100;
+      });
+    }
+
     function normalizeReturnSeries(series) {
       if (!series || !series.length) return [];
       const portfolioReturns = portfolioTimeWeightedReturns(series);
+      const equityReturns = equityTimeWeightedReturns(series);
       const p0 = series[0];
       const m0 = Number(p0.msci_return_pct || 0);
       const xeon0 = Number(p0.xeon_return_pct || 0);
@@ -985,17 +1027,24 @@
         return {
           ...p,
           return_pct: Number(portfolioReturns[index]?.return_pct || 0),
+          equity_return_pct: equityReturns[index],
           msci_return_pct: norm_m,
           xeon_return_pct: norm_xeon,
           inflation_return_pct: norm_inf
         };
       });
       
-      mapped.forEach((p, idx) => {
-        const scores = timeWeightedOutperformanceScores(mapped.slice(0, idx + 1));
-        p.weighted_score = scores.areaScore;
-        p.freq_score = scores.timeScore;
-      });
+      if (equityReturns.every(value => value !== null)) {
+        mapped.forEach((p, idx) => {
+          const scores = timeWeightedOutperformanceScores(mapped.slice(0, idx + 1).map(row => ({
+            ...row, return_pct: row.equity_return_pct
+          })));
+          p.weighted_score = scores.areaScore;
+          p.freq_score = scores.timeScore;
+        });
+      } else {
+        mapped.forEach(p => { p.weighted_score = null; p.freq_score = null; });
+      }
       return mapped;
     }
     function integrateDiffSegment(d0, d1, days) {
@@ -1068,28 +1117,33 @@
       const normalizedReturns = normalizeReturnSeries(filtered);
       renderLineChart("return-chart", normalizedReturns, activeReturnDefs, value => `${value.toFixed(1)}%`);
 
-      const outperformanceScores = timeWeightedOutperformanceScores(normalizedReturns);
-      const scoreFreq = outperformanceScores.timeScore;
-      const scoreWeighted = outperformanceScores.areaScore;
-      const finalReturns = normalizedReturns.length >= 2 ? normalizedReturns[normalizedReturns.length - 1] : null;
-      const returnGap = finalReturns ? finalReturns.return_pct - finalReturns.msci_return_pct : null;
+      const equityComparable = normalizedReturns.length >= 2 && filtered.every(point =>
+        point.msci_return_pct !== null && point.msci_return_pct !== undefined
+      ) && normalizedReturns.every(point => point.equity_return_pct !== null);
+      const outperformanceScores = equityComparable
+        ? timeWeightedOutperformanceScores(normalizedReturns.map(point => ({ ...point, return_pct: point.equity_return_pct })))
+        : null;
+      const scoreFreq = outperformanceScores?.timeScore;
+      const scoreWeighted = outperformanceScores?.areaScore;
+      const finalReturns = equityComparable ? normalizedReturns[normalizedReturns.length - 1] : null;
+      const returnGap = finalReturns ? finalReturns.equity_return_pct - finalReturns.msci_return_pct : null;
       const returnGapLabel = returnGap === null ? "—" : `${returnGap > 0 ? "+" : ""}${returnGap.toFixed(1)} pp`;
       const windowReturnLabel = finalReturns
-        ? `Window ${isTotal ? "total" : "price"} return: Portfolio ${finalReturns.return_pct.toFixed(1)}% · MSCI ETF ${finalReturns.msci_return_pct.toFixed(1)}%`
-        : "Select a window with at least two dates to compare returns.";
+        ? `Equities ${finalReturns.equity_return_pct.toFixed(1)}% · MSCI ETF ${finalReturns.msci_return_pct.toFixed(1)}% · EUR, same window, net dividends included`
+        : "Equity comparison unavailable: select at least two dates with priced equities and refreshed valuation data.";
 
       const scorePills = `
-        <span class="score-pill return-gap" title="Portfolio return minus MSCI World return in the selected window">
-          <span class="score-pill-label">Return gap</span>
+        <span class="score-pill return-gap" title="Equity-only total return minus MSCI World ETF return over the selected window">
+          <span class="score-pill-label">Equity gap</span>
           <span class="score-pill-value" style="color: ${returnGap === null ? 'var(--text-muted)' : returnGap >= 0 ? 'var(--positive)' : 'var(--negative)'};">${returnGapLabel}</span>
         </span>
-        <button type="button" id="freq-pill" class="score-pill teal ${returnVisibility.freq_score ? "active" : ""}" title="Toggle the line showing the percentage of time the portfolio return was above MSCI World">
+        <button type="button" id="freq-pill" class="score-pill teal ${returnVisibility.freq_score ? "active" : ""}" title="Toggle the line showing the percentage of time equity total return was above MSCI World">
           <span class="score-pill-label">Time ahead</span>
-          <span class="score-pill-value" style="color: ${scoreFreq >= 50 ? 'var(--positive)' : 'var(--negative)'};">${normalizedReturns.length >= 2 ? `${scoreFreq.toFixed(1)}%` : "—"}</span>
+          <span class="score-pill-value" style="color: ${scoreFreq >= 50 ? 'var(--positive)' : 'var(--negative)'};">${equityComparable ? `${scoreFreq.toFixed(1)}%` : "—"}</span>
         </button>
-        <button type="button" id="weighted-pill" class="score-pill violet ${returnVisibility.weighted_score ? "active" : ""}" title="Toggle the line showing the share of return-gap area where the portfolio was above MSCI World">
+        <button type="button" id="weighted-pill" class="score-pill violet ${returnVisibility.weighted_score ? "active" : ""}" title="Toggle the line showing the share of equity return-gap area above MSCI World">
           <span class="score-pill-label">Area ahead</span>
-          <span class="score-pill-value" style="color: ${scoreWeighted >= 50 ? 'var(--positive)' : 'var(--negative)'};">${normalizedReturns.length >= 2 ? `${scoreWeighted.toFixed(1)}%` : "—"}</span>
+          <span class="score-pill-value" style="color: ${scoreWeighted >= 50 ? 'var(--positive)' : 'var(--negative)'};">${equityComparable ? `${scoreWeighted.toFixed(1)}%` : "—"}</span>
         </button>
       `;
 
@@ -1128,7 +1182,7 @@
             <div class="chart-control-items">${retHtml.join("")}</div>
           </div>
           <div class="chart-control-group">
-            <div class="chart-control-title">Against MSCI World</div>
+            <div class="chart-control-title">Equities vs MSCI World</div>
             <div class="chart-control-items">${scorePills}</div>
             <div class="chart-control-note">${windowReturnLabel}</div>
           </div>

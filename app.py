@@ -3078,6 +3078,7 @@ def read_mappings() -> dict[str, dict[str, str]]:
                     "isin": isin,
                     "ticker": (row.get("Ticker") or row.get("ticker") or "").strip(),
                     "exchange": (row.get("Borsa") or row.get("exchange") or "").strip(),
+                    "benchmark_class": (row.get("benchmark_class") or "").strip().lower(),
                 }
     return mappings
 
@@ -3191,7 +3192,9 @@ def crypto_wallet_valuation(wallet_positions: list[dict[str, Any]]) -> dict[str,
 
     # Fetch MSCI World prices for comparison
     msci_prices = {}
-    for sym in ["SWDA.MI", "EUNL.DE", "URTH"]:
+    # Both exchanges quote the accumulating ETF in EUR; URTH trades in USD
+    # and must not be compared directly with EUR portfolio valuations.
+    for sym in ["SWDA.MI", "EUNL.DE"]:
         h = fetch_history(sym, start, today, refresh=False)
         if h and h.get("status") == "priced" and h.get("prices"):
             msci_prices = h["prices"]
@@ -4045,6 +4048,40 @@ def determine_asset_type(asset: str, isin: str, symbol: str, broker: str, exposu
         return "ETF"
         
     return "STOCK"
+
+
+def is_equity_benchmark_asset(trade: Trade, ref: dict[str, str], mapping: dict[str, str], exposures: dict) -> bool:
+    """Classify the invested-equity sleeve; an explicit mapping overrides inference."""
+    override = mapping.get("benchmark_class", "").lower()
+    if override in {"equity", "other"}:
+        return override == "equity"
+    name = trade.asset.casefold()
+    symbol = ref.get("symbol", "")
+    if trade.broker.casefold() == "crypto wallet" or symbol.endswith("-USD"):
+        return False
+    non_equity_terms = (
+        "bond", "obbligaz", "fixed income", "btp", "bot ", "bund", "treasury", "government", "gold", "silver", "commodity",
+        "commodit", "money market", "overnight", "cash", "liquidity", "liquidit",
+        "xeon", "btc", "bitcoin", "ethereum", "crypto", "certificate", "leveraged",
+    )
+    if any(term in name for term in non_equity_terms):
+        return False
+    rows = exposures.get(exposure_key(trade.asset, trade.isin)) or exposures.get(exposure_key(trade.asset, ""))
+    if rows:
+        equity_classes = {"equity", "equities", "single share", "etf underlying", "proxy etf underlying"}
+        total_weight = sum((Decimal(str(row.get("weight_pct") or 0)) for row in rows), ZERO)
+        equity_weight = sum(
+            (Decimal(str(row.get("weight_pct") or 0)) for row in rows
+             if str(row.get("asset_class", "")).casefold() in equity_classes), ZERO
+        )
+        return total_weight > ZERO and equity_weight / total_weight >= Decimal("0.9")
+    # Stock names and ordinary equity funds are included. Unknown fund types are
+    # excluded until classified in asset_mappings.csv with benchmark_class.
+    fund_terms = ("etf", "ucits", "fund", "acc", "dist", "index", "swap")
+    if any(term in name for term in fund_terms):
+        equity_terms = ("equity", "equities", "stock", "shares", "msci", "ftse", "s&p", "stoxx", "nasdaq", "all-world")
+        return any(term in name for term in equity_terms)
+    return bool(trade.isin or symbol)
 
 
 def read_etf_documents() -> dict[str, dict[str, Any]]:
@@ -5756,6 +5793,15 @@ def calculate_valuation_series(
 
     end = date.today()
     refs = build_instrument_refs(trades, mappings, refresh=refresh)
+    exposures = read_exposures()
+    equity_keys = {
+        trade.isin or trade.asset
+        for trade in trades
+        if is_equity_benchmark_asset(
+            trade, refs.get(trade.isin or trade.asset, {}), mapping_for(trade.asset, trade.isin, mappings), exposures
+        )
+    }
+    equity_asset_names = {trade.asset for trade in trades if (trade.isin or trade.asset) in equity_keys}
     recent_dates = {end - timedelta(days=i) for i in range(35) if end - timedelta(days=i) >= start}
     valuation_dates = month_end_dates(start, end) | {trade.date for trade in trades} | recent_dates
     sorted_dates = sorted(valuation_dates)
@@ -5799,6 +5845,8 @@ def calculate_valuation_series(
     invested_by_asset: dict[str, Decimal] = {}
     invested = ZERO
     proceeds = ZERO
+    equity_invested = ZERO
+    equity_proceeds = ZERO
     invested_tr = ZERO
     proceeds_tr = ZERO
     invested_other = ZERO
@@ -5810,7 +5858,7 @@ def calculate_valuation_series(
     # Fetch MSCI World prices
     msci_prices = {}
     msci_symbol = ""
-    for sym in ["SWDA.MI", "EUNL.DE", "URTH"]:
+    for sym in ["SWDA.MI", "EUNL.DE"]:
         h = fetch_history(sym, start, end, refresh=refresh)
         if h and h.get("status") == "priced" and h.get("prices"):
             msci_prices = h["prices"]
@@ -5879,6 +5927,8 @@ def calculate_valuation_series(
             is_tr = (trade.broker.lower() == "trade republic")
             if trade.quantity_diff >= ZERO:
                 invested += amount
+                if key in equity_keys:
+                    equity_invested += amount
                 if is_tr:
                     invested_tr += amount
                 else:
@@ -5886,6 +5936,8 @@ def calculate_valuation_series(
                 invested_by_asset[key] = invested_by_asset.get(key, ZERO) + amount
             else:
                 proceeds += amount
+                if key in equity_keys:
+                    equity_proceeds += amount
                 if is_tr:
                     proceeds_tr += amount
                 else:
@@ -5894,8 +5946,11 @@ def calculate_valuation_series(
             trade_index += 1
 
         market_value = ZERO
+        equity_market_value = ZERO
         priced_positions = 0
         unpriced_positions = 0
+        equity_priced_positions = 0
+        equity_unpriced_positions = 0
         for key, quantity in holdings.items():
             if quantity <= ZERO:
                 continue
@@ -5911,10 +5966,18 @@ def calculate_valuation_series(
                 fallback_val = invested_by_asset.get(key, ZERO)
                 if fallback_val > ZERO:
                     market_value += fallback_val
+                    if key in equity_keys:
+                        equity_market_value += fallback_val
+                if key in equity_keys:
+                    equity_unpriced_positions += 1
                 continue
             if currency == "GBp":
                 price = price / 100
-            market_value += quantity * Decimal(str(price)) * Decimal(str(fx_rate))
+            position_value = quantity * Decimal(str(price)) * Decimal(str(fx_rate))
+            market_value += position_value
+            if key in equity_keys:
+                equity_market_value += position_value
+                equity_priced_positions += 1
             priced_positions += 1
 
         net_contributions = invested - proceeds
@@ -5924,6 +5987,9 @@ def calculate_valuation_series(
         # Accumulate dividends and cash interest up to valuation_date by broker
         accumulated_dividends_tr = sum((d.amount_eur for d in dividends if d.date <= valuation_date and d.broker.lower() == "trade republic"), ZERO)
         accumulated_dividends_other = sum((d.amount_eur for d in dividends if d.date <= valuation_date and d.broker.lower() != "trade republic"), ZERO)
+        equity_dividends = sum(
+            (d.amount_eur for d in dividends if d.date <= valuation_date and (d.isin in equity_keys or d.asset in equity_asset_names)), ZERO
+        )
         
         accumulated_interest_tr = sum((Decimal(str(i["net_eur"])) for i in interests if i["date"] <= valuation_date and i.get("broker", "").lower() == "trade republic"), ZERO)
         accumulated_interest_bbva = sum((Decimal(str(i["net_eur"])) for i in interests if i["date"] <= valuation_date and i.get("broker", "").lower() == "bbva"), ZERO)
@@ -6008,6 +6074,11 @@ def calculate_valuation_series(
                 {
                     "date": valuation_date.isoformat(),
                     "market_value": money(market_value),
+                    "equity_market_value": money(equity_market_value),
+                    "equity_net_contributions": money(equity_invested - equity_proceeds),
+                    "equity_dividends": money(equity_dividends),
+                    "equity_priced_positions": equity_priced_positions,
+                    "equity_unpriced_positions": equity_unpriced_positions,
                     "total_market_value": money(total_market_value),
                     "net_contributions": money(net_contributions),
                     "total_net_contributions": money(total_net_contributions),
@@ -6391,7 +6462,7 @@ def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID
     msci_prices = history_context.get("msci_prices", {}) if isinstance(history_context, dict) else {}
     msci_symbol = history_context.get("msci_symbol", "") if isinstance(history_context, dict) else ""
     if not msci_prices:
-        for sym in ["SWDA.MI", "EUNL.DE", "URTH"]:
+        for sym in ["SWDA.MI", "EUNL.DE"]:
             h = fetch_history(sym, start_date - timedelta(days=30), end_date, refresh=False)
             if h and h.get("status") == "priced" and h.get("prices"):
                 msci_prices = h["prices"]

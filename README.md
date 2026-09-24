@@ -206,6 +206,13 @@ original under `cache_dir/legacy`.
 
 `asset_mappings.csv` maps imported names or ISINs to price symbols. Optional `Ticker`
 and `Borsa` columns provide exchange hints for Yahoo Finance symbol construction.
+For the equity-only MSCI comparison, an optional `benchmark_class` column can be
+set to `equity` or `other` per asset; otherwise the dashboard infers the class
+from exposure data and the asset name. Review the mapping for ambiguous funds.
+The comparison uses invested equity values, purchase/sale cash flows and net
+dividends; it excludes idle cash and cash interest. It is shown only when every
+equity valuation in the selected window has price coverage. The MSCI proxy is
+the accumulating SWDA.MI ETF (or EUNL.DE fallback), both quoted in EUR.
 
 `asset_exposures.csv` supplies look-through data for direct shares, ETFs, and funds:
 
@@ -255,6 +262,9 @@ consumption.
   relevant tax residence, instrument, and account treatment, then verify locally.
 - Market prices, FX conversion, news, mappings, and proxy compositions are best-effort
   data and may be stale or unavailable.
+- Selected-window returns are linked across available valuation dates and adjust
+  external flows at those dates. They approximate, rather than exactly reproduce,
+  daily time-weighted returns when intra-period trade timing is unavailable.
 - Snapshot portfolios cannot provide transaction-level accuracy for periods before
   the supplied history and adjustments.
 

@@ -3,6 +3,19 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.7.0 - 2026-09-24
+
+### Added
+
+- An equity-only, cash-flow-adjusted total-return line includes net dividends and
+  compares with the EUR-traded accumulating MSCI World ETF over the same window.
+  The equity gap and time/area ahead scores now use this line, independently of
+  the portfolio Price/Total Return switch.
+- Optional `benchmark_class` values `equity` or `other` in asset mappings let
+  users correct inferred security classification for the equity comparison.
+  Missing or unpriced equity history makes the comparison unavailable instead
+  of presenting a misleading number.
+
 ## 0.6.9 - 2026-09-24
 
 ### Added

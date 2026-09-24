@@ -32,6 +32,52 @@ class DistributionAggregationTest(unittest.TestCase):
             source="synthetic_test",
         )
 
+    def test_equity_benchmark_classification_excludes_cash_and_bonds(self) -> None:
+        trade = self.sample_trade()
+        ref = {"symbol": "EXAMPLE.MI"}
+        self.assertTrue(app.is_equity_benchmark_asset(trade, ref, {"benchmark_class": "equity"}, {}))
+        self.assertFalse(app.is_equity_benchmark_asset(trade, ref, {"benchmark_class": "other"}, {}))
+        bond = app.replace(trade, asset="Government Bond ETF")
+        self.assertFalse(app.is_equity_benchmark_asset(bond, ref, {}, {}))
+        equity_fund = app.replace(trade, asset="MSCI World UCITS ETF")
+        self.assertTrue(app.is_equity_benchmark_asset(equity_fund, ref, {}, {}))
+        exposure_rows = {
+            app.exposure_key(equity_fund.asset, equity_fund.isin): [
+                {"asset_class": "Equity", "weight_pct": Decimal("98")},
+                {"asset_class": "Cash", "weight_pct": Decimal("2")},
+            ]
+        }
+        self.assertTrue(app.is_equity_benchmark_asset(equity_fund, ref, {}, exposure_rows))
+
+    def test_valuation_keeps_equity_value_flows_and_dividends_separate(self) -> None:
+        equity = app.replace(self.sample_trade(), asset="MSCI World UCITS ETF")
+        bond = app.replace(self.sample_trade(), asset="Government Bond ETF", isin="IE0000000002")
+        dividend = app.Dividend(
+            broker="Example Broker", asset=equity.asset, isin="", date=date(2026, 2, 1),
+            amount_eur=Decimal("5"), tax_eur=Decimal("0"),
+        )
+        symbols = {equity.isin: "EQUITY.MI", bond.isin: "BOND.MI"}
+        def resolve(isin: str, **_kwargs: object) -> dict[str, str]:
+            return {"symbol": symbols[isin], "status": "priced"}
+        def history(symbol: str, *_args: object, **_kwargs: object) -> dict[str, object]:
+            return {"status": "priced", "currency": "EUR", "prices": {"2026-01-02": 100.0}}
+        with (
+            patch.object(app, "resolve_isin", side_effect=resolve),
+            patch.object(app, "fetch_history", side_effect=history),
+            patch.object(app, "current_price_overrides", return_value={}),
+            patch.object(app, "fetch_eurostat_cpi", return_value={}),
+            patch.object(app, "read_portfolio_dividends", return_value=[dividend]),
+            patch.object(app, "read_cash_interests", return_value=[]),
+            patch.object(app, "load_cash_histories", return_value=([], [], [])),
+            patch.object(app, "read_exposures", return_value={}),
+        ):
+            series = app.calculate_valuation_series([equity, bond], {}, person=app.PRIMARY_PORTFOLIO_ID)["series"]
+        self.assertEqual(series[-1]["market_value"], 200.0)
+        self.assertEqual(series[-1]["equity_market_value"], 100.0)
+        self.assertEqual(series[-1]["equity_net_contributions"], 100.0)
+        self.assertEqual(series[-1]["equity_dividends"], 5.0)
+        self.assertEqual(series[-1]["equity_priced_positions"], 1)
+
     def test_canonical_holding_name_merges_issuer_name_variants(self) -> None:
         examples = {
             "NVIDIA CORP": "NVIDIA",
