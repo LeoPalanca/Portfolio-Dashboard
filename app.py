@@ -4977,7 +4977,14 @@ def resolve_isin(isin: str, refresh: bool = False, direct_symbol: str = "") -> d
 
     cache = get_symbol_cache()
     cached = cache.get(isin)
-    if cached and not refresh:
+    # Failed lookups are temporary (notably Yahoo rate limits), not permanent
+    # instrument mappings. Cool down before retrying to avoid request storms.
+    retry_failed_lookup = (
+        cached
+        and cached.get("status") == "lookup_error"
+        and time.time() - cached.get("resolved_at", 0) >= 900
+    )
+    if cached and not refresh and not retry_failed_lookup:
         return {**cached, "status": cached.get("status", "resolved")}
     if yf is None:
         if cached and cached.get("symbol"):

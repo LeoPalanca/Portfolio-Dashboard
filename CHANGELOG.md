@@ -3,6 +3,13 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.8.1 - 2026-10-06
+
+### Fixed
+
+- Failed ISIN lookups retry after a 15-minute cooldown instead of permanently
+  caching temporary Yahoo rate-limit and network errors for imported assets.
+
 ## 0.8.0 - 2026-09-24
 
 ### Added

@@ -191,6 +191,30 @@ class PriceHistoryLookupTest(unittest.TestCase):
         self.assertEqual(cached["US0079031078"]["symbol"], "AMD")
         save.assert_not_called()
 
+    def test_failed_lookup_retries_after_cooldown(self) -> None:
+        cached = {"IE00BL25JL35": {"status": "lookup_error", "resolved_at": 1000}}
+        result = type("SearchResult", (), {"quotes": [{"symbol": "XDEQ.MI"}]})()
+        with (
+            patch.object(app, "get_symbol_cache", return_value=cached),
+            patch.object(app, "save_json"),
+            patch.object(app.time, "time", return_value=1900),
+            patch.object(app.yf, "Search", return_value=result) as search,
+        ):
+            resolved = app.resolve_isin("IE00BL25JL35")
+        search.assert_called_once()
+        self.assertEqual(resolved["symbol"], "XDEQ.MI")
+        self.assertEqual(resolved["status"], "resolved")
+
+    def test_failed_lookup_respects_cooldown(self) -> None:
+        cached = {"IE00BL25JL35": {"status": "lookup_error", "resolved_at": 1000}}
+        with (
+            patch.object(app, "get_symbol_cache", return_value=cached),
+            patch.object(app.time, "time", return_value=1899),
+            patch.object(app.yf, "Search") as search,
+        ):
+            self.assertEqual(app.resolve_isin("IE00BL25JL35")["status"], "lookup_error")
+        search.assert_not_called()
+
     def test_missing_yfinance_reuses_resolved_symbol(self) -> None:
         cached = {
             "US0079031078": {
