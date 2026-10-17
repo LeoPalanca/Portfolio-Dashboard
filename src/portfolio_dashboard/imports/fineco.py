@@ -49,6 +49,38 @@ def fineco_statement_kind(path: Path) -> str:
     return ""
 
 
+def read_fineco_security_rows(path: Path) -> list[dict[str, Any]]:
+    """Read securities by heading: Fineco omits fund-fee columns in some exports."""
+
+    required = {
+        "operazione", "descrizione", "titolo", "isin", "segno", "quantita",
+        "divisa", "prezzo", "controvalore", "commissioni_amministrato",
+    }
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    try:
+        sheet = next(
+            (sheet for sheet in workbook if sheet.title.casefold() == "movimenti dossier titoli"),
+            None,
+        )
+        if sheet is None:
+            raise ValueError("Fineco securities worksheet is missing")
+        for row_number, row in enumerate(sheet.iter_rows(max_row=30, values_only=True), start=1):
+            headers = [normalize_fineco_header(value) for value in row]
+            if {"operazione", "descrizione", "titolo", "isin"}.issubset(headers):
+                missing = required.difference(headers)
+                if missing:
+                    raise ValueError(f"Fineco securities export is missing columns: {', '.join(sorted(missing))}")
+                return [
+                    {header: row[index] if index < len(row) else None
+                     for index, header in enumerate(headers) if header}
+                    for row in sheet.iter_rows(min_row=row_number + 1, values_only=True)
+                    if any(value is not None for value in row)
+                ]
+        raise ValueError("Fineco securities export headers were not found")
+    finally:
+        workbook.close()
+
+
 def _date_value(value: Any) -> date | None:
     if isinstance(value, datetime):
         return value.date()

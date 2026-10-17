@@ -55,6 +55,7 @@ from src.portfolio_dashboard.imports import (
     source_format_label,
 )
 from src.portfolio_dashboard.ingest import BrokerAdapter, FunctionBrokerAdapter
+from src.portfolio_dashboard.imports.fineco import read_fineco_security_rows
 from src.portfolio_dashboard.movements import MovementStore
 
 try:
@@ -808,25 +809,21 @@ def fineco_row_event(description: Any) -> str:
 
 
 def read_fineco_trades(path: Path) -> list[Trade]:
-    workbook = load_workbook(path, data_only=True, read_only=True)
-    sheet = workbook["Movimenti Dossier Titoli"]
     trades: list[Trade] = []
 
-    for row in sheet.iter_rows(min_row=8, values_only=True):
-        if not row:
-            continue
-        event = fineco_row_event(row[2])
+    for row in read_fineco_security_rows(path):
+        event = fineco_row_event(row["descrizione"])
         if not event:
             continue
-        sign = str(row[5] or "").strip().upper()
+        sign = str(row["segno"] or "").strip().upper()
         if event == "trade" and sign not in {"A", "V"}:
             continue
 
-        quantity = abs(fineco_decimal(row[6]))
+        quantity = abs(fineco_decimal(row["quantita"]))
         if not quantity:
             continue
-        value_eur = fineco_decimal(row[10])
-        commission = fineco_decimal(row[14])
+        value_eur = fineco_decimal(row["controvalore"])
+        commission = fineco_decimal(row["commissioni_amministrato"])
         is_buy = sign != "V"
         cash_effect = -(value_eur + commission) if is_buy else value_eur - commission
         if event == "trade":
@@ -837,14 +834,14 @@ def read_fineco_trades(path: Path) -> list[Trade]:
             source = "fineco_corporate_action"
         trades.append(
             Trade(
-                asset=str(row[3]).strip(),
-                isin=str(row[4] or "").strip().upper(),
+                asset=str(row["titolo"]).strip(),
+                isin=str(row["isin"] or "").strip().upper(),
                 broker="Fineco",
                 action=action,
-                currency_hint=str(row[7] or "EUR").strip().upper(),
+                currency_hint=str(row["divisa"] or "EUR").strip().upper(),
                 cash_currency="EUR",
-                date=parse_fineco_date(row[0]),
-                price=fineco_decimal(row[8]),
+                date=parse_fineco_date(row["operazione"]),
+                price=fineco_decimal(row["prezzo"]),
                 quantity=quantity,
                 quantity_diff=quantity if is_buy else -quantity,
                 total_spend=cash_effect,
@@ -1026,19 +1023,17 @@ def read_trade_republic_dividends(path: Path) -> list[Dividend]:
 
 
 def read_fineco_dividends(path: Path) -> list[Dividend]:
-    workbook = load_workbook(path, data_only=True, read_only=True)
-    sheet = workbook["Movimenti Dossier Titoli"]
     dividends: list[Dividend] = []
-    for row in sheet.iter_rows(min_row=8, values_only=True):
-        if not row or row[2] != "Dividendo":
+    for row in read_fineco_security_rows(path):
+        if row["descrizione"] != "Dividendo":
             continue
-        net_amount = fineco_decimal(row[10])
+        net_amount = fineco_decimal(row["controvalore"])
         dividends.append(
             Dividend(
                 broker="Fineco",
-                asset=str(row[3]).strip(),
-                isin=str(row[4] or "").strip().upper(),
-                date=parse_fineco_date(row[0]),
+                asset=str(row["titolo"]).strip(),
+                isin=str(row["isin"] or "").strip().upper(),
+                date=parse_fineco_date(row["operazione"]),
                 amount_eur=net_amount,
                 tax_eur=fineco_dividend_tax_from_net(net_amount),
             )
@@ -2435,13 +2430,11 @@ def read_trade_republic_tax_events(path: Path) -> list[FrictionEvent]:
 
 
 def read_fineco_friction_events(path: Path) -> list[FrictionEvent]:
-    workbook = load_workbook(path, data_only=True, read_only=True)
-    sheet = workbook["Movimenti Dossier Titoli"]
     events: list[FrictionEvent] = []
-    for row in sheet.iter_rows(min_row=8, values_only=True):
-        if not row or row[2] != "Dividendo":
+    for row in read_fineco_security_rows(path):
+        if row["descrizione"] != "Dividendo":
             continue
-        net_amount = fineco_decimal(row[10])
+        net_amount = fineco_decimal(row["controvalore"])
         tax = fineco_dividend_tax_from_net(net_amount)
         if not tax:
             continue
@@ -2449,9 +2442,9 @@ def read_fineco_friction_events(path: Path) -> list[FrictionEvent]:
             FrictionEvent(
                 broker="Fineco",
                 event_type="dividend_tax",
-                date=parse_fineco_date(row[0]),
+                date=parse_fineco_date(row["operazione"]),
                 amount_eur=tax,
-                description=f"Implied dividend withholding - {str(row[3] or '').strip()}",
+                description=f"Implied dividend withholding - {str(row['titolo'] or '').strip()}",
             )
         )
     return events

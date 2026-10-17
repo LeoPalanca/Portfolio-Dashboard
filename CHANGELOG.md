@@ -3,6 +3,15 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.8.2 - 2026-10-17
+
+### Fixed
+
+- Fineco securities imports locate columns by header, supporting both the
+  15-column and compact 12-column exports without losing commissions.
+- Trades, dividends, and dividend-tax entries also support reordered columns
+  and variable preambles; missing required columns produce a clear error.
+
 ## 0.8.1 - 2026-10-06
 
 ### Fixed
