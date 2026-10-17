@@ -3,6 +3,19 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.9.1 - 2026-10-17
+
+### Fixed
+
+- Intesa's importer explicitly identifies native Lista_Operazioni XLSX files as
+  bank income/expense statements, without creating investment trades.
+- Intesa giroconti stay separate from income in either direction; bank-labelled
+  incoming refunds and reversals are credits rather than earnings.
+- A recipient's name in Intesa payment details no longer causes salary and
+  third-party receipts to be discarded as own-account transfers.
+- Added upload-to-ledger coverage for Intesa automatic detection, statement
+  archiving, duplicate uploads, and separation from investment positions.
+
 ## 0.9.0 - 2026-10-17
 
 ### Added

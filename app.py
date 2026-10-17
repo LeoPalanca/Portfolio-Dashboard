@@ -1776,10 +1776,14 @@ def parse_intesa_expense_date(value: Any) -> date | None:
 
 
 def intesa_expense_flow_kind(source_category: str, merchant: str, description: str, amount: Decimal) -> str:
-    if amount > ZERO:
-        return "income"
     category = source_category.strip().lower()
     combined = f"{merchant} {description}".lower()
+    if "giroconto" in category or "giroconto" in combined:
+        return "personal_transfer"
+    if amount > ZERO and ("rimbors" in category or "storni" in category):
+        return "credit"
+    if amount > ZERO:
+        return "income"
     if "preliev" in category or "preliev" in combined:
         return "cash_withdrawal"
     if "imposte" in category or "commission" in category or "commission" in combined or "interessi debitori" in combined:
@@ -1836,7 +1840,10 @@ def read_intesa_expense_events(
         description = intesa_cell_text(record.get("Dettagli")) or merchant
         currency = normalize_currency_code(record.get("Valuta") or "EUR")
         flow_kind = intesa_expense_flow_kind(source_category, merchant, description, amount)
-        if is_self_giroconto_expense(source_category, merchant, description, flow_kind):
+        # Intesa details include the recipient's name even for payroll and
+        # third-party receipts. Only the operation/counterparty identifies an
+        # own-account transfer; matching the full narrative drops real income.
+        if is_self_giroconto_expense(source_category, merchant, "", flow_kind):
             continue
         raw_events.append(
             {
