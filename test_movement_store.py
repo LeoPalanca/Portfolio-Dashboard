@@ -1,15 +1,71 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import sqlite3
 import tempfile
 import unittest
-import sqlite3
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 from src.portfolio_dashboard.movements import MovementStore
 
 
 class MovementStoreTest(unittest.TestCase):
+    def test_numeric_formatting_deduplicates_imports_and_enrichment(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = MovementStore(Path(temporary) / "movements.sqlite3")
+            original = {"date": "2024-01-23", "event_type": "trade", "asset": "ETF",
+                        "quantity": "4", "price": "55.6275", "amount": "-225.46", "fees": "2.95"}
+            formatted = {**original, "quantity": "4.00", "price": "55.62750", "amount": "-225.4600"}
+            kwargs = {"source_kind": "fineco", "stored_path": "test.xlsx", "parser_version": "test"}
+            first = store.record_import(sha256="a", original_name="one.xlsx", movements=[original], **kwargs)
+            second = store.record_import(sha256="b", original_name="two.xlsx", movements=[formatted], **kwargs)
+            self.assertEqual((second.movement_count, second.duplicate_count), (0, 1))
+            self.assertEqual(store.enrich_import(first, parser_version="new", movements=[formatted]), (0, 1))
+            different_fee = {**formatted, "fees": "3.95"}
+            self.assertEqual(store.enrich_import(first, parser_version="new", movements=[different_fee]), (1, 0))
+
+    def test_migration_backs_up_repairs_and_is_idempotent(self) -> None:
+        def legacy_fingerprint(canonical):
+            fields = {key: value for key, value in canonical.items() if key != "metadata_json"}
+            return hashlib.sha256(json.dumps(fields, ensure_ascii=False, sort_keys=True,
+                                              separators=(",", ":")).encode()).hexdigest()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            database = Path(temporary) / "movements.sqlite3"
+            store = MovementStore(database)
+            original = {"date": "2024-01-23", "event_type": "trade", "asset": "ETF",
+                        "quantity": "4", "price": "55.6275", "amount": "-225.46", "fees": "2.95"}
+            with patch("src.portfolio_dashboard.movements.store._movement_fingerprint", legacy_fingerprint):
+                for token, movement, portfolio in [
+                    ("a", original, "primary"),
+                    ("b", {**original, "quantity": "4.00", "price": "55.62750"}, "primary"),
+                    ("c", original, "partner"),
+                    ("d", {**original, "fees": "3.95"}, "primary"),
+                ]:
+                    store.record_import(sha256=token, source_kind="fineco", original_name=token,
+                                        stored_path=token, parser_version="old", movements=[movement],
+                                        portfolio_id=portfolio)
+            with sqlite3.connect(database) as connection:
+                connection.execute("UPDATE schema_metadata SET value='2' WHERE key='schema_version'")
+            repaired = MovementStore(database)
+            rows = repaired.movements()
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0]["quantity"], "4")
+            self.assertEqual(len(repaired.movements("partner")), 1)
+            duplicate_import = repaired.import_by_hash("b")
+            self.assertEqual((duplicate_import.movement_count, duplicate_import.duplicate_count), (0, 1))
+            backups = list(Path(temporary).glob("*.bak"))
+            self.assertEqual(len(backups), 1)
+            with sqlite3.connect(backups[0]) as connection:
+                self.assertEqual(connection.execute("SELECT count(*) FROM movements").fetchone()[0], 4)
+            self.assertEqual(len(MovementStore(database).movements()), 2)
+            self.assertEqual(len(list(Path(temporary).glob("*.bak"))), 1)
+            self.assertEqual(repaired.enrich_import(repaired.import_by_hash("a"), parser_version="new",
+                                                   movements=[{**original, "quantity": "4.000"}]), (0, 1))
+
     def test_records_imports_and_deduplicates_movements_across_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             store = MovementStore(Path(temporary) / "movements.sqlite3")

@@ -10,11 +10,29 @@ from collections.abc import Iterable, Mapping, Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+
+
+def _movement_fingerprint(canonical: Mapping[str, str]) -> str:
+    fields = {key: value for key, value in canonical.items() if key != "metadata_json"}
+    for key in ("amount", "quantity", "price", "fees", "tax"):
+        value = fields.get(key, "")
+        if value == "":
+            continue
+        try:
+            number = Decimal(value)
+        except InvalidOperation:
+            continue
+        if number.is_finite():
+            text = format(number, "f")
+            fields[key] = "0" if number == 0 else text.rstrip("0").rstrip(".") if "." in text else text
+    return hashlib.sha256(
+        json.dumps(fields, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -87,12 +105,54 @@ class MovementStore:
                         self._migrate_v1(connection)
                     else:
                         self._create_schema(connection)
+                connection.commit()
+                self._migrate_numeric_fingerprints(connection)
                 connection.execute(
                     "INSERT OR REPLACE INTO schema_metadata(key, value) VALUES ('schema_version', ?)",
                     (str(SCHEMA_VERSION),),
                 )
                 connection.commit()
             self._initialized = True
+
+    def _migrate_numeric_fingerprints(self, connection: sqlite3.Connection) -> None:
+        """Reconcile formatting-only duplicates atomically, preserving a SQLite backup."""
+
+        connection.execute("BEGIN IMMEDIATE")
+        version = connection.execute(
+            "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
+        ).fetchone()
+        if version and int(version[0]) >= 3:
+            return
+        cursor = connection.execute("SELECT * FROM movements ORDER BY id")
+        columns = [column[0] for column in cursor.description]
+        rows = [dict(zip(columns, row)) for row in cursor]
+        if not rows:
+            return
+        backup = self.path.with_name(
+            f"{self.path.name}.pre-numeric-v3-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}.bak"
+        )
+        with closing(sqlite3.connect(self.path)) as source, closing(sqlite3.connect(backup)) as target:
+            source.backup(target)
+        seen: set[tuple[str, str]] = set()
+        survivors: list[tuple[str, int]] = []
+        for row in rows:
+            canonical = {key: value for key, value in row.items()
+                         if key not in {"id", "portfolio_id", "import_id", "fingerprint"}}
+            fingerprint = _movement_fingerprint(canonical)
+            identity = (row["portfolio_id"], fingerprint)
+            if identity in seen:
+                connection.execute("DELETE FROM movements WHERE id = ?", (row["id"],))
+                connection.execute(
+                    "UPDATE imports SET movement_count = movement_count - 1, "
+                    "duplicate_count = duplicate_count + 1 WHERE id = ?",
+                    (row["import_id"],),
+                )
+            else:
+                seen.add(identity)
+                survivors.append((fingerprint, row["id"]))
+        # Temporary unique keys prevent collisions while replacing legacy hashes.
+        connection.execute("UPDATE movements SET fingerprint = 'numeric-v3:' || id")
+        connection.executemany("UPDATE movements SET fingerprint = ? WHERE id = ?", survivors)
 
     @staticmethod
     def _create_schema(connection: sqlite3.Connection) -> None:
@@ -229,10 +289,7 @@ class MovementStore:
             import_id = cursor.lastrowid
             for movement in movements:
                 canonical = self._canonical_movement(source_kind, movement)
-                fingerprint_fields = {key: value for key, value in canonical.items() if key != "metadata_json"}
-                fingerprint = hashlib.sha256(
-                    json.dumps(fingerprint_fields, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-                ).hexdigest()
+                fingerprint = _movement_fingerprint(canonical)
                 result = connection.execute(
                     """
                     INSERT OR IGNORE INTO movements(
@@ -297,10 +354,7 @@ class MovementStore:
         with closing(self._connect()) as connection, connection:
             for movement in movements:
                 canonical = self._canonical_movement(record.source_kind, movement)
-                fingerprint_fields = {key: value for key, value in canonical.items() if key != "metadata_json"}
-                fingerprint = hashlib.sha256(
-                    json.dumps(fingerprint_fields, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-                ).hexdigest()
+                fingerprint = _movement_fingerprint(canonical)
                 result = connection.execute(
                     """
                     INSERT OR IGNORE INTO movements(

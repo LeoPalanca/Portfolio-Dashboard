@@ -3,6 +3,16 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.8.3 - 2026-10-17
+
+### Fixed
+
+- Equivalent numeric formats such as `4` and `4.00` now deduplicate across
+  imports and parser enrichment without rounding transaction values.
+- Existing ledgers receive a backed-up, atomic migration retaining the earliest
+  matching transaction and reconciling duplicate import counts. Portfolios and
+  transactions with different fees or other financial fields remain distinct.
+
 ## 0.8.2 - 2026-10-17
 
 ### Fixed
