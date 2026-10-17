@@ -3,6 +3,18 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.9.0 - 2026-10-17
+
+### Added
+
+- Expenses becomes Income & expenses, with income, spending, and their balance
+  upfront plus a dedicated recent-income table using existing classified imports.
+- Period-filtered monthly and cumulative charts compare income with expenses;
+  cumulative balance shows income minus expenses. Investments, credits, and
+  personal transfers remain separate from that balance.
+- Expense categories, shares, merchants, and drilldowns now cover spending only;
+  source breakdowns show income, expenses, investments, credits, and balance.
+
 ## 0.8.4 - 2026-10-17
 
 ### Fixed

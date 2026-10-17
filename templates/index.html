@@ -636,21 +636,22 @@
       </div>
     </section>
 
-    <!-- Expenses -->
+    <!-- Income and expenses -->
     <section data-section="expenses" class="section-support" id="expenses-section">
       <div class="section-head" data-collapse="expenses-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-          <h2>Expenses</h2>
+          <h2>Income &amp; expenses</h2>
         </div>
         <span class="subtle" id="expenses-summary"></span>
       </div>
       <div class="section-content" id="expenses-content">
         <div class="section-body">
           <div class="expense-summary" id="expense-metrics"></div>
+          <p class="subtle">Balance = income minus expenses. Credits, transfers and investments are shown separately. Figures cover imported, classified transactions in the selected period.</p>
           <div class="expense-grid">
             <div class="table-wrap">
-              <h3>Top Categories</h3>
+              <h3>Expense categories</h3>
               <table>
                 <thead>
                   <tr>
@@ -664,15 +665,15 @@
               </table>
             </div>
             <div class="expense-chart-card">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h3 style="margin: 0;">Expense Trend</h3>
-                <div class="periods secondary-selector" id="expense-trend-mode" aria-label="Expense trend mode" style="padding: 2px; border-radius: 7px; background: var(--surface-overlay); display: flex;">
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin: 0;">Income &amp; expenses over time</h3>
+                <div class="periods secondary-selector" id="expense-trend-mode" aria-label="Income and expense trend mode" style="padding: 2px; border-radius: 7px; background: var(--surface-overlay); display: flex;">
                   <button type="button" id="expense-toggle-monthly" class="active" style="min-height: 22px; padding: 2px 8px; font-size: 11px; font-weight: 500; border-radius: 5px; background: var(--accent); color: white; border: none; cursor: pointer;">Monthly</button>
                   <button type="button" id="expense-toggle-cumulative" style="min-height: 22px; padding: 2px 8px; font-size: 11px; font-weight: 500; border-radius: 5px; background: transparent; color: var(--text-muted); border: none; cursor: pointer;">Cumulative</button>
                 </div>
               </div>
               <div id="expense-trend-legend" style="display: flex; gap: 12px; font-size: 11px; margin-bottom: 8px; align-items: center;"></div>
-              <svg class="expense-chart" id="expense-trend" role="img" aria-label="Monthly expense trend"></svg>
+              <svg class="expense-chart" id="expense-trend" role="img" aria-label="Income and expenses over time"></svg>
             </div>
             <div class="table-wrap">
               <h3>Source Breakdown</h3>
@@ -681,10 +682,11 @@
                   <tr>
                     <th>Source</th>
                     <th>Rows</th>
-                    <th>Outflow</th>
                     <th>Income</th>
+                    <th>Expenses</th>
+                    <th>Investments</th>
                     <th>Credits</th>
-                    <th>Net Outflow</th>
+                    <th>Balance</th>
                   </tr>
                 </thead>
                 <tbody id="expense-sources"></tbody>
@@ -706,6 +708,13 @@
             </div>
           </div>
           <div class="table-wrap">
+            <h3>Recent income</h3>
+            <table>
+              <thead><tr><th>Date</th><th>Source</th><th>Payer</th><th>Description</th><th>Amount EUR</th></tr></thead>
+              <tbody id="income-rows"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
             <h3>Credits</h3>
             <table>
               <thead>
@@ -721,7 +730,7 @@
             </table>
           </div>
           <div class="table-wrap">
-            <h3>Recent Rows</h3>
+            <h3>Recent transactions</h3>
             <table>
               <thead>
                 <tr>

@@ -1804,7 +1804,7 @@ tbody tr:hover {
 }
 .expense-summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
   gap: var(--space-3);
   border-bottom: 1px solid var(--border);
   padding-bottom: var(--space-4);

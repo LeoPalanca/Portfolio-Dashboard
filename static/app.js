@@ -2002,12 +2002,16 @@
       let investments = 0;
       let credits = 0;
       const creditRows = [];
+      const incomeRows = [];
 
       (rows || []).forEach(row => {
         const amount = Number(row.amount_eur || 0);
         if (!Number.isFinite(amount) || amount === 0) return;
         const kind = expenseKind(row);
-        if (kind === "income") income += amount;
+        if (kind === "income") {
+          income += amount;
+          incomeRows.push(row);
+        }
         else if (kind === "credits") {
           credits += amount;
           creditRows.push(row);
@@ -2017,9 +2021,11 @@
         else spend += amount;
 
         const category = row.category || "Uncategorized";
-        categoryMap[category] ||= { category, amount: 0, count: 0 };
-        categoryMap[category].amount += amount;
-        categoryMap[category].count += 1;
+        if (kind === "spend") {
+          categoryMap[category] ||= { category, amount: 0, count: 0 };
+          categoryMap[category].amount += amount;
+          categoryMap[category].count += 1;
+        }
 
         const source = row.source_label || row.source || "Source";
         sourceMap[source] ||= { source, spend: 0, income: 0, transfers: 0, investments: 0, credits: 0, count: 0 };
@@ -2033,7 +2039,7 @@
           monthMap[month].count += 1;
         }
 
-        if (kind !== "income" && kind !== "credits") {
+        if (kind === "spend") {
           const merchant = row.merchant || "Unknown";
           merchantMap[merchant] ||= { merchant, category, amount: 0, count: 0 };
           merchantMap[merchant].amount += amount;
@@ -2045,20 +2051,20 @@
       const netOutflow = totalOutflow - income;
       const categories = Object.values(categoryMap)
         .filter(row => row.category !== "Income" && row.category !== "Credits" && row.category !== "Personal Transfers")
-        .map(row => ({ ...row, share: totalOutflow > 0 ? row.amount / totalOutflow * 100 : null }))
+        .map(row => ({ ...row, share: spend > 0 ? row.amount / spend * 100 : null }))
         .sort((a, b) => b.amount - a.amount);
       const sources = Object.values(sourceMap)
         .map(row => ({
           ...row,
-          outflow: row.spend + row.investments,
-          net: row.spend + row.investments - row.income
+          outflow: row.spend,
+          net: row.spend - row.income
         }))
         .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
       const months = Object.values(monthMap)
         .map(row => ({
           ...row,
-          outflow: row.spend + row.investments,
-          net: row.spend + row.investments - row.income
+          outflow: row.spend,
+          net: row.spend - row.income
         }))
         .sort((a, b) => String(a.month).localeCompare(String(b.month)));
       const merchants = Object.values(merchantMap).sort((a, b) => b.amount - a.amount);
@@ -2071,7 +2077,9 @@
         credits,
         totalOutflow,
         netOutflow,
+        balance: income - spend,
         rows: rows || [],
+        incomeRows: incomeRows.sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))),
         creditRows: creditRows.sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))),
         categories,
         sources,
@@ -2099,7 +2107,7 @@
           legend.innerHTML = `
             <span class="inline-legend">
               <i class="legend-dot legend-dot--accent"></i>
-              Cumulative Outflow
+              Cumulative expenses
             </span>
             <span class="inline-legend">
               <i class="legend-dot legend-dot--positive"></i>
@@ -2107,14 +2115,14 @@
             </span>
             <span class="inline-legend">
               <i class="legend-dot legend-dot--warning"></i>
-              Cumulative Net Outflow
+              Cumulative balance
             </span>
           `;
         } else {
           legend.innerHTML = `
             <span class="inline-legend">
               <i class="legend-dot legend-dot--accent"></i>
-              Outflow
+              Expenses
             </span>
             <span class="inline-legend">
               <i class="legend-dot legend-dot--positive"></i>
@@ -2131,7 +2139,7 @@
       svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
       svg.setAttribute("preserveAspectRatio", "none");
       if (!rows.length) {
-        svg.innerHTML = `<text x="${width / 2}" y="${height / 2}" text-anchor="middle" class="expense-label">No monthly expense rows in this window</text>`;
+        svg.innerHTML = `<text x="${width / 2}" y="${height / 2}" text-anchor="middle" class="expense-label">No income or expense rows in this window</text>`;
         return;
       }
       const plotW = width - margin.left - margin.right;
@@ -2152,7 +2160,7 @@
         const cumulativeRows = rows.map(row => {
           runningOutflow += Number(row.outflow || 0);
           runningIncome += Number(row.income || 0);
-          runningNet += Number(row.net || 0);
+          runningNet -= Number(row.net || 0);
           return {
             month: row.month,
             outflow: runningOutflow,
@@ -2210,13 +2218,13 @@
 
           return `
             <circle cx="${x.toFixed(2)}" cy="${yOut.toFixed(2)}" r="4" class="point point--accent" stroke-width="1.5">
-              <title>${row.month} cumulative outflow: ${money(row.outflow)}</title>
+              <title>${row.month} cumulative expenses: ${money(row.outflow)}</title>
             </circle>
             <circle cx="${x.toFixed(2)}" cy="${yInc.toFixed(2)}" r="4" class="point point--positive" stroke-width="1.5">
               <title>${row.month} cumulative income: ${money(row.income)}</title>
             </circle>
             <circle cx="${x.toFixed(2)}" cy="${yNet.toFixed(2)}" r="4" class="point point--warning" stroke-width="1.5">
-              <title>${row.month} cumulative net: ${money(row.net)}</title>
+              <title>${row.month} cumulative balance: ${money(row.net)}</title>
             </circle>
             ${showLabel ? `<text class="expense-label" x="${x.toFixed(2)}" y="${height - 10}" text-anchor="middle">${escapeHtml(label)}</text>` : ""}
           `;
@@ -2250,7 +2258,7 @@
           const showLabel = (index % labelStep === 0) || (index === rows.length - 1);
 
           return `
-            <rect class="expense-bar spend" x="${(center - barW - 2).toFixed(2)}" y="${spendY.toFixed(2)}" width="${barW.toFixed(2)}" height="${Math.max(0, spendH).toFixed(2)}" rx="3"><title>${row.month} outflow ${money(row.outflow)} | net ${money(row.net)}</title></rect>
+            <rect class="expense-bar spend" x="${(center - barW - 2).toFixed(2)}" y="${spendY.toFixed(2)}" width="${barW.toFixed(2)}" height="${Math.max(0, spendH).toFixed(2)}" rx="3"><title>${row.month} expenses ${money(row.outflow)} | balance ${money(-row.net)}</title></rect>
             <rect class="expense-bar income" x="${(center + 2).toFixed(2)}" y="${incomeY.toFixed(2)}" width="${barW.toFixed(2)}" height="${Math.max(0, incomeH).toFixed(2)}" rx="3"><title>${row.month} income ${money(row.income)}</title></rect>
             ${showLabel ? `<text class="expense-label" x="${center.toFixed(2)}" y="${height - 10}" text-anchor="middle">${escapeHtml(label)}</text>` : ""}
           `;
@@ -2267,20 +2275,20 @@
     function renderExpenses(data) {
       const expenses = periodExpenses(data);
       const unavailable = (expenses.status === "empty" || expenses.status === "unavailable") && !expenses.rows.length;
-      const message = expenses.message || "No classified expense rows are available for this window.";
+      const message = expenses.message || "No classified income or expense rows are available for this window.";
 
       window.currentExpenseRows = expenses.rows || [];
 
       document.getElementById("expenses-summary").textContent = unavailable
         ? "No rows"
-        : `${selectedWindowLabel()} | ${money(expenses.netOutflow)} net outflow | ${expenses.rows.length} rows`;
+        : `${selectedWindowLabel()} | ${money(expenses.balance)} balance | ${expenses.rows.length} transactions`;
       document.getElementById("expense-metrics").innerHTML = unavailable ? `<div class="empty-state">${escapeHtml(message)}</div>` : `
-        <div class="expense-item"><span>Spend</span><strong class="negative">${money(expenses.spend)}</strong></div>
+        <div class="expense-item"><span>Income</span><strong class="positive">${money(expenses.income)}</strong></div>
+        <div class="expense-item"><span>Expenses</span><strong class="negative">${money(expenses.spend)}</strong></div>
+        <div class="expense-item"><span>Balance</span><strong class="${signedClass(expenses.balance)}">${money(expenses.balance)}</strong></div>
         <div class="expense-item"><span>Transfers</span><strong class="negative">${money(expenses.transfers)}</strong></div>
         <div class="expense-item"><span>Investments</span><strong class="negative">${money(expenses.investments)}</strong></div>
         <div class="expense-item"><span>Credits</span><strong>${money(expenses.credits)}</strong></div>
-        <div class="expense-item"><span>Income</span><strong class="positive">${money(expenses.income)}</strong></div>
-        <div class="expense-item"><span>Net outflow</span><strong class="${signedClass(-expenses.netOutflow)}">${money(expenses.netOutflow)}</strong></div>
       `;
       document.getElementById("expense-categories").innerHTML = !expenses.categories.length
         ? `<tr><td colspan="4" class="empty-state">${escapeHtml(message)}</td></tr>`
@@ -2296,15 +2304,27 @@
           </tr>
         `).join("");
       document.getElementById("expense-sources").innerHTML = !expenses.sources.length
-        ? `<tr><td colspan="6" class="empty-state">${escapeHtml(message)}</td></tr>`
+        ? `<tr><td colspan="7" class="empty-state">${escapeHtml(message)}</td></tr>`
         : expenses.sources.map(row => `
           <tr>
             <td>${escapeHtml(row.source)}</td>
             <td>${row.count}</td>
-            <td>${money(row.outflow)}</td>
             <td class="positive">${money(row.income)}</td>
+            <td>${money(row.spend)}</td>
+            <td>${money(row.investments)}</td>
             <td>${money(row.credits)}</td>
-            <td class="${signedClass(-row.net)}">${money(row.net)}</td>
+            <td class="${signedClass(-row.net)}">${money(-row.net)}</td>
+          </tr>
+        `).join("");
+      document.getElementById("income-rows").innerHTML = !expenses.incomeRows.length
+        ? `<tr><td colspan="5" class="empty-state">No income transactions in this window.</td></tr>`
+        : expenses.incomeRows.slice(0, 30).map(row => `
+          <tr>
+            <td>${escapeHtml(row.date || "")}</td>
+            <td>${escapeHtml(row.source_label || row.source || "")}</td>
+            <td>${escapeHtml(row.merchant || "")}</td>
+            <td>${escapeHtml(row.description || "")}</td>
+            <td class="positive">${money(row.amount_eur || 0)}</td>
           </tr>
         `).join("");
       document.getElementById("expense-credits").innerHTML = !expenses.creditRows.length
@@ -2360,7 +2380,7 @@
       document.querySelectorAll(".category-chevron").forEach(el => el.style.transform = "rotate(0deg)");
       
       const allRows = window.currentExpenseRows || [];
-      const catRows = allRows.filter(row => (row.category || "Uncategorized") === categoryName);
+      const catRows = allRows.filter(row => expenseKind(row) === "spend" && (row.category || "Uncategorized") === categoryName);
       
       const subcatMap = {};
       let totalAmount = 0;
@@ -2415,6 +2435,7 @@
     window.showSubcategoryDetails = function(categoryName, subcategoryName) {
       const allRows = window.currentExpenseRows || [];
       window.currentSubcatRows = allRows.filter(row => 
+        expenseKind(row) === "spend" &&
         (row.category || "Uncategorized") === categoryName &&
         ((row.subcategory || "").trim() || "Unspecified") === subcategoryName
       );
