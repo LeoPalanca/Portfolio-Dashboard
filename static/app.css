@@ -376,11 +376,12 @@ h1 {
   background: var(--scrim);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  visibility: hidden;
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--motion-base) var(--ease);
 }
-.import-modal.open { opacity: 1; pointer-events: auto; }
+.import-modal.open { visibility: visible; opacity: 1; pointer-events: auto; }
 .import-card {
   width: min(560px, 100%);
   max-height: calc(100vh - 2 * var(--space-5));
@@ -1935,8 +1936,8 @@ tbody tr:hover {
   0%, 100% { opacity: 0.72; transform: scaleX(0.7); }
   50% { opacity: 1; transform: scaleX(1); }
 }
-body.dashboard-refreshing main > :not(.dashboard-refresh-overlay),
-body.dashboard-redrawing main > :not(.dashboard-refresh-overlay) {
+body.dashboard-refreshing main > :not(.dashboard-refresh-overlay):not(.import-modal):not(#info-modal),
+body.dashboard-redrawing main > :not(.dashboard-refresh-overlay):not(.import-modal):not(#info-modal) {
   opacity: 0.14;
   filter: blur(10px) saturate(0.8);
   transform: scale(0.992);

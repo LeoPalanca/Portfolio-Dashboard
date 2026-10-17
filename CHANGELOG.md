@@ -3,6 +3,13 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.8.4 - 2026-10-17
+
+### Fixed
+
+- Closed import dialogs remain hidden while the dashboard loads or redraws.
+  Loading effects no longer fade, blur, or disable modal dialogs.
+
 ## 0.8.3 - 2026-10-17
 
 ### Fixed
