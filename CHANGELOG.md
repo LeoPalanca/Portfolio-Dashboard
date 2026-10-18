@@ -3,6 +3,29 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.10.0 - 2026-10-18
+
+### Added
+
+- Edit imported transaction categories and subcategories without modifying bank
+  records; optionally learn exact normalized merchant/source/direction rules.
+- Apply rules to past and future matches while preserving individual overrides,
+  or restrict a rule to future imports. Review and remove learned rules.
+- Manual EUR cash ledger with income, expenses, cash transfers, editable entries,
+  an opening balance and current balance, kept separate from investment returns.
+- Search and progressively reveal imported transactions beyond the latest 30.
+- Refresh income/expenses independently after edits, without refreshing prices.
+
+### Fixed
+
+- Bank cash withdrawals are transfers rather than spending, avoiding double
+  counting when actual cash purchases are entered into the manual ledger.
+- Categories cannot change a transaction's underlying income/expense direction.
+- Main grid tracks shrink to the viewport, keeping dense tables from widening
+  the page and displacing the cash editor on mobile.
+- Expense category summaries and exports include spending only, and exports
+  reload saved categories and manual cash entries instead of using stale snapshots.
+
 ## 0.9.1 - 2026-10-17
 
 ### Fixed

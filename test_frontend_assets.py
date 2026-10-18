@@ -36,10 +36,9 @@ class FrontendAssetTest(unittest.TestCase):
         self.assertIn('href="/static/app.css', html)
         self.assertIn('src="/static/app.js', html)
         self.assertNotIn("<style>", html)
-        # Exactly three script tags are sanctioned: the pre-paint theme boot,
-        # the JSON config island, and the external bundle. Anything else means
-        # logic is creeping back into the template.
-        self.assertEqual(html.count("<script"), 3)
+        # Theme boot, config island, and the two external UI modules.
+        self.assertEqual(html.count("<script"), 4)
+        self.assertIn('src="/static/personal-ledger.js', html)
         self.assertIn('id="app-config"', html)
         self.assertIn('localStorage.getItem("theme")', html)
 

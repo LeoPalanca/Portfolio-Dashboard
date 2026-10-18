@@ -1984,6 +1984,8 @@
     }
     function expenseKind(row) {
       const flow = String(row.flow_kind || "");
+      const known = {income: "income", credit: "credits", investment: "investments", personal_transfer: "transfers", spend: "spend", fee: "spend", cash_withdrawal: "transfers"};
+      if (known[flow]) return known[flow];
       const category = String(row.category || "");
       if (flow === "income" || category === "Income") return "income";
       if (flow === "credit" || category === "Credits") return "credits";
@@ -2348,11 +2350,18 @@
             <td>${money(row.amount)}</td>
           </tr>
         `).join("");
-      document.getElementById("expense-rows").innerHTML = !expenses.rows.length
-        ? `<tr><td colspan="6" class="empty-state">${escapeHtml(message)}</td></tr>`
-        : expenses.rows.slice(0, 30).map(row => {
+      renderExpenseTransactions();
+      renderExpenseTrend(expenses.months);
+    }
+    let expenseRowLimit = 30;
+    function renderExpenseTransactions() {
+      const query = String(document.getElementById("expense-search")?.value || "").toLowerCase();
+      const rows = (window.currentExpenseRows || []).filter(row => [row.merchant, row.category, row.description, row.date, row.source_label].join(" ").toLowerCase().includes(query));
+      document.getElementById("expense-rows").innerHTML = !rows.length
+        ? `<tr><td colspan="7" class="empty-state">No matching transactions</td></tr>`
+        : rows.slice(0, expenseRowLimit).map(row => {
           const kind = expenseKind(row);
-          const signedAmount = kind === "income" ? Number(row.amount_eur || 0) : (kind === "credits" ? Number(row.amount_eur || 0) : -Number(row.amount_eur || 0));
+          const signedAmount = row.cash_id ? Number(row.native_amount || 0) : kind === "income" ? Number(row.amount_eur || 0) : (kind === "credits" ? Number(row.amount_eur || 0) : -Number(row.amount_eur || 0));
           return `
             <tr>
               <td>${escapeHtml(row.date)}</td>
@@ -2361,11 +2370,15 @@
               <td>${escapeHtml(row.merchant || "")}</td>
               <td style="text-align: left; color: var(--text-muted); max-width: 340px; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(row.description || "")}</td>
               <td class="${signedClass(signedAmount)}">${money(signedAmount)}</td>
+              <td>${row.cash_id ? `<button type="button" data-cash-edit="${escapeHtml(row.cash_id)}">Edit cash</button>` : row.movement_id ? `<button type="button" data-category-edit="${Number(row.movement_id)}">Set category</button>` : ""}</td>
             </tr>
           `;
         }).join("");
-      renderExpenseTrend(expenses.months);
+      const more = document.getElementById("expense-show-more");
+      if (more) more.hidden = rows.length <= expenseRowLimit;
     }
+    window.renderExpenseTransactions = renderExpenseTransactions;
+    window.showMoreExpenseTransactions = () => {expenseRowLimit += 100; renderExpenseTransactions();};
     window.toggleCategorySubcategories = function(rowElement, categoryName) {
       const nextRow = rowElement.nextElementSibling;
       if (nextRow && nextRow.classList.contains("subcategory-breakdown-row")) {
@@ -3192,6 +3205,11 @@
         if (requestId !== loadRequestId) return;
         dashboardData = data;
         renderDashboard(data);
+        void window.personalLedger.load(selectedPerson, expenses => {
+          if (requestId !== loadRequestId) return;
+          dashboardData.expenses = expenses;
+          renderExpenses(dashboardData);
+        });
         loadNews(false, data.news_symbols || []);
         loadWatchlist(false);
         if (HAS_MULTIPLE_PORTFOLIOS) {

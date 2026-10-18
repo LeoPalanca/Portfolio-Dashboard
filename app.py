@@ -57,6 +57,7 @@ from src.portfolio_dashboard.imports import (
 from src.portfolio_dashboard.ingest import BrokerAdapter, FunctionBrokerAdapter
 from src.portfolio_dashboard.imports.fineco import read_fineco_security_rows
 from src.portfolio_dashboard.movements import MovementStore
+from src.portfolio_dashboard.movements.personal import PersonalLedger
 
 try:
     import yfinance as yf
@@ -2052,6 +2053,9 @@ def read_expense_events(person: str = PRIMARY_PORTFOLIO_ID, refresh: bool = Fals
 
 def expense_row_kind(row: dict[str, Any]) -> str:
     flow_kind = str(row.get("flow_kind") or "")
+    known_kinds = {"income": "income", "credit": "credits", "investment": "investments", "personal_transfer": "transfers", "spend": "spend", "fee": "spend", "cash_withdrawal": "transfers"}
+    if flow_kind in known_kinds:
+        return known_kinds[flow_kind]
     category = str(row.get("category") or "")
     if flow_kind == "income" or category == "Income":
         return "income"
@@ -2072,6 +2076,9 @@ def expense_event_payload(event: dict[str, Any]) -> dict[str, Any]:
         date_value = str(event_date or "")
     return {
         "date": date_value,
+        "movement_id": event.get("movement_id"),
+        "cash_id": event.get("cash_id"),
+        "cash_direction": event.get("cash_direction"),
         "source": event.get("source") or "",
         "source_label": expense_source_label(str(event.get("source") or "")),
         "merchant": event.get("merchant") or "Unknown",
@@ -2115,9 +2122,10 @@ def summarize_expense_events(events: list[dict[str, Any]]) -> dict[str, Any]:
             spend += amount
 
         category = normalize_expense_category(str(row.get("category") or ""))
-        cat_bucket = by_category.setdefault(category, {"category": category, "amount": ZERO, "count": 0})
-        cat_bucket["amount"] += amount
-        cat_bucket["count"] += 1
+        if kind == "spend":
+            cat_bucket = by_category.setdefault(category, {"category": category, "amount": ZERO, "count": 0})
+            cat_bucket["amount"] += amount
+            cat_bucket["count"] += 1
 
         source = row.get("source_label") or expense_source_label(str(row.get("source") or ""))
         source_bucket = by_source.setdefault(str(source), {"source": str(source), "spend": ZERO, "income": ZERO, "transfers": ZERO, "investments": ZERO, "credits": ZERO, "count": 0})
@@ -2130,23 +2138,21 @@ def summarize_expense_events(events: list[dict[str, Any]]) -> dict[str, Any]:
             month_bucket[kind if kind != "spend" else "spend"] += amount
             month_bucket["count"] += 1
 
-        if kind not in {"income", "credits"}:
+        if kind == "spend":
             merchant = str(row.get("merchant") or "Unknown")
             merch_bucket = by_merchant.setdefault(merchant, {"merchant": merchant, "category": category, "amount": ZERO, "count": 0})
             merch_bucket["amount"] += amount
             merch_bucket["count"] += 1
 
     net_outflow = spend + investments - income
-    total_outflow = spend + investments
     category_rows = [
         {
             "category": values["category"],
             "amount_eur": money(values["amount"]),
             "count": values["count"],
-            "share_pct": float((values["amount"] / total_outflow * Decimal("100")).quantize(Decimal("0.01"))) if total_outflow and values["category"] not in {"Income", "Credits", "Personal Transfers"} else None,
+            "share_pct": float((values["amount"] / spend * Decimal("100")).quantize(Decimal("0.01"))) if spend else None,
         }
         for values in by_category.values()
-        if values["category"] not in {"Income", "Credits", "Personal Transfers"}
     ]
     source_rows = [
         {
@@ -7340,23 +7346,23 @@ def expense_category_export_rows(rows: list[dict[str, Any]]) -> list[dict[str, A
     grouped: dict[str, dict[str, Any]] = {}
     total_outflow = ZERO
     for row in rows:
+        if expense_row_kind(row) != "spend":
+            continue
         amount = Decimal(str(row.get("amount_eur") or 0))
         category = normalize_expense_category(str(row.get("category") or ""))
         bucket = grouped.setdefault(category, {"category": category, "amount_eur": ZERO, "count": 0})
         bucket["amount_eur"] += amount
         bucket["count"] += 1
-        if expense_row_kind(row) not in {"income", "credits"}:
-            total_outflow += amount
+        total_outflow += amount
     output = []
     for values in grouped.values():
         amount = values["amount_eur"]
-        is_non_outflow = values["category"] in {"Income", "Credits"}
         output.append(
             {
                 "category": values["category"],
                 "amount_eur": money(amount),
                 "count": values["count"],
-                "share_pct": float((amount / total_outflow * Decimal("100")).quantize(Decimal("0.01"))) if total_outflow and not is_non_outflow else None,
+                "share_pct": float((amount / total_outflow * Decimal("100")).quantize(Decimal("0.01"))) if total_outflow else None,
             }
         )
     return sorted(output, key=lambda item: float(item.get("amount_eur") or 0), reverse=True)
@@ -8236,6 +8242,7 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
         metadata = row.get("metadata") or {}
         events.append(
             {
+                "movement_id": row["id"],
                 "date": movement_date(row),
                 "source": str(row.get("account") or row.get("source_kind") or ""),
                 "merchant": str(metadata.get("merchant") or row.get("description") or "Unknown"),
@@ -8250,7 +8257,57 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
                 "source_category": metadata.get("source_category"),
             }
         )
+    personal = PersonalLedger(MOVEMENT_DATABASE)
+    events = personal.classify(owner, events) + personal.cash_events(owner)
     return sorted(events, key=lambda item: (item["date"], item["source"], item["merchant"]))
+
+
+def personal_expenses_payload(owner: str) -> dict[str, Any]:
+    payload = summarize_expense_events(read_ledger_expenses(owner))
+    payload["categories"] = sorted(EXPENSE_CATEGORIES)
+    payload["rules"] = PersonalLedger(MOVEMENT_DATABASE).rules(owner)
+    payload["cash_rows"] = [expense_event_payload(row) for row in PersonalLedger(MOVEMENT_DATABASE).cash_events(owner)]
+    payload["cash_ledger"] = PersonalLedger(MOVEMENT_DATABASE).cash_balance(owner)
+    return payload
+
+
+@app.route("/api/expenses", methods=["GET", "POST"])
+def api_personal_expenses():
+    try:
+        body = (request.get_json(silent=True) or {}) if request.method == "POST" else {}
+        if not isinstance(body, dict):
+            raise ValueError("Expected a JSON object")
+        owner = configured_portfolio_id(body.get("portfolio_id") or request.args.get("person", PRIMARY_PORTFOLIO_ID))
+        if request.method == "POST":
+            # JSON-only writes and same-origin checks prevent cross-site form submissions.
+            if not request.is_json or (request.headers.get("Origin") and request.headers["Origin"] != request.host_url.rstrip("/")):
+                return jsonify({"error": "Same-origin JSON request required"}), 403
+            personal = PersonalLedger(MOVEMENT_DATABASE)
+            action = body.get("action")
+            if action == "category":
+                category = str(body.get("category") or "")
+                subcategory = str(body.get("subcategory") or "").strip()
+                if category not in EXPENSE_CATEGORIES or len(subcategory) > 500:
+                    raise ValueError("Choose a valid category and subcategory")
+                event = next((row for row in read_ledger_expenses(owner)
+                              if row.get("movement_id") == body.get("movement_id")), None)
+                if event is None:
+                    raise ValueError("Imported transaction not found")
+                personal.set_category(owner, event, category, subcategory,
+                                      body.get("learn") is True, body.get("include_past", True) is True)
+            elif action == "save_cash":
+                personal.save_cash(owner, body, EXPENSE_CATEGORIES)
+            elif action == "opening_balance":
+                personal.set_opening_balance(owner, body.get("amount"))
+            elif action == "delete_cash":
+                personal.delete_cash(owner, str(body.get("id") or ""))
+            elif action == "delete_rule":
+                personal.delete_rule(owner, str(body.get("source") or ""), str(body.get("merchant") or ""), str(body.get("flow_kind") or ""))
+            else:
+                raise ValueError("Unknown ledger action")
+        return jsonify(personal_expenses_payload(owner))
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 def read_ledger_interests(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[str, Any]]:
@@ -8807,6 +8864,7 @@ def api_export():
             broker=broker,
             live_only=live_only,
         )
+        payload = {**payload, "expenses": personal_expenses_payload(configured_portfolio_id(person))}
         context_rows = dashboard_export_context(
             payload,
             person,

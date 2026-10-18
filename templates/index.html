@@ -648,6 +648,12 @@
       <div class="section-content" id="expenses-content">
         <div class="section-body">
           <div class="expense-summary" id="expense-metrics"></div>
+          <div class="personal-ledger-toolbar">
+            <button type="button" onclick="openCashEntry()">Add cash income / expense</button>
+            <button type="button" onclick="openCategoryRules()">Category rules</button>
+            <span id="personal-ledger-status" class="subtle" role="status"></span>
+          </div>
+          <p class="subtle">Cash entries are separate from bank imports and investment returns. Identified bank withdrawals are transfers, not expenses. Record the withdrawal as a cash transfer in to fund this ledger, then enter cash purchases as expenses. Do not enter bank/card purchases here again.</p>
           <p class="subtle">Balance = income minus expenses. Credits, transfers and investments are shown separately. Figures cover imported, classified transactions in the selected period.</p>
           <div class="expense-grid">
             <div class="table-wrap">
@@ -731,6 +737,7 @@
           </div>
           <div class="table-wrap">
             <h3>Recent transactions</h3>
+            <label class="personal-ledger-search">Find a transaction <input type="search" id="expense-search" placeholder="Merchant, category, description…" oninput="renderExpenseTransactions()"></label>
             <table>
               <thead>
                 <tr>
@@ -740,10 +747,18 @@
                   <th>Merchant</th>
                   <th>Description</th>
                   <th>Amount EUR</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="expense-rows"></tbody>
             </table>
+            <button type="button" id="expense-show-more" onclick="showMoreExpenseTransactions()">Show more transactions</button>
+          </div>
+          <div class="table-wrap">
+            <h3>Manual cash ledger <span class="subtle">(all dates)</span></h3>
+            <div class="personal-ledger-toolbar"><strong id="cash-ledger-balance"></strong><button type="button" onclick="openCashOpeningBalance()">Set opening balance</button></div>
+            <p class="subtle">Opening balance is cash held before the first entry. Current cash includes all recorded cash entries, regardless of the dashboard period, and is not part of investment market value.</p>
+            <table><thead><tr><th>Date</th><th>Merchant / payee</th><th>Category</th><th>Amount EUR</th><th>Actions</th></tr></thead><tbody id="cash-ledger-rows"></tbody></table>
           </div>
         </div>
       </div>
@@ -1054,6 +1069,12 @@
     </div>
   </main>
   <script id="app-config" type="application/json">{{ app_config|safe }}</script>
+  <dialog id="personal-ledger-dialog" aria-labelledby="personal-ledger-title">
+    <div class="personal-ledger-dialog-head"><h2 id="personal-ledger-title"></h2><button type="button" onclick="document.getElementById('personal-ledger-dialog').close()" aria-label="Close ledger editor">Close</button></div>
+    <div id="personal-ledger-editor"></div>
+    <p id="personal-ledger-error" role="alert"></p>
+  </dialog>
+  <script src="{{ url_for('static', filename='personal-ledger.js') }}?v={{ app_version }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}?v={{ app_version }}"></script>
 </body>
 </html>

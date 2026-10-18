@@ -320,15 +320,15 @@ class IntesaExpenseExtractionTest(unittest.TestCase):
         self.assertEqual(by_merchant["Bonifico Rossi"]["category"], "Personal Transfers")
         self.assertEqual(by_merchant["Commissione Pagamento Cbill"]["category"], "Fees")
         self.assertEqual(by_merchant["Prelievo Sportello"]["category"], "Cash Withdrawals")
-        self.assertEqual(app.expense_row_kind(by_merchant["Prelievo Sportello"]), "spend")
+        self.assertEqual(app.expense_row_kind(by_merchant["Prelievo Sportello"]), "transfers")
         self.assertEqual(by_merchant["Rimborso carta"]["category"], "Credits")
         self.assertEqual(by_merchant["Rimborso carta"]["amount_eur"], Decimal("8.0"))
         self.assertNotIn("Bonifico Account Owner", by_merchant)
         self.assertNotIn("Account Owner", by_merchant)
 
         summary = app.summarize_expense_events(events)["summary"]
-        self.assertEqual(summary["spend_eur"], 63.84)
-        self.assertEqual(summary["transfers_eur"], 100.0)
+        self.assertEqual(summary["spend_eur"], 13.84)
+        self.assertEqual(summary["transfers_eur"], 150.0)
         self.assertEqual(summary["income_eur"], 0.0)
         self.assertEqual(summary["credits_eur"], 8.0)
 
