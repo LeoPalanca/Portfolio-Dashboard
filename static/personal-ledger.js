@@ -95,6 +95,16 @@
       finally {button.disabled = false;}
     };
   }
+  window.openNewCategory = () => {
+    if (!data.categories) return;
+    dialog("Create category", `<form id="new-category-form" class="personal-ledger-form"><label class="personal-ledger-wide">Category name<input name="name" required maxlength="80" autocomplete="off"></label><button type="submit">Create category</button></form>`);
+    node("new-category-form").onsubmit = async event => {
+      event.preventDefault(); const button = event.submitter; button.disabled = true;
+      try {await write({action:"add_category", name:new FormData(event.target).get("name")}); node("personal-ledger-dialog").close();}
+      catch (error) {node("personal-ledger-error").textContent = error.message;}
+      finally {button.disabled = false;}
+    };
+  };
   window.openCategoryRules = () => {
     dialog("Category rules", `<p class="subtle">Rules match exact merchant names after ignoring capitalization and repeated spaces, within the same source and direction. Individual transaction overrides take priority. Removing a rule restores imported categories except individual overrides.</p>
       <div class="table-wrap"><table><thead><tr><th>Source / direction</th><th>Merchant</th><th>Category</th><th>Scope</th><th></th></tr></thead><tbody>${(data.rules || []).map((rule, index) => `<tr><td>${escape(rule.source)} / ${escape(rule.flow_kind)}</td><td>${escape(rule.merchant)}</td><td>${escape(rule.category)}${rule.subcategory ? ` / ${escape(rule.subcategory)}` : ""}</td><td>${rule.after_id ? "Future imports" : "Past and future"}</td><td><button type="button" data-rule-delete="${index}">Remove</button></td></tr>`).join("") || '<tr><td colspan="5">No learned rules yet</td></tr>'}</tbody></table></div>`);

@@ -2598,3 +2598,36 @@ main > section { backdrop-filter: none; background-color: var(--surface-panel); 
   .section-head { flex-wrap: wrap; }
   .section-head > .subtle { flex-basis: 100%; }
 }
+
+/* Income panels share the same title inset and keep long narratives in view. */
+#expenses-content .expense-grid{align-items:stretch}
+#expenses-content .expense-grid>.table-wrap>h3{padding:var(--space-3) var(--space-4);margin:0;min-height:48px;box-sizing:border-box}
+#expenses-content .expense-chart-card{min-width:0}
+#expenses-content .expense-chart-card h3{line-height:1.4}
+#expenses-content .recent-income-table{table-layout:fixed;width:100%}
+#expenses-content .recent-income-table th,#expenses-content .recent-income-table td{white-space:normal;overflow-wrap:anywhere;vertical-align:top;text-align:left}
+#expenses-content .recent-income-table th:first-child{width:100px}
+#expenses-content .recent-income-table th:nth-child(2){width:110px}
+#expenses-content .recent-income-table th:last-child{width:115px}
+#expenses-content .recent-income-table td:last-child,#expenses-content .recent-income-table th:last-child{text-align:right}
+@media(max-width:680px){
+ #expenses-content .recent-income-table th:first-child{width:76px}
+ #expenses-content .recent-income-table th:nth-child(2){width:68px}
+ #expenses-content .recent-income-table th:last-child{width:85px}
+ #expenses-content .recent-income-table th,#expenses-content .recent-income-table td{padding:var(--space-2);font-size:var(--text-xs)}
+}
+@media(max-width:680px){
+ #expenses-content .recent-income-table thead{display:none}
+ #expenses-content .recent-income-table tbody,#expenses-content .recent-income-table tr{display:block;width:100%}
+ #expenses-content .recent-income-table tr{padding:var(--space-3) 0;border-bottom:1px solid var(--border)}
+ #expenses-content .recent-income-table td{display:grid;grid-template-columns:80px minmax(0,1fr);gap:var(--space-2);border:0;font-size:var(--text-sm);text-align:left}
+ #expenses-content .recent-income-table td::before{color:var(--text-muted)}
+ #expenses-content .recent-income-table td:nth-child(1)::before{content:"Date"}
+ #expenses-content .recent-income-table td:nth-child(2)::before{content:"Source"}
+ #expenses-content .recent-income-table td:nth-child(3)::before{content:"Payer"}
+ #expenses-content .recent-income-table td:nth-child(4)::before{content:"Description"}
+ #expenses-content .recent-income-table td:nth-child(5)::before{content:"Amount EUR"}
+ #expenses-content .recent-income-table td:last-child{text-align:left}
+ #expenses-content .recent-income-table td[colspan]{display:block}
+ #expenses-content .recent-income-table td[colspan]::before{content:none}
+}

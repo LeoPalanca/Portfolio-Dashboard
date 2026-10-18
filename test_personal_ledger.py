@@ -53,6 +53,16 @@ class PersonalLedgerTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_json())
         return response.get_json()
 
+    def test_create_and_use_custom_category(self):
+        result = self.post(action="add_category", name="Professional learning")
+        self.assertIn("Professional learning", result["categories"])
+        row = result["rows"][0]
+        result = self.post(action="category", movement_id=row["movement_id"], category="Professional learning")
+        self.assertTrue(any(r["category"] == "Professional learning" for r in result["rows"]))
+        result = self.post(action="save_cash", date="2026-01-01", amount="5", flow_kind="spend",
+                           merchant="Bookshop", category="Professional learning")
+        self.assertEqual(result["cash_rows"][0]["category"], "Professional learning")
+
     def test_rules_apply_past_and_future_without_changing_manual_overrides(self):
         ids = [row["movement_id"] for row in self.get()["rows"]]
         self.post(action="category", movement_id=ids[0], category="Shopping", learn=False)

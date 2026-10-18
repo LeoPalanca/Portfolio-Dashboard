@@ -1866,7 +1866,7 @@ def read_intesa_expense_events(
             if header
         }
         accounted = intesa_cell_text(record.get("Contabilizzazione")).upper()
-        if accounted and not (accounted.startswith("S") or accounted in {"YES", "Y", "TRUE", "1"}):
+        if accounted and not (accounted.startswith("S") or accounted in {"YES", "Y", "TRUE", "1", "CONTABILIZZATO", "CONTABILIZZATA"}):
             continue
         event_date = parse_intesa_expense_date(record.get("Data"))
         if event_date is None:
@@ -2126,7 +2126,7 @@ def expense_event_payload(event: dict[str, Any]) -> dict[str, Any]:
         "merchant": event.get("merchant") or "Unknown",
         "description": event.get("description") or "",
         "flow_kind": event.get("flow_kind") or "spend",
-        "category": normalize_expense_category(str(event.get("category") or "")),
+        "category": str(event.get("category") or "Uncategorized"),
         "subcategory": event.get("subcategory") or "",
         "amount_eur": money(Decimal(str(event.get("amount_eur") or 0))),
         "currency": normalize_currency_code(event.get("currency") or "EUR"),
@@ -2163,7 +2163,7 @@ def summarize_expense_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         else:
             spend += amount
 
-        category = normalize_expense_category(str(row.get("category") or ""))
+        category = str(row.get("category") or "Uncategorized")
         if kind == "spend":
             cat_bucket = by_category.setdefault(category, {"category": category, "amount": ZERO, "count": 0})
             cat_bucket["amount"] += amount
@@ -7423,7 +7423,7 @@ def expense_category_export_rows(rows: list[dict[str, Any]]) -> list[dict[str, A
         if expense_row_kind(row) != "spend":
             continue
         amount = Decimal(str(row.get("amount_eur") or 0))
-        category = normalize_expense_category(str(row.get("category") or ""))
+        category = str(row.get("category") or "Uncategorized")
         bucket = grouped.setdefault(category, {"category": category, "amount_eur": ZERO, "count": 0})
         bucket["amount_eur"] += amount
         bucket["count"] += 1
@@ -8352,7 +8352,7 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
 
 def personal_expenses_payload(owner: str) -> dict[str, Any]:
     payload = summarize_expense_events(read_ledger_expenses(owner))
-    payload["categories"] = sorted(EXPENSE_CATEGORIES)
+    payload["categories"] = PersonalLedger(MOVEMENT_DATABASE).categories(owner, EXPENSE_CATEGORIES)
     payload["rules"] = PersonalLedger(MOVEMENT_DATABASE).rules(owner)
     payload["cash_rows"] = [expense_event_payload(row) for row in PersonalLedger(MOVEMENT_DATABASE).cash_events(owner)]
     payload["cash_ledger"] = PersonalLedger(MOVEMENT_DATABASE).cash_balance(owner)
@@ -8382,10 +8382,13 @@ def api_personal_expenses():
                 return jsonify({"error": "Same-origin JSON request required"}), 403
             personal = PersonalLedger(MOVEMENT_DATABASE)
             action = body.get("action")
-            if action == "category":
+            categories = personal.categories(owner, EXPENSE_CATEGORIES)
+            if action == "add_category":
+                personal.add_category(owner, str(body.get("name") or ""))
+            elif action == "category":
                 category = str(body.get("category") or "")
                 subcategory = str(body.get("subcategory") or "").strip()
-                if category not in EXPENSE_CATEGORIES or len(subcategory) > 500:
+                if category not in categories or len(subcategory) > 500:
                     raise ValueError("Choose a valid category and subcategory")
                 event = next((row for row in read_ledger_expenses(owner)
                               if row.get("movement_id") == body.get("movement_id")), None)
@@ -8400,7 +8403,7 @@ def api_personal_expenses():
                 if changed_direction:
                     personal.set_direction(owner, event["movement_id"], corrected_kind)
             elif action == "save_cash":
-                personal.save_cash(owner, body, EXPENSE_CATEGORIES)
+                personal.save_cash(owner, body, categories)
             elif action == "opening_balance":
                 personal.set_opening_balance(owner, body.get("amount"))
             elif action == "delete_cash":

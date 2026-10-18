@@ -1,5 +1,7 @@
 """User annotations and manual cash entries, separate from immutable bank imports."""
 
+import json
+import re
 import sqlite3
 import uuid
 from collections.abc import Collection
@@ -22,6 +24,13 @@ class PersonalLedger:
         connection = sqlite3.connect(self.path, timeout=30)
         connection.row_factory = sqlite3.Row
         connection.executescript("""
+            CREATE TABLE IF NOT EXISTS personal_categories (
+                portfolio_id TEXT NOT NULL, name TEXT NOT NULL,
+                PRIMARY KEY (portfolio_id, name)
+            );
+            CREATE TABLE IF NOT EXISTS personal_income_policy (
+                portfolio_id TEXT PRIMARY KEY, credit_payers TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS expense_overrides (
                 portfolio_id TEXT NOT NULL, movement_id INTEGER NOT NULL,
                 category TEXT NOT NULL, subcategory TEXT NOT NULL,
@@ -48,8 +57,28 @@ class PersonalLedger:
             connection.commit()
         return connection
 
+    def categories(self, owner: str, defaults: Collection[str]) -> list[str]:
+        with closing(self.connect()) as connection:
+            names = [row[0] for row in connection.execute(
+                "SELECT name FROM personal_categories WHERE portfolio_id=?", (owner,))]
+        return sorted(set(defaults) | set(names), key=str.casefold)
+
+    def add_category(self, owner: str, name: str) -> None:
+        name = " ".join(name.split())
+        if not name or len(name) > 80:
+            raise ValueError("Enter a category name between 1 and 80 characters")
+        with closing(self.connect()) as connection, connection:
+            connection.execute("INSERT OR IGNORE INTO personal_categories VALUES (?, ?)", (owner, name))
+
+    def set_credit_payers(self, owner: str, names: list[str]) -> None:
+        with closing(self.connect()) as connection, connection:
+            connection.execute("INSERT OR REPLACE INTO personal_income_policy VALUES (?, ?)",
+                               (owner, json.dumps(names)))
+
     def classify(self, owner: str, events: list[dict]) -> list[dict]:
         with closing(self.connect()) as connection:
+            policy = connection.execute("SELECT credit_payers FROM personal_income_policy WHERE portfolio_id=?", (owner,)).fetchone()
+            credit_payers = json.loads(policy[0]) if policy else None
             overrides = {
                 row["movement_id"]: dict(row)
                 for row in connection.execute("SELECT * FROM expense_overrides WHERE portfolio_id = ?", (owner,))
@@ -59,6 +88,14 @@ class PersonalLedger:
                 for row in connection.execute("SELECT * FROM personal_category_rules WHERE portfolio_id = ?", (owner,))
             }
         for event in events:
+            if credit_payers is not None and event["flow_kind"] in {"income", "credit"}:
+                text = match_key(f"{event.get('merchant', '')} {event.get('description', '')}")
+                transfer = bool(re.search(r"\b(?:bonific\w*|transfer\w*)\b", text))
+                matched = transfer and any(re.search(r"(?<!\w)" + re.escape(match_key(name)) + r"(?!\w)", text)
+                                           for name in credit_payers)
+                event["flow_kind"] = "credit" if matched else "income"
+                if event.get("category") in {"Income", "Credits", "Uncategorized"}:
+                    event["category"] = "Credits" if matched else "Income"
             rule = rules.get((match_key(event["source"]), match_key(event["merchant"]), event["flow_kind"]))
             selected = overrides.get(event["movement_id"])
             if selected is None and rule and event["movement_id"] > rule["after_id"]:

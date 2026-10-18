@@ -3,6 +3,15 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.10.2 - 2026-10-18
+
+### Fixed
+
+- Align income/expense panel titles and wrap long recent-income descriptions.
+- Accept Intesa booked statuses CONTABILIZZATO and CONTABILIZZATA.
+- Allow portfolio-specific custom categories for bank and manual cash entries.
+- Support a private per-portfolio payer policy separating credits from ordinary income, without publishing personal names.
+
 ## 0.10.1 - 2026-10-18
 
 ### Added
