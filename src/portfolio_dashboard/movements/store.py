@@ -14,11 +14,31 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
+
+
+def _event_family(kind: str) -> str:
+    return (
+        "bank"
+        if kind
+        in {"income", "spend", "credit", "personal_transfer", "investment", "fee", "cash_withdrawal", "cash_movement"}
+        else kind
+    )
 
 
 def _movement_fingerprint(canonical: Mapping[str, str]) -> str:
     fields = {key: value for key, value in canonical.items() if key != "metadata_json"}
+    metadata = json.loads(canonical.get("metadata_json") or "{}")
+    transaction_id = str(metadata.get("transaction_id") or "").strip()
+    if transaction_id:
+        fields = {
+            "source_kind": canonical.get("source_kind", ""),
+            "account": canonical.get("account", ""),
+            "event_family": _event_family(canonical.get("event_type", "")),
+            "transaction_id": transaction_id,
+        }
+    elif int(metadata.get("source_occurrence") or 1) > 1:
+        fields["source_occurrence"] = str(metadata["source_occurrence"])
     for key in ("amount", "quantity", "price", "fees", "tax"):
         value = fields.get(key, "")
         if value == "":
@@ -98,9 +118,18 @@ class MovementStore:
                 if not imports_exists:
                     self._create_schema(connection)
                 else:
-                    import_columns = {
-                        row[1] for row in connection.execute("PRAGMA table_info(imports)")
-                    }
+                    schema = connection.execute(
+                        "SELECT value FROM schema_metadata WHERE key='schema_version'"
+                    ).fetchone()
+                    if schema and int(schema[0]) == 3:
+                        backup = self.path.with_name(f"{self.path.name}.pre-ledger-v4.bak")
+                        if not backup.exists():
+                            with (
+                                closing(sqlite3.connect(self.path)) as source,
+                                closing(sqlite3.connect(backup)) as target,
+                            ):
+                                source.backup(target)
+                    import_columns = {row[1] for row in connection.execute("PRAGMA table_info(imports)")}
                     if "portfolio_id" not in import_columns:
                         self._migrate_v1(connection)
                     else:
@@ -118,9 +147,7 @@ class MovementStore:
         """Reconcile formatting-only duplicates atomically, preserving a SQLite backup."""
 
         connection.execute("BEGIN IMMEDIATE")
-        version = connection.execute(
-            "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
-        ).fetchone()
+        version = connection.execute("SELECT value FROM schema_metadata WHERE key = 'schema_version'").fetchone()
         if version and int(version[0]) >= 3:
             return
         cursor = connection.execute("SELECT * FROM movements ORDER BY id")
@@ -136,8 +163,11 @@ class MovementStore:
         seen: set[tuple[str, str]] = set()
         survivors: list[tuple[str, int]] = []
         for row in rows:
-            canonical = {key: value for key, value in row.items()
-                         if key not in {"id", "portfolio_id", "import_id", "fingerprint"}}
+            canonical = {
+                key: value
+                for key, value in row.items()
+                if key not in {"id", "portfolio_id", "import_id", "fingerprint"}
+            }
             fingerprint = _movement_fingerprint(canonical)
             identity = (row["portfolio_id"], fingerprint)
             if identity in seen:
@@ -197,6 +227,10 @@ class MovementStore:
             CREATE INDEX IF NOT EXISTS movements_portfolio_type_idx
                 ON movements(portfolio_id, event_type);
             CREATE INDEX IF NOT EXISTS movements_source_kind_idx ON movements(source_kind);
+            CREATE TABLE IF NOT EXISTS movement_revisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, movement_id INTEGER NOT NULL,
+                changed_at TEXT NOT NULL, previous_json TEXT NOT NULL
+            );
             """
         )
 
@@ -287,9 +321,14 @@ class MovementStore:
             if cursor.lastrowid is None:  # pragma: no cover - SQLite always supplies this value
                 raise RuntimeError("SQLite did not return an import id")
             import_id = cursor.lastrowid
-            for movement in movements:
-                canonical = self._canonical_movement(source_kind, movement)
+            claimed = set()
+            for canonical in self._canonical_batch(source_kind, movements):
                 fingerprint = _movement_fingerprint(canonical)
+                matched = self._reconcile_movement(connection, owner, source_kind, canonical, claimed)
+                if matched:
+                    claimed.add(matched)
+                    duplicates += 1
+                    continue
                 result = connection.execute(
                     """
                     INSERT OR IGNORE INTO movements(
@@ -319,6 +358,7 @@ class MovementStore:
                     ),
                 )
                 if result.rowcount:
+                    claimed.add(result.lastrowid)
                     inserted += 1
                 else:
                     duplicates += 1
@@ -352,9 +392,16 @@ class MovementStore:
         inserted = 0
         duplicates = 0
         with closing(self._connect()) as connection, connection:
-            for movement in movements:
-                canonical = self._canonical_movement(record.source_kind, movement)
+            claimed = set()
+            for canonical in self._canonical_batch(record.source_kind, movements):
                 fingerprint = _movement_fingerprint(canonical)
+                matched = self._reconcile_movement(
+                    connection, record.portfolio_id, record.source_kind, canonical, claimed
+                )
+                if matched:
+                    claimed.add(matched)
+                    duplicates += 1
+                    continue
                 result = connection.execute(
                     """
                     INSERT OR IGNORE INTO movements(
@@ -384,6 +431,7 @@ class MovementStore:
                     ),
                 )
                 if result.rowcount:
+                    claimed.add(result.lastrowid)
                     inserted += 1
                 else:
                     duplicates += 1
@@ -396,6 +444,64 @@ class MovementStore:
                 (parser_version, inserted, record.id, record.portfolio_id),
             )
         return inserted, duplicates
+
+    @staticmethod
+    def _reconcile_movement(connection, owner, source, canonical, claimed) -> int:
+        """Update one unambiguous source event in place; never append a reclassification."""
+        fingerprint = _movement_fingerprint(canonical)
+        cursor = connection.execute(
+            "SELECT * FROM movements WHERE portfolio_id=? AND source_kind=? AND (occurred_on=? OR fingerprint=?)",
+            (owner, source, canonical["occurred_on"], fingerprint),
+        )
+        columns = [column[0] for column in cursor.description]
+        rows = [dict(zip(columns, row)) for row in cursor]
+        metadata = json.loads(canonical["metadata_json"])
+        external_id = str(metadata.get("transaction_id") or "")
+
+        def legacy_key(item):
+            fields = {key: item.get(key, "") for key in canonical if key != "metadata_json"}
+            fields["event_type"] = _event_family(fields["event_type"])
+            return _movement_fingerprint(fields)
+
+        candidates = [row for row in rows if row["fingerprint"] == fingerprint]
+        if not candidates:
+            key = legacy_key(canonical)
+            for row in rows:
+                if row["id"] in claimed:
+                    continue
+                previous_id = str(json.loads(row["metadata_json"]).get("transaction_id") or "")
+                if external_id and previous_id and external_id != previous_id:
+                    continue
+                if not external_id and int(metadata.get("source_occurrence") or 1) != int(
+                    json.loads(row["metadata_json"]).get("source_occurrence") or 1
+                ):
+                    continue
+                if legacy_key(row) == key:
+                    candidates.append(row)
+        if len(candidates) > 1:
+            raise ValueError(
+                "Ambiguous transaction identity; existing rows were preserved. Review the source transaction IDs."
+            )
+        if not candidates:
+            return 0
+        previous = candidates[0]
+        previous_id = json.loads(previous["metadata_json"]).get("transaction_id")
+        if previous_id and not external_id:
+            metadata["transaction_id"] = previous_id
+            canonical["metadata_json"] = json.dumps(metadata, ensure_ascii=False, sort_keys=True, default=_json_default)
+            fingerprint = _movement_fingerprint(canonical)
+        if all(previous[key] == value for key, value in canonical.items()) and previous["fingerprint"] == fingerprint:
+            return previous["id"]
+        connection.execute(
+            "INSERT INTO movement_revisions(movement_id, changed_at, previous_json) VALUES (?, ?, ?)",
+            (previous["id"], datetime.now(UTC).isoformat(), json.dumps(previous, ensure_ascii=False)),
+        )
+        keys = list(canonical)
+        connection.execute(
+            f"UPDATE movements SET {', '.join(key + '=?' for key in keys)}, fingerprint=? WHERE id=? AND portfolio_id=?",
+            [canonical[key] for key in keys] + [fingerprint, previous["id"], owner],
+        )
+        return previous["id"]
 
     def movements(
         self,
@@ -443,7 +549,9 @@ class MovementStore:
         with closing(self._connect()) as connection:
             imports = int(connection.execute(f"SELECT COUNT(*) FROM imports i {where}", parameters).fetchone()[0])
             movement_where = where.replace("i.portfolio_id", "m.portfolio_id")
-            movements = int(connection.execute(f"SELECT COUNT(*) FROM movements m {movement_where}", parameters).fetchone()[0])
+            movements = int(
+                connection.execute(f"SELECT COUNT(*) FROM movements m {movement_where}", parameters).fetchone()[0]
+            )
             sources = [
                 {
                     "source": row[0],
@@ -468,6 +576,37 @@ class MovementStore:
         connection.execute("PRAGMA journal_mode = WAL")
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
+
+    def revision(self) -> list[int]:
+        """Financial changes only: manual cash/category writes must not rebuild prices."""
+        if not self.path.exists():
+            return [0, 0, 0]
+        with closing(sqlite3.connect(self.path.absolute().as_uri() + "?mode=ro", uri=True)) as connection:
+            tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "movements" not in tables:
+                return [0, 0, 0]
+            count, maximum = connection.execute("SELECT COUNT(*), COALESCE(MAX(id),0) FROM movements").fetchone()
+            revision = (
+                connection.execute("SELECT COALESCE(MAX(id),0) FROM movement_revisions").fetchone()[0]
+                if "movement_revisions" in tables
+                else 0
+            )
+        return [count, maximum, revision]
+
+    @staticmethod
+    def _canonical_batch(source_kind, movements):
+        counts = {}
+        for movement in movements:
+            canonical = MovementStore._canonical_movement(source_kind, movement)
+            metadata = json.loads(canonical["metadata_json"])
+            if not metadata.get("transaction_id"):
+                metadata.pop("source_occurrence", None)
+                canonical["metadata_json"] = json.dumps(metadata, ensure_ascii=False, sort_keys=True)
+                key = _movement_fingerprint(canonical)
+                counts[key] = counts.get(key, 0) + 1
+                metadata["source_occurrence"] = counts[key]
+                canonical["metadata_json"] = json.dumps(metadata, ensure_ascii=False, sort_keys=True)
+            yield canonical
 
     @staticmethod
     def _canonical_movement(source_kind: str, movement: Mapping[str, Any]) -> dict[str, str]:

@@ -42,6 +42,10 @@ class PersonalLedger:
                 portfolio_id TEXT PRIMARY KEY, opening_balance TEXT NOT NULL
             );
         """)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(expense_overrides)")}
+        if "flow_kind" not in columns:
+            connection.execute("ALTER TABLE expense_overrides ADD COLUMN flow_kind TEXT NOT NULL DEFAULT ''")
+            connection.commit()
         return connection
 
     def classify(self, owner: str, events: list[dict]) -> list[dict]:
@@ -61,6 +65,8 @@ class PersonalLedger:
                 selected = rule
             if selected:
                 event.update(category=selected["category"], subcategory=selected["subcategory"])
+                if selected.get("flow_kind"):
+                    event["flow_kind"] = selected["flow_kind"]
         return events
 
     def set_category(
@@ -68,7 +74,8 @@ class PersonalLedger:
     ) -> None:
         with closing(self.connect()) as connection, connection:
             connection.execute(
-                "INSERT OR REPLACE INTO expense_overrides VALUES (?, ?, ?, ?)",
+                "INSERT INTO expense_overrides(portfolio_id,movement_id,category,subcategory) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(portfolio_id,movement_id) DO UPDATE SET category=excluded.category,subcategory=excluded.subcategory",
                 (owner, event["movement_id"], category, subcategory),
             )
             if learn:
@@ -97,6 +104,15 @@ class PersonalLedger:
                     (owner,),
                 )
             ]
+
+    def set_direction(self, owner: str, movement_id: int, flow_kind: str) -> None:
+        if flow_kind not in {"income", "spend", "credit", "personal_transfer", "investment", "cash_withdrawal", "fee"}:
+            raise ValueError("Choose a supported transaction type")
+        with closing(self.connect()) as connection, connection:
+            connection.execute(
+                "UPDATE expense_overrides SET flow_kind=? WHERE portfolio_id=? AND movement_id=?",
+                (flow_kind, owner, movement_id),
+            )
 
     def delete_rule(self, owner: str, source: str, merchant: str, flow_kind: str) -> None:
         with closing(self.connect()) as connection, connection:

@@ -25,6 +25,7 @@ class Trade:
     grand_total: Decimal
     grand_total_present: bool
     source: str
+    transaction_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -56,4 +57,3 @@ class ExpenseRule:
     category: str
     subcategory: str
     merchant: str
-

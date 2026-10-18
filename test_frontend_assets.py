@@ -181,7 +181,7 @@ class FrontendAssetTest(unittest.TestCase):
         load_end = js.index('document.querySelectorAll("#periods button")', load_start)
         load_body = js[load_start:load_end]
         self.assertIn("renderDashboard(data);", load_body)
-        self.assertIn("void loadRankings(params, requestId);", load_body)
+        self.assertIn('renderSection("rankings-content", () => void loadRankings(params, requestId))', load_body)
         self.assertNotIn("Promise.all", load_body)
 
     def test_every_section_has_a_stable_key(self) -> None:

@@ -71,6 +71,7 @@
         });
         header.classList.remove('expanded');
       } else {
+        renderDeferredSection(targetId);
         content.classList.add('expanded');
         content.style.maxHeight = content.scrollHeight + 'px';
         header.classList.add('expanded');
@@ -166,7 +167,7 @@
             <span class="section-wrap-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>
             </span>
-            <span>Wrap up</span>
+            <span>Collapse section</span>
           </button>
         `;
         wrap.querySelector("button").addEventListener("click", event => {
@@ -264,7 +265,10 @@
         item.append(label, date);
         importLatestList.append(item);
       }
-      importLatest.hidden = sources.length === 0;
+      for (const error of status.migration_errors || []) {
+        const item = document.createElement("li"); item.textContent = `Needs review: ${error}`; importLatestList.append(item);
+      }
+      importLatest.hidden = sources.length === 0 && !(status.migration_errors || []).length;
     }
 
     async function loadImportHistory() {
@@ -427,7 +431,7 @@
       weighted_score: false,
       freq_score: false
     };
-    let showTransactions = true;
+    let showTransactions = false;
     let showAllTransactions = false;
     const returnDefs = [
       ["return_pct", "Portfolio mode %", "series-return"],
@@ -440,8 +444,8 @@
     ];
     const metricDefs = [
       ["market_value", "Market value"],
-      ["return_pct", "Return"],
-      ["open_cost_basis", "Open cost"],
+      ["return_pct", "Time-weighted return"],
+      ["open_cost_basis", "Cost of current holdings"],
       ["unrealized_pl", "Unrealized P/L"],
       ["realized_pl", "Realized P/L"],
       ["net_contributions", "Net contributions"]
@@ -1552,7 +1556,7 @@
             `;
           }).join("")
         : `<tr><td colspan="6" class="empty-state">No ETF composition source metadata available.</td></tr>`;
-      document.getElementById("distribution-underlying").innerHTML = distributionRows(underlyingRows, "holding");
+      pagedTable("distribution-underlying", underlyingRows || [], rows => distributionRows(rows, "holding"));
       document.querySelectorAll(".composition-source-row").forEach(rowEl => {
         rowEl.addEventListener("click", () => {
           selectedDistributionSource = selectedDistributionSource === rowEl.dataset.sourceKey ? "" : rowEl.dataset.sourceKey;
@@ -1969,8 +1973,8 @@
         : `<tr><td colspan="5" class="empty-state">No cash interest summary available.</td></tr>`;
         
       // Render all payments
-      document.getElementById("cash-interest-payments").innerHTML = info.payments && info.payments.length
-        ? info.payments.map(row => `
+      pagedTable("cash-interest-payments", info.payments || [], rows => rows.length
+        ? rows.map(row => `
             <tr>
               <td>${row.date}</td>
               <td class="ta-l fw-500">${escapeHtml(row.broker)}</td>
@@ -1980,7 +1984,7 @@
               <td style="text-align: left; color: var(--text-muted); font-size: 0.9em;">${escapeHtml(row.description)}</td>
             </tr>
           `).join("")
-        : `<tr><td colspan="6" class="empty-state">No interest payments recorded.</td></tr>`;
+        : `<tr><td colspan="6" class="empty-state">No interest payments recorded.</td></tr>`);
     }
     function expenseKind(row) {
       const flow = String(row.flow_kind || "");
@@ -3029,7 +3033,7 @@
       });
 
       rankingsTbody.innerHTML = sorted.map(user => {
-        const ret = user.returns[modeKey] || {};
+        const ret = user.returns?.[modeKey] || {};
         const startVal = ret.start;
         const commonVal = ret.common;
         const ytdVal = ret.ytd;
@@ -3044,7 +3048,7 @@
               <span class="user-avatar ${user.person}" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
               </span>
-              <span style="${nameStyle}">${escapeHtml(user.name)}</span>
+              <span style="${nameStyle}">${escapeHtml(user.name)}${user.message ? `<small class="ranking-message">${escapeHtml(user.message)}</small>` : ""}</span>
             </td>
             <td>${formatRankingPct(startVal)}</td>
             <td>${formatRankingPct(commonVal)}</td>
@@ -3083,6 +3087,49 @@
       }
     };
 
+    const deferredSectionRenders = new Map();
+    function pagedTable(id, rows, renderer, size = 50) {
+      const body = document.getElementById(id);
+      if (!body) return;
+      let page = 0;
+      let control = document.getElementById(`${id}-pages`);
+      if (!control) {control = document.createElement("div");control.id=`${id}-pages`;control.className="table-pages";body.closest(".table-wrap").appendChild(control);}
+      const draw = () => {
+        body.innerHTML = renderer(rows.slice(page * size, (page + 1) * size));
+        control.replaceChildren();
+        if (rows.length <= size) return;
+        const previous = document.createElement("button"), next = document.createElement("button"), label = document.createElement("span");
+        previous.type=next.type="button";previous.textContent="Previous";next.textContent="Next";
+        previous.disabled=page===0;next.disabled=(page+1)*size>=rows.length;
+        label.textContent=`${page*size+1}–${Math.min((page+1)*size,rows.length)} of ${rows.length}`;
+        previous.onclick=()=>{page--;draw();};next.onclick=()=>{page++;draw();};control.append(previous,label,next);
+      };
+      draw();
+    }
+    function renderSection(id, render) {
+      deferredSectionRenders.set(id, render);
+      if (document.getElementById(id)?.classList.contains("expanded")) renderDeferredSection(id);
+    }
+    function renderDeferredSection(id) {
+      const render = deferredSectionRenders.get(id);
+      if (render) {deferredSectionRenders.delete(id); render();}
+    }
+    function renderMoneyOverview(data) {
+      const target = document.getElementById("money-overview");
+      if (!target) return;
+      const expenses = periodExpenses(data);
+      const cash = data.expenses?.cash_ledger || {};
+      target.innerHTML = [["Income",expenses.income,"positive"],["Expenses",expenses.spend,"negative"],["Income minus expenses",expenses.balance,signedClass(expenses.balance)],["Refunds & credits",expenses.credits,""],["Transfers (gross movements)",expenses.transfers,""],["Manual cash · all dates",cash.balance, signedClass(cash.balance)]].map(([label,value,klass])=>`<div class="metric"><span>${escapeHtml(label)}</span><strong class="${klass}">${moneyWhole(value)}</strong></div>`).join("");
+      document.getElementById("money-window").textContent = `${selectedWindowLabel()} · ${expenses.rows.length} classified transactions`;
+      const coverage = data.expenses?.coverage || [];
+      document.getElementById("money-coverage").textContent = coverage.length ? coverage.map(row=>`${row.source}: ${row.first_date} → ${row.last_date}`).join(" · ") : "Coverage is limited to imported statements; receipts are not necessarily salary.";
+      document.getElementById("investment-scope").textContent = `${selectedWindowLabel()} · ${selectedReturnMode === "total" ? "Securities + reconstructed investment cash, dividends included" : "Securities only, excluding dividends"}. Benchmark chart compares equity total return with MSCI World.`;
+    }
+    window.openIncomeExpenses = () => {
+      const content = document.getElementById("expenses-content");
+      if (!content.classList.contains("expanded")) toggleSection(document.querySelector('[data-collapse="expenses-content"]'));
+      document.getElementById("expenses-section").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block:"start"});
+    };
     function renderDashboard(data) {
       updatePeriodButtons();
       // Product-specific analysis must be explicitly enabled in private configuration.
@@ -3125,18 +3172,20 @@
       }
 
       renderMetrics(periodMetrics(data));
+      renderMoneyOverview(data);
       renderRankings(rankingsData);
       renderValueCharts(data.valuation_series || []);
       renderChart(data.series);
       renderPositions(data.positions);
-      renderDistribution(data.distribution);
-      renderDividends(data.dividends);
-      renderCashInterests(data.cash_interests);
-      renderExpenses(data);
-      renderNetContributions(data.net_contributions);
-      renderFrictions(data);
-      renderCoverage(data);
-      renderStats(data);
+      renderSection("distribution-content", () => renderDistribution(data.distribution));
+      renderSection("dividends-content", () => renderDividends(data.dividends));
+      renderSection("cash-interest-content", () => renderCashInterests(data.cash_interests));
+      renderSection("expenses-content", () => renderExpenses(data));
+      renderSection("contributions-content", () => renderNetContributions(data.net_contributions));
+      renderSection("frictions-content", () => renderFrictions(data));
+      renderSection("coverage-content", () => renderCoverage(data));
+      renderSection("stats-content", () => renderStats(data));
+      document.getElementById("stats-section").style.display = data.stats ? "block" : "none";
       renderBrokerButtons(data.brokers);
       
       // Render optional actions supplied by the selected portfolio profile.
@@ -3180,9 +3229,36 @@
         if (requestId !== loadRequestId) return;
         rankingsData = result;
         renderRankings(rankingsData);
+        if (result.refreshing) window.setTimeout(() => {if(requestId === loadRequestId) void loadRankings(params,requestId);},10000);
       } catch (err) {
-        if (requestId === loadRequestId) console.warn("Rankings failed to load:", err.message);
+        if (requestId === loadRequestId) {
+          document.getElementById("rankings-window-label").textContent = `Rankings unavailable: ${err.message}. Refresh prices to retry.`;
+          if (!rankingsData) document.getElementById("rankings-tbody").innerHTML = '<tr><td colspan="4">Other dashboard sections are still available.</td></tr>';
+        }
       }
+    }
+
+    function showSnapshotStatus(data) {
+      const status = data.snapshot || {};
+      const saved = data.generated_at || status.generated_at || "unknown date";
+      document.getElementById("snapshot-status").textContent = `Saved ${saved} · Oldest open-position price: ${data.pricing_as_of || "unavailable"}${status.status === "refreshing" ? " · Updating in the background" : status.status === "stale" ? ` · Saved data may be out of date${status.error ? ": " + status.error : ""}` : ""}`;
+    }
+    async function pollSavedSnapshot(params, requestId, started = Date.now()) {
+      if (requestId !== loadRequestId || Date.now() - started > 6 * 60 * 1000) return;
+      try {
+        const response = await fetch(`/api/portfolio/refresh-prices?${params.toString()}`, {cache:"no-store"});
+        const status = await response.json();
+        if (requestId !== loadRequestId) return;
+        if (status.status === "done") return void load(false, "Applying saved portfolio");
+        if (status.status === "error") {
+          document.getElementById("snapshot-status").textContent += ` · Refresh failed: ${status.error}. Saved values remain visible.`;
+          return;
+        }
+      } catch (error) {
+        if (requestId === loadRequestId) document.getElementById("snapshot-status").textContent = "Could not check refresh status. Saved values remain visible; use Refresh prices to retry.";
+        return;
+      }
+      window.setTimeout(() => void pollSavedSnapshot(params,requestId,started),4000);
     }
 
     let priceRefreshBusy = false;
@@ -3199,27 +3275,38 @@
       try {
         const params = currentQueryParams();
         if (refresh) params.set("refresh", "1");
-        const portfolioRes = await fetch(`/api/portfolio?${params.toString()}`, { signal: controller.signal });
-        const data = await portfolioRes.json();
+        let portfolioRes, data;
+        do {
+          portfolioRes = await fetch(`/api/portfolio?${params.toString()}`, { signal: controller.signal });
+          data = await portfolioRes.json();
+          if (portfolioRes.status !== 202) break;
+          document.getElementById("snapshot-status").textContent = data.message || "Preparing the first saved snapshot…";
+          await new Promise(resolve => window.setTimeout(resolve, Math.max(1, Math.min(10, data.retry_after || 3)) * 1000));
+          if (requestId !== loadRequestId) return;
+        } while (!controller.signal.aborted);
+        if (controller.signal.aborted) throw new DOMException("Snapshot preparation timed out", "AbortError");
         if (!portfolioRes.ok) throw new Error(data.error || "Dashboard request failed.");
         if (requestId !== loadRequestId) return;
         dashboardData = data;
         renderDashboard(data);
+        showSnapshotStatus(data);
+        if (data.snapshot?.status === "refreshing") void pollSavedSnapshot(params,requestId);
         void window.personalLedger.load(selectedPerson, expenses => {
           if (requestId !== loadRequestId) return;
           dashboardData.expenses = expenses;
-          renderExpenses(dashboardData);
+          renderMoneyOverview(dashboardData);
+          renderSection("expenses-content", () => renderExpenses(dashboardData));
         });
-        loadNews(false, data.news_symbols || []);
-        loadWatchlist(false);
+        renderSection("news-content", () => void loadNews(false, data.news_symbols || []));
+        renderSection("watchlist-content", () => void loadWatchlist(false));
         if (HAS_MULTIPLE_PORTFOLIOS) {
           params.delete("refresh");
-          void loadRankings(params, requestId);
+          renderSection("rankings-content", () => void loadRankings(params, requestId));
         }
       } catch (err) {
         if (requestId !== loadRequestId) return;
         error.textContent = err.name === "AbortError"
-          ? "Price refresh timed out. Your last saved portfolio is still available; please try again."
+          ? dashboardData ? "The request timed out. Previously loaded values remain visible; use Refresh prices to retry." : "The first portfolio snapshot is still being prepared. No saved values have been loaded yet; try again shortly."
           : err.message;
         error.style.display = "block";
       } finally {
@@ -3621,11 +3708,14 @@
       return Array.from(document.querySelectorAll("main > section[data-section]"));
     }
 
-    const DEFAULT_ORDER = allSections().map((el) => el.dataset.section);
+    const LEGACY_ORDER = allSections().map(el => el.dataset.section);
+    const preferredOrder = ["portfolio-value","current-holdings","expenses","cash-flow-evolution","portfolio-distribution","dividends","cash-account-interest","net-contributions","taxes-and-costs","portfolio-statistics","family-rankings","watchlist","stock-news","pricing-coverage","suggested-actions-and-to-dos","import-your-statements"];
+    const DEFAULT_ORDER = [...LEGACY_ORDER].sort((a,b) => (preferredOrder.indexOf(a)<0?99:preferredOrder.indexOf(a)) - (preferredOrder.indexOf(b)<0?99:preferredOrder.indexOf(b)));
 
     function readSectionPrefs() {
       let stored = null;
       try { stored = JSON.parse(localStorage.getItem(SECTIONS_KEY) || "null"); } catch (e) { stored = null; }
+      if (JSON.stringify(stored?.order) === JSON.stringify(LEGACY_ORDER)) stored.order = DEFAULT_ORDER;
       const known = new Set(DEFAULT_ORDER);
       const order = [];
       const hidden = new Set();
@@ -3662,7 +3752,7 @@
 
     function sectionTitle(el) {
       const heading = el.querySelector("h2");
-      return heading ? heading.textContent.trim() : el.dataset.section;
+      return heading ? heading.textContent.trim() : el.getAttribute("aria-label") || el.dataset.section;
     }
 
     function renderSectionsList(prefs) {
@@ -3736,6 +3826,9 @@
     }
 
     initializeSectionIdentity();
+    const sectionTitles = {"portfolio-value":"Investment performance","cash-flow-evolution":"Investment cash flows","current-holdings":"Current holdings","portfolio-distribution":"Portfolio allocation","cash-account-interest":"Cash interest","net-contributions":"Contributions & withdrawals","taxes-and-costs":"Taxes & costs","portfolio-statistics":"Return statistics","family-rankings":"Family rankings","stock-news":"Stock news","pricing-coverage":"Data & price coverage","suggested-actions-and-to-dos":"Suggested actions"};
+    allSections().forEach(section=>{const heading=section.querySelector("h2");if(heading&&sectionTitles[section.dataset.section])heading.textContent=sectionTitles[section.dataset.section];});
+    renderSectionsList(sectionPrefs);
     initializeSectionWrapButtons();
     const updateWrap = document.getElementById("update-wrap");
     const updateToggle = document.getElementById("update-toggle");

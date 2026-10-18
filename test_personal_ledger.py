@@ -135,6 +135,20 @@ class PersonalLedgerTest(unittest.TestCase):
         )
         self.assertEqual(exported, [{"category": "Dining", "amount_eur": 20, "count": 2, "share_pct": 100}])
 
+    def test_explicit_direction_correction_survives_reimport_without_affecting_other_rows(self):
+        identifier = self.get()["rows"][0]["movement_id"]
+        result = self.post(
+            action="category", movement_id=identifier, category="Credits", flow_kind="credit", learn=True
+        )
+        self.assertEqual(result["rules"], [])
+        record = app.get_movement_store().import_by_hash("first", self.owner)
+        app.get_movement_store().enrich_import(
+            record, parser_version="new", movements=[self.row("2026-01-01"), self.row("2026-01-02")]
+        )
+        result = self.get()
+        self.assertEqual([row["flow_kind"] for row in result["rows"]], ["credit", "spend"])
+        self.assertEqual(result["summary"]["credits_eur"], 10)
+
     def test_invalid_cash_and_cross_site_writes_are_rejected(self):
         for value in ("NaN", "Infinity", "-1", "0", "1.001", "1e100"):
             response = self.client.post(

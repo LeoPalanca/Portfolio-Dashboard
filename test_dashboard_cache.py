@@ -42,25 +42,23 @@ class DashboardPayloadCacheTest(unittest.TestCase):
     def test_source_signature_change_invalidates_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             cache_dir = Path(temporary)
-            signatures = iter(
-                ["inputs-v1", "inputs-v1", "inputs-v1", "inputs-v2", "inputs-v2", "inputs-v2"]
-            )
             builds = [
                 {"generated_at": "first"},
                 {"generated_at": "after-import"},
             ]
             with (
                 patch.object(app, "DASHBOARD_CACHE_DIR", cache_dir),
-                patch.object(app, "dashboard_source_signature", side_effect=signatures),
+                patch.object(app, "dashboard_source_signature", return_value="inputs-v1") as signature,
                 patch.object(app, "_build_dashboard_payload", side_effect=builds) as build,
             ):
                 first = app.dashboard_payload(person=app.PRIMARY_PORTFOLIO_ID)
-                after_import = app.dashboard_payload(person=app.PRIMARY_PORTFOLIO_ID)
+                signature.return_value = "inputs-v2"
+                after_import = app.dashboard_payload(person=app.PRIMARY_PORTFOLIO_ID, allow_stale=False)
 
         self.assertNotEqual(first, after_import)
         self.assertEqual(build.call_count, 2)
 
-    def test_expired_snapshot_is_rebuilt_without_an_explicit_refresh(self) -> None:
+    def test_expired_snapshot_is_served_immediately_and_refresh_is_queued(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             cache_dir = Path(temporary)
             expired = (datetime.now() - timedelta(seconds=app.PRICE_TTL_SECONDS + 1)).isoformat()
@@ -72,12 +70,16 @@ class DashboardPayloadCacheTest(unittest.TestCase):
                 patch.object(app, "DASHBOARD_CACHE_DIR", cache_dir),
                 patch.object(app, "dashboard_source_signature", return_value="inputs-v1"),
                 patch.object(app, "_build_dashboard_payload", side_effect=builds) as build,
+                patch.object(app, "queue_dashboard_refresh") as queue,
             ):
                 first = app.dashboard_payload(person=app.PRIMARY_PORTFOLIO_ID)
                 rebuilt = app.dashboard_payload(person=app.PRIMARY_PORTFOLIO_ID)
+                queue.assert_called_once()
+                current = app.dashboard_payload(person=app.PRIMARY_PORTFOLIO_ID, allow_stale=False)
 
         self.assertEqual(first["totals"]["market_value"], 1)
-        self.assertEqual(rebuilt["totals"]["market_value"], 2)
+        self.assertEqual(rebuilt["totals"]["market_value"], 1)
+        self.assertEqual(current["totals"]["market_value"], 2)
         self.assertEqual(build.call_count, 2)
 
     def test_running_refresh_keeps_old_snapshot_available(self) -> None:

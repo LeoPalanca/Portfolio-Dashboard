@@ -251,7 +251,7 @@ class TradeRepublicExpenseExtractionTest(unittest.TestCase):
         self.assertEqual(by_merchant["OpenAI"]["native_amount"], Decimal("-21.62"))
         self.assertEqual(by_merchant["OpenAI"]["amount_eur"], Decimal("18.80"))
         self.assertEqual(by_merchant["Trade Republic Card"]["category"], "Fees")
-        self.assertEqual(by_merchant["Refund"]["category"], "Income")
+        self.assertEqual(by_merchant["Refund"]["category"], "Credits")
         self.assertNotIn("Revolut**2841*", by_merchant)
 
 

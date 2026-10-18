@@ -80,16 +80,17 @@
     if (!row) return;
     dialog("Set transaction category", `<p>${escape(row.merchant)} · ${escape(row.source_label)} · ${escape(row.date)}</p>
       <form id="category-entry-form" class="personal-ledger-form">
+      <label class="personal-ledger-wide">Transaction type (explicit correction)<select name="flow_kind">${[["spend","Expense"],["income","Income"],["credit","Refund / credit"],["personal_transfer","Own-account transfer"],["investment","Investment"],["cash_withdrawal","Cash withdrawal"],["fee","Bank fee"]].map(([kind,label])=>`<option value="${kind}" ${row.flow_kind===kind?"selected":""}>${label}</option>`).join("")}</select></label>
       <label>Category<select name="category">${options(row.category)}</select></label>
       <label>Subcategory<input name="subcategory" maxlength="500" value="${escape(row.subcategory)}"></label>
       <label class="personal-ledger-wide personal-ledger-check"><input name="learn" type="checkbox" checked>Use for the same merchant, source and direction</label>
       <label class="personal-ledger-wide personal-ledger-check"><input name="include_past" type="checkbox" checked>Also apply to matching past transactions (individual overrides stay unchanged)</label>
-      <p class="subtle personal-ledger-wide">Direction stays unchanged: a category edit cannot turn an expense into income.</p>
+      <p class="subtle personal-ledger-wide">Changing the category alone never changes direction. A transaction-type correction applies only to this row and disables rule learning for this save.</p>
       <button type="submit">Save category</button></form>`);
     node("category-entry-form").onsubmit = async event => {
       event.preventDefault(); const button = event.submitter || event.target.querySelector('[type="submit"]'); button.disabled = true;
       const form = new FormData(event.target);
-      try {await write({action:"category", movement_id:id, category:form.get("category"), subcategory:form.get("subcategory"), learn:form.has("learn"), include_past:form.has("include_past")}); node("personal-ledger-dialog").close();}
+      try {await write({action:"category", movement_id:id, category:form.get("category"), subcategory:form.get("subcategory"), flow_kind:form.get("flow_kind"), learn:form.has("learn"), include_past:form.has("include_past")}); node("personal-ledger-dialog").close();}
       catch (error) {node("personal-ledger-error").textContent = error.message;}
       finally {button.disabled = false;}
     };

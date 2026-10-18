@@ -212,8 +212,8 @@ header {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface-panel) 94%, transparent), color-mix(in srgb, var(--surface-page) 82%, transparent)),
     linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--series-teal) 6%, transparent), color-mix(in srgb, var(--series-pink) 7%, transparent));
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
   border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 14%, transparent);
   position: sticky;
   top: 0;
@@ -2566,4 +2566,35 @@ body.dashboard-redrawing .dashboard-refresh-overlay {
 @media (max-width: 600px) {
   #personal-ledger-dialog { padding: 16px; }
   .personal-ledger-form { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Two ledgers share the opening view; detail tables remain calm, solid surfaces. */
+.snapshot-status { color: var(--text-muted); font-size: var(--text-sm); line-height: 1.5; }
+.overview-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-5); align-items: start; }
+.overview-grid > div { min-width: 0; }
+.overview-grid h2 { margin: 0 0 var(--space-2); font-size: var(--text-lg); }
+.overview-grid .subtle { margin-bottom: var(--space-3); line-height: 1.6; }
+.overview-grid .metrics, .money-overview { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-3); }
+.overview-grid .metrics-variations { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.overview-grid .metric { padding: var(--space-3); min-height: 80px; }
+.overview-grid .metric > span { white-space: normal; }
+.overview-grid .metric strong { font-size: var(--text-2xl); }
+.money-overview { margin-bottom: var(--space-4); }
+#money-coverage { max-height: 88px; overflow: auto; }
+main > section { backdrop-filter: none; background-color: var(--surface-panel); }
+.metric, .score-pill, .selector-fancy, .secondary-selector { backdrop-filter: none; }
+.section-content > .table-wrap > h3 { padding: var(--space-4) var(--space-5) var(--space-2); margin: 0; }
+.section-body .table-wrap > h3 { padding: var(--space-4) 0 var(--space-2); margin: 0; }
+.table-pages { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-3); }
+.ranking-message { display: block; color: var(--text-muted); font-weight: 400; white-space: normal; max-width: 280px; }
+@media (max-width: 900px) {
+  .overview-grid { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 680px) {
+  .overview-grid .metrics-variations { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .overview-grid .metrics-variations .metric { padding: var(--space-2); }
+  .overview-grid .metrics-variations strong { font-size: var(--text-base); }
+  .overview-grid .metric-benchmark { flex-wrap: wrap; }
+  .section-head { flex-wrap: wrap; }
+  .section-head > .subtle { flex-basis: 100%; }
 }

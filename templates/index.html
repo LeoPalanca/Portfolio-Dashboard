@@ -189,20 +189,24 @@
         </div>
       </div>
     </div>
-    <div class="metrics" id="metrics"></div>
+    <div id="snapshot-status" class="snapshot-status" role="status">Loading saved portfolio…</div>
+    <div class="overview-grid">
+      <div class="overview-investments"><h2>Investments</h2><p class="subtle" id="investment-scope"></p><div class="metrics" id="metrics"></div></div>
+      <div class="overview-money"><h2>Income &amp; expenses</h2><p class="subtle" id="money-window"></p><div id="money-overview" class="money-overview"></div><p class="subtle" id="money-coverage"></p><button type="button" onclick="openIncomeExpenses()">Manage income, expenses &amp; cash</button></div>
+    </div>
     <div class="movers-panel" id="movers-panel" hidden></div>
 
     {% if show_rankings %}
     <!-- Multi-portfolio rankings -->
     <section data-section="family-rankings">
-      <div class="section-head expanded" data-collapse="rankings-content" onclick="toggleSection(this)">
+      <div class="section-head" data-collapse="rankings-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
           <h2>Family Rankings</h2>
         </div>
-        <span class="subtle" id="rankings-window-label">Common alignment: loading…</span>
+        <span class="subtle" id="rankings-window-label">Open to compare available portfolios</span>
       </div>
-      <div class="section-content expanded" id="rankings-content">
+      <div class="section-content" id="rankings-content">
         <div class="table-wrap">
           <table class="positions-table" id="rankings-table">
             <thead>
@@ -390,14 +394,14 @@
     <!-- Product-specific breakdowns belong in private configuration. -->
     <!-- Watchlist -->
     <section data-section="watchlist">
-      <div class="section-head expanded" data-collapse="watchlist-content" onclick="toggleSection(this)">
+      <div class="section-head" data-collapse="watchlist-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
           <h2>Watchlist</h2>
         </div>
-        <span class="subtle" id="watchlist-summary">Loading watchlist…</span>
+        <span class="subtle" id="watchlist-summary">Open to load watchlist</span>
       </div>
-      <div class="section-content expanded" id="watchlist-content">
+      <div class="section-content" id="watchlist-content">
         <div id="watchlist-grid" style="
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

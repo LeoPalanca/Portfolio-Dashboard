@@ -3,6 +3,19 @@
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 
+## 0.10.1 - 2026-10-18
+
+### Added
+
+- Serve cached dashboard snapshots with background asynchronous refresh and gzip compression.
+- Partial family rankings reporting per-portfolio availability when refreshing or temporarily unavailable.
+- Stable transaction identity on fills to prevent dropping duplicate fills across imports.
+
+### Fixed
+
+- Reclassify refunds and reversals for BBVA and Trade Republic as credits rather than income.
+- Balanced overview layout and deferred rendering for collapsed dashboard sections.
+
 ## 0.10.0 - 2026-10-18
 
 ### Added

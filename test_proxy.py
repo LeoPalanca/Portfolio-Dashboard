@@ -391,7 +391,7 @@ class PriceHistoryLookupTest(unittest.TestCase):
         def fake_payload(*args, **kwargs):
             return {"valuation_series": series}
 
-        with patch.object(app, "dashboard_payload", side_effect=fake_payload):
+        with patch.object(app, "read_dashboard_cache", side_effect=fake_payload):
             response = app.app.test_client().get("/api/rankings")
 
         self.assertEqual(response.status_code, 200)

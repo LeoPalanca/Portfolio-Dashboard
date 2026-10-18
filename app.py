@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import email.utils
+import gzip
 import hashlib
 import html
 import io
@@ -163,9 +164,13 @@ HISTORY_CACHE = SETTINGS.cache_path("history.json")
 HISTORY_CACHE_DIR = SETTINGS.cache_dir / "history"
 NEWS_CACHE = SETTINGS.cache_path("news.json")
 DASHBOARD_CACHE_DIR = SETTINGS.cache_dir / "dashboard-payloads"
-DASHBOARD_CACHE_FORMAT_VERSION = 1
+DASHBOARD_CACHE_FORMAT_VERSION = 2
+IMPORT_PARSER_VERSION = "ledger-4"
 _DASHBOARD_CACHE_LOCK = threading.Lock()
+_DASHBOARD_BUILD_LOCKS: dict[Path, threading.Lock] = {}
+_DASHBOARD_REFRESH_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dashboard-refresh")
 _DASHBOARD_MEMORY_CACHE: dict[Path, tuple[str, dict[str, Any], bytes]] = {}
+_DASHBOARD_GZIP_CACHE: dict[tuple, bytes] = {}
 _PRICE_REFRESH_JOBS_LOCK = threading.Lock()
 _PRICE_REFRESH_JOBS: dict[Path, dict[str, Any]] = {}
 _UPDATE_STATUS_LOCK = threading.Lock()
@@ -183,6 +188,19 @@ _CACHE_WRITE_LOCK = threading.RLock()
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = SETTINGS.import_max_bytes
 app.jinja_env.keep_trailing_newline = True
+
+
+@app.after_request
+def compact_api_response(response):
+    if request.path.startswith("/api/") and response.mimetype == "application/json":
+        response.headers["Cache-Control"] = "no-store"
+        if "Content-Encoding" not in response.headers and request.accept_encodings["gzip"] > 0:
+            encoded = response.get_data()
+            if len(encoded) > 4096:
+                response.set_data(gzip.compress(encoded, compresslevel=1))
+                response.headers["Content-Encoding"] = "gzip"
+                response.vary.add("Accept-Encoding")
+    return response
 
 
 def update_release_status() -> dict[str, Any]:
@@ -260,7 +278,6 @@ def dashboard_source_signature() -> str:
 
     inputs = (
         SETTINGS.project_dir / "config.toml",
-        MOVEMENT_DATABASE,
         MAPPINGS_CSV,
         EXPOSURES_CSV,
         CRYPTO_WALLET_POSITIONS_CSV,
@@ -268,6 +285,7 @@ def dashboard_source_signature() -> str:
         ETF_DOCUMENTS_JSON,
         BERKSHIRE_HOLDINGS_CSV,
         PROXY_EXPOSURES_CSV,
+        EXPENSE_RULES_CSV,
     )
     file_state = []
     for path in inputs:
@@ -279,7 +297,7 @@ def dashboard_source_signature() -> str:
     encoded = json.dumps(
         {
             "format": DASHBOARD_CACHE_FORMAT_VERSION,
-            "version": APP_VERSION,
+            "ledger": get_movement_store().revision(),
             "files": file_state,
         },
         separators=(",", ":"),
@@ -311,7 +329,7 @@ def read_dashboard_cache(path: Path, signature: str, allow_expired: bool = False
     payload = cached["payload"]
     if not allow_expired and not dashboard_snapshot_is_fresh(payload):
         return None
-    remember_dashboard_payload(path, signature, payload)
+    remember_dashboard_payload(path, str(cached.get("signature") or ""), payload)
     return payload
 
 
@@ -339,7 +357,7 @@ def write_dashboard_cache(path: Path, signature: str, payload: dict[str, Any]) -
 
 def remember_dashboard_payload(path: Path, signature: str, payload: dict[str, Any]) -> bytes:
     encoded = app.json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    if len(_DASHBOARD_MEMORY_CACHE) >= 32 and path not in _DASHBOARD_MEMORY_CACHE:
+    if len(_DASHBOARD_MEMORY_CACHE) >= 4 and path not in _DASHBOARD_MEMORY_CACHE:
         _DASHBOARD_MEMORY_CACHE.clear()
     _DASHBOARD_MEMORY_CACHE[path] = (signature, payload, encoded)
     return encoded
@@ -349,7 +367,24 @@ def dashboard_response_bytes(path: Path, payload: dict[str, Any]) -> bytes:
     memory = _DASHBOARD_MEMORY_CACHE.get(path)
     if memory is not None and memory[1] is payload:
         return memory[2]
-    return remember_dashboard_payload(path, dashboard_source_signature(), payload)
+    return app.json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+
+def cash_coverage_disclosure(payload: dict[str, Any], person: str) -> dict[str, Any]:
+    """A reconstructed positive balance is not a reconciled bank statement."""
+    cash = payload.get("cash_portfolio")
+    if not cash:
+        return payload
+    coverage = {}
+    for row in get_movement_store().movements(person, ("cash_flow",)):
+        account, day = str(row.get("account") or ""), str(row["occurred_on"])[:10]
+        item = coverage.setdefault(account, {"first_date": day, "last_date": day})
+        item["first_date"], item["last_date"] = min(item["first_date"], day), max(item["last_date"], day)
+    accounts = [{**row, **coverage.get(row["account"], {}),
+                 "status": "reconstructed" if row.get("status") == "verified" else row.get("status"),
+                 "reconciled_at": None} for row in cash.get("accounts", [])]
+    return {**payload, "cash_portfolio": {**cash, "accounts": accounts,
+            "scope": "Reconstructed investment-account cash; excludes Intesa and the manual cash ledger. Not bank-reconciled."}}
 
 
 def configured_path_label(path: Path) -> str:
@@ -751,6 +786,7 @@ def read_trade_republic_trades(path: Path) -> list[Trade]:
                     grand_total=cash_effect,
                     grand_total_present=True,
                     source="trade_republic",
+                    transaction_id=str(row.get("transaction_id") or "").strip(),
                 )
             )
 
@@ -1735,7 +1771,8 @@ def read_trade_republic_expense_events(path: Path, rules: list[ExpenseRule] | No
                 flow_kind = "fee"
                 merchant = merchant if merchant != t_type else "Trade Republic Card"
             else:
-                flow_kind = "income" if cash_change > ZERO else "spend"
+                # Positive card settlements are reversals/refunds, not earnings.
+                flow_kind = "credit" if cash_change > ZERO else "spend"
             if is_self_giroconto_expense("", merchant, description, flow_kind):
                 continue
             events.append(
@@ -1749,6 +1786,7 @@ def read_trade_republic_expense_events(path: Path, rules: list[ExpenseRule] | No
                     currency=native_currency,
                     native_amount=native_amount,
                     rules=active_rules,
+                    extra={"transaction_id": str(row.get("transaction_id") or "").strip()},
                 )
             )
     return sorted(events, key=lambda item: (item["date"], item["source"], item["merchant"]))
@@ -1958,11 +1996,15 @@ def read_bbva_expense_events(
 
                     flow_kind = "spend"
                     if amount > 0:
-                        flow_kind = "income"
+                        flow_kind = "credit" if re.search(r"rimbors|storn|refund|cashback", f"{causale} {movimento}", re.I) else "income"
                     else:
                         causale_upper = str(causale).upper()
                         if "COMMISS" in causale_upper or "SPESE" in causale_upper:
                             flow_kind = "fee"
+                        elif "PRELIEV" in causale_upper:
+                            flow_kind = "cash_withdrawal"
+                    if "giroconto" in str(causale).casefold():
+                        flow_kind = "personal_transfer"
 
                     merchant = benef if benef else (str(movimento).strip() if movimento else (str(causale).strip() if causale else "BBVA"))
                     description = str(movimento).strip() if movimento else (str(causale).strip() if causale else "")
@@ -6960,6 +7002,7 @@ def dashboard_payload(
     proxy_mode: str = "off",
     broker: str = "all",
     live_only: str = "off",
+    allow_stale: bool = True,
 ) -> dict[str, Any]:
     """Return a persistent snapshot unless the caller explicitly refreshes it."""
 
@@ -6971,14 +7014,22 @@ def dashboard_payload(
     path = dashboard_cache_path(person, berkshire_mode, proxy_mode, broker, live_only)
     signature = dashboard_source_signature()
     if not refresh:
-        cached = read_dashboard_cache(path, signature, allow_expired=price_refresh_running(path))
+        cached = read_dashboard_cache(path, signature)
         if cached is not None:
             return cached
+        if allow_stale:
+            cached = read_dashboard_cache(path, signature, allow_expired=True)
+            if cached is not None:
+                queue_dashboard_refresh(path, dict(person=person, berkshire_mode=berkshire_mode,
+                    proxy_mode=proxy_mode, broker=broker, live_only=live_only), force=False)
+                return cached
 
     with _DASHBOARD_CACHE_LOCK:
+        build_lock = _DASHBOARD_BUILD_LOCKS.setdefault(path, threading.Lock())
+    with build_lock:
         signature = dashboard_source_signature()
         if not refresh:
-            cached = read_dashboard_cache(path, signature, allow_expired=price_refresh_running(path))
+            cached = read_dashboard_cache(path, signature)
             if cached is not None:
                 return cached
         payload = _build_dashboard_payload(
@@ -6989,15 +7040,37 @@ def dashboard_payload(
             broker=broker,
             live_only=live_only,
         )
-        write_dashboard_cache(path, dashboard_source_signature(), payload)
+        # If inputs changed during calculation, retain the starting signature so
+        # the next request refreshes again instead of calling old values current.
+        write_dashboard_cache(path, signature, payload)
         return payload
 
 
-def run_portfolio_price_refresh(path: Path, options: dict[str, Any]) -> None:
+def queue_dashboard_refresh(path: Path, options: dict[str, Any], force: bool = True) -> dict[str, Any]:
+    """Deduplicate selections and serialize expensive work on the small Pi."""
+    with _PRICE_REFRESH_JOBS_LOCK:
+        job = _PRICE_REFRESH_JOBS.get(path)
+        if job and job.get("status") == "running":
+            return dict(job)
+        if not force and job and job.get("status") == "error" and time.monotonic() - job.get("finished_monotonic", 0) < 60:
+            return dict(job)
+        if len(_PRICE_REFRESH_JOBS) >= 32:
+            for previous_path, previous in list(_PRICE_REFRESH_JOBS.items()):
+                if previous.get("status") != "running":
+                    del _PRICE_REFRESH_JOBS[previous_path]
+            if len(_PRICE_REFRESH_JOBS) >= 32:
+                return {"status": "error", "error": "Refresh queue is full; saved values remain available. Try again shortly."}
+        job = {"status": "running", "started_at": datetime.now().isoformat(timespec="seconds")}
+        _PRICE_REFRESH_JOBS[path] = job
+        _DASHBOARD_REFRESH_POOL.submit(run_portfolio_price_refresh, path, options, force)
+        return dict(job)
+
+
+def run_portfolio_price_refresh(path: Path, options: dict[str, Any], force: bool = True) -> None:
     """Rebuild a dashboard without holding an HTTP request open for minutes."""
 
     try:
-        payload = dashboard_payload(refresh=True, **options)
+        payload = dashboard_payload(refresh=force, allow_stale=False, **options)
     except Exception as exc:
         update = {"status": "error", "error": str(exc)}
     else:
@@ -7011,6 +7084,7 @@ def run_portfolio_price_refresh(path: Path, options: dict[str, Any]) -> None:
         if job is not None:
             job.update(update)
             job["finished_at"] = datetime.now().isoformat(timespec="seconds")
+            job["finished_monotonic"] = time.monotonic()
 
 
 NEWS_SYMBOL_EXCLUDE = {"", "USD", "EUR", "GBP", "USDC-USD", "BTC-USD", "ETH-USD", "TON-USD", "TON11419-USD"}
@@ -7747,7 +7821,7 @@ def normalize_trade_movement(trade: Trade) -> dict[str, Any]:
         "price": trade.price,
         "fees": trade.fees,
         "tax": trade.tax,
-        "metadata": {"action": trade.action, "source": trade.source},
+        "metadata": {"action": trade.action, "source": trade.source, "transaction_id": trade.transaction_id},
     }
 
 
@@ -7793,6 +7867,7 @@ def normalize_expense_movement(event: dict[str, Any]) -> dict[str, Any]:
             "source_category": event.get("source_category"),
             "value_date": event.get("value_date"),
             "source_state": event.get("source_state"),
+            "transaction_id": event.get("transaction_id"),
         },
     }
 
@@ -7818,7 +7893,7 @@ def normalize_cash_flow_movement(event: dict[str, Any], account: str) -> dict[st
         "description": event.get("description") or "Cash movement",
         "currency": event.get("currency") or "EUR",
         "amount": event.get("cash_change"),
-        "metadata": {"contribution_change": event.get("contrib_change") or ZERO},
+        "metadata": {"contribution_change": event.get("contrib_change") or ZERO, "transaction_id": event.get("transaction_id")},
     }
 
 
@@ -7904,6 +7979,7 @@ def read_trade_republic_cash_flows(path: Path) -> list[dict[str, Any]]:
                     "date": datetime.strptime(row["date"], "%Y-%m-%d").date(),
                     "cash_change": cash_change,
                     "contrib_change": cash_change if row.get("type") in contribution_types else ZERO,
+                    "transaction_id": str(row.get("transaction_id") or "").strip(),
                     "currency": row.get("currency") or "EUR",
                     "description": row.get("description") or row.get("type") or "Cash movement",
                 }
@@ -8015,7 +8091,7 @@ def import_statement_path(
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     store = get_movement_store()
     existing = store.import_by_hash(digest, owner)
-    if existing is not None and existing.parser_version == APP_VERSION:
+    if existing is not None and existing.parser_version == IMPORT_PARSER_VERSION:
         return {
             "status": "duplicate",
             "duplicate": True,
@@ -8032,7 +8108,7 @@ def import_statement_path(
     if not movements:
         raise ValueError(f"No supported movements were found in this {SOURCE_LABELS[source]} statement")
     if existing is not None:
-        inserted, duplicates = store.enrich_import(existing, parser_version=APP_VERSION, movements=movements)
+        inserted, duplicates = store.enrich_import(existing, parser_version=IMPORT_PARSER_VERSION, movements=movements)
         return {
             "status": "upgraded",
             "duplicate": False,
@@ -8060,7 +8136,7 @@ def import_statement_path(
             source_kind=source,
             original_name=safe_original_name,
             stored_path=configured_path_label(destination),
-            parser_version=APP_VERSION,
+            parser_version=IMPORT_PARSER_VERSION,
             movements=movements,
             portfolio_id=owner,
         )
@@ -8110,7 +8186,7 @@ def legacy_statement_candidates(portfolio_id: str) -> list[tuple[Path, str]]:
         if family_trade_republic:
             candidates.append((family_trade_republic, "trade_republic"))
 
-    archive_root = ROOT_DIR / "portfolios" / owner
+    archive_root = ROOT_DIR if owner == PRIMARY_PORTFOLIO_ID else ROOT_DIR / "portfolios" / owner
     for source, extensions in SOURCE_EXTENSIONS.items():
         category = "cash_exports" if source in {"revolut", "intesa", "bbva"} else "broker_exports"
         for extension in extensions:
@@ -8240,6 +8316,18 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
         if row.get("event_type") in excluded:
             continue
         metadata = row.get("metadata") or {}
+        flow_kind = str(row.get("event_type") or "spend")
+        category = str(metadata.get("category") or "Uncategorized")
+        # Apply known source semantics even when an older raw export is no
+        # longer available to reparse. Explicit user overrides run afterwards.
+        refund_text = f"{metadata.get('source_category', '')} {metadata.get('merchant', '')} {row.get('description', '')}"
+        if flow_kind == "income" and (row.get("source_kind") == "trade_republic" or
+                (row.get("source_kind") == "bbva" and re.search(r"rimbors|storn|refund|cashback", refund_text, re.I))):
+            flow_kind = "credit"
+            if category in {"Income", "Uncategorized"}:
+                category = "Credits"
+        if flow_kind == "spend" and row.get("source_kind") == "bbva" and "preliev" in str(metadata.get("source_category") or "").casefold():
+            flow_kind = "cash_withdrawal"
         events.append(
             {
                 "movement_id": row["id"],
@@ -8247,8 +8335,8 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
                 "source": str(row.get("account") or row.get("source_kind") or ""),
                 "merchant": str(metadata.get("merchant") or row.get("description") or "Unknown"),
                 "description": str(row.get("description") or ""),
-                "flow_kind": str(row.get("event_type") or "spend"),
-                "category": str(metadata.get("category") or "Uncategorized"),
+                "flow_kind": flow_kind,
+                "category": category,
                 "subcategory": str(metadata.get("subcategory") or ""),
                 "amount_eur": Decimal(str(metadata.get("amount_eur") or abs(movement_decimal(row, "amount")))),
                 "currency": str(row.get("currency") or "EUR"),
@@ -8268,6 +8356,16 @@ def personal_expenses_payload(owner: str) -> dict[str, Any]:
     payload["rules"] = PersonalLedger(MOVEMENT_DATABASE).rules(owner)
     payload["cash_rows"] = [expense_event_payload(row) for row in PersonalLedger(MOVEMENT_DATABASE).cash_events(owner)]
     payload["cash_ledger"] = PersonalLedger(MOVEMENT_DATABASE).cash_balance(owner)
+    coverage = {}
+    for row in payload["rows"]:
+        source = row["source_label"]
+        bucket = coverage.setdefault(source, {"source": source, "first_date": row["date"], "last_date": row["date"], "rows": 0})
+        bucket["first_date"] = min(bucket["first_date"], row["date"])
+        bucket["last_date"] = max(bucket["last_date"], row["date"])
+        bucket["rows"] += 1
+    payload["coverage"] = list(coverage.values())
+    payload.pop("recent_rows", None)
+    payload.pop("credits", None)
     return payload
 
 
@@ -8293,8 +8391,14 @@ def api_personal_expenses():
                               if row.get("movement_id") == body.get("movement_id")), None)
                 if event is None:
                     raise ValueError("Imported transaction not found")
+                corrected_kind = str(body.get("flow_kind") or event["flow_kind"])
+                if corrected_kind not in {"income", "spend", "credit", "personal_transfer", "investment", "cash_withdrawal", "fee"}:
+                    raise ValueError("Choose a supported transaction type")
+                changed_direction = corrected_kind != event["flow_kind"]
                 personal.set_category(owner, event, category, subcategory,
-                                      body.get("learn") is True, body.get("include_past", True) is True)
+                                      body.get("learn") is True and not changed_direction, body.get("include_past", True) is True)
+                if changed_direction:
+                    personal.set_direction(owner, event["movement_id"], corrected_kind)
             elif action == "save_cash":
                 personal.save_cash(owner, body, EXPENSE_CATEGORIES)
             elif action == "opening_balance":
@@ -8640,33 +8744,12 @@ def api_portfolio_refresh_prices():
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 
-    with _PRICE_REFRESH_JOBS_LOCK:
-        job = _PRICE_REFRESH_JOBS.get(path)
-        if request.method == "POST" and (job is None or job["status"] != "running"):
-            job = {
-                "status": "running",
-                "started_at": datetime.now().isoformat(timespec="seconds"),
-            }
-            if len(_PRICE_REFRESH_JOBS) >= 32:
-                for stale_path, stale_job in list(_PRICE_REFRESH_JOBS.items()):
-                    if stale_job.get("status") != "running":
-                        del _PRICE_REFRESH_JOBS[stale_path]
-                    if len(_PRICE_REFRESH_JOBS) < 32:
-                        break
-            if len(_PRICE_REFRESH_JOBS) >= 32:
-                return jsonify({"error": "Too many price refreshes are already running."}), 503
-            _PRICE_REFRESH_JOBS[path] = job
-            worker = threading.Thread(
-                target=run_portfolio_price_refresh,
-                args=(path, options),
-                daemon=True,
-                name="portfolio-price-refresh",
-            )
-        else:
-            worker = None
-        response = dict(job) if job is not None else {"status": "idle"}
-    if worker is not None:
-        worker.start()
+    if request.method == "POST":
+        response = queue_dashboard_refresh(path, options)
+    else:
+        with _PRICE_REFRESH_JOBS_LOCK:
+            response = dict(_PRICE_REFRESH_JOBS.get(path) or {"status": "idle"})
+    response.pop("finished_monotonic", None)
     return jsonify(response), 202 if request.method == "POST" else 200
 
 
@@ -8679,6 +8762,15 @@ def api_portfolio():
     broker = request.args.get("broker", "all")
     live_only = request.args.get("live_only", "off")
     try:
+        options = dict(person=configured_portfolio_id(person), berkshire_mode=normalize_berkshire_mode(berkshire_mode),
+                       proxy_mode=normalize_proxy_mode(proxy_mode), broker=(broker or "all").strip().lower(),
+                       live_only="on" if live_only == "on" else "off")
+        path = dashboard_cache_path(*options.values())
+        if read_dashboard_cache(path, dashboard_source_signature(), allow_expired=True) is None:
+            job = queue_dashboard_refresh(path, options, force=refresh)
+            if job["status"] == "error":
+                return jsonify({"error": job.get("error"), "status": "error"}), 503
+            return jsonify({"status": "building", "retry_after": 3, "message": "Preparing the first saved portfolio snapshot."}), 202
         payload = dashboard_payload(
             refresh=refresh,
             person=person,
@@ -8694,10 +8786,30 @@ def api_portfolio():
             (broker or "all").strip().lower(),
             "on" if live_only == "on" else "off",
         )
-        return app.response_class(
-            dashboard_response_bytes(path, payload),
-            mimetype="application/json",
-        )
+        signature = dashboard_source_signature()
+        memory = _DASHBOARD_MEMORY_CACHE.get(path)
+        fresh = memory is not None and memory[1] is payload and memory[0] == signature and dashboard_snapshot_is_fresh(payload)
+        with _PRICE_REFRESH_JOBS_LOCK:
+            job = _PRICE_REFRESH_JOBS.get(path, {})
+            snapshot = {"status": "fresh" if fresh else "refreshing" if job.get("status") == "running" else "stale",
+                        "generated_at": payload.get("generated_at"), "error": job.get("error")}
+        payload = {**payload, "snapshot": snapshot}
+        payload = cash_coverage_disclosure(payload, configured_portfolio_id(person))
+        encoded = dashboard_response_bytes(path, payload)
+        response = app.response_class(mimetype="application/json")
+        if "gzip" in request.accept_encodings and request.accept_encodings["gzip"] > 0 and len(encoded) > 4096:
+            key = (path, hashlib.sha256(encoded).digest())
+            if key not in _DASHBOARD_GZIP_CACHE:
+                if len(_DASHBOARD_GZIP_CACHE) >= 16:
+                    _DASHBOARD_GZIP_CACHE.clear()
+                _DASHBOARD_GZIP_CACHE[key] = gzip.compress(encoded, compresslevel=1)
+            response.set_data(_DASHBOARD_GZIP_CACHE[key])
+            response.headers["Content-Encoding"] = "gzip"
+        else:
+            response.set_data(encoded)
+        response.headers["Vary"] = "Accept-Encoding"
+        response.headers["Cache-Control"] = "no-store"
+        return response
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -8737,16 +8849,27 @@ def api_rankings():
     try:
         users = [PRIMARY_PORTFOLIO_ID] + list(FAMILY_PORTFOLIOS.keys())
         user_series = {}
+        availability = {}
         for user in users:
-            payload = dashboard_payload(
-                refresh=refresh,
-                person=user,
-                berkshire_mode=berkshire_mode,
-                proxy_mode=proxy_mode,
-                broker=broker,
-                live_only=live_only
-            )
-            user_series[user] = payload.get("valuation_series", [])
+            try:
+                options = dict(person=user, berkshire_mode=normalize_berkshire_mode(berkshire_mode),
+                               proxy_mode=normalize_proxy_mode(proxy_mode), broker=(broker or "all").strip().lower(),
+                               live_only="on" if live_only == "on" else "off")
+                path = dashboard_cache_path(*options.values())
+                signature = dashboard_source_signature()
+                payload = read_dashboard_cache(path, signature)
+                stale = payload is None
+                if payload is None:
+                    payload = read_dashboard_cache(path, signature, allow_expired=True)
+                if payload is None and not get_movement_store().summary(user)["movements"] and not legacy_statement_candidates(user):
+                    availability[user] = "No imported investment data"
+                elif stale or refresh:
+                    job = queue_dashboard_refresh(path, options, force=refresh)
+                    availability[user] = "Refresh failed: " + job.get("error", "Unknown error") if job["status"] == "error" else "Updating saved data"
+                user_series[user] = (payload or {}).get("valuation_series", [])
+            except Exception as exc:
+                user_series[user] = []
+                availability[user] = str(exc)
             
         start_dates = {}
         for user, series in user_series.items():
@@ -8767,9 +8890,11 @@ def api_rankings():
                     "person": user,
                     "name": FAMILY_PORTFOLIOS.get(user, {}).get("name", user.capitalize()),
                     "start_date": None,
+                    "status": "unavailable",
+                    "message": availability.get(user, "Waiting for first portfolio snapshot"),
                     "returns": {
-                        "price": {"start": 0.0, "common": 0.0, "ytd": 0.0},
-                        "total": {"start": 0.0, "common": 0.0, "ytd": 0.0}
+                        "price": {"start": None, "common": None, "ytd": None},
+                        "total": {"start": None, "common": None, "ytd": None}
                     }
                 })
                 continue
@@ -8815,6 +8940,8 @@ def api_rankings():
                 "person": user,
                 "name": FAMILY_PORTFOLIOS.get(user, {}).get("name", user.capitalize()),
                 "start_date": p_first["date"],
+                "status": "refreshing" if user in availability else "available",
+                "message": availability.get(user, ""),
                 "returns": {
                     "price": {
                         "start": ret_start_price,
@@ -8832,6 +8959,7 @@ def api_rankings():
         return jsonify({
             "common_start_date": common_start_date,
             "ytd_start_date": current_year_start,
+            "refreshing": any(message == "Updating saved data" for message in availability.values()),
             "rankings": rankings
         })
     except Exception as e:
@@ -8865,6 +8993,7 @@ def api_export():
             live_only=live_only,
         )
         payload = {**payload, "expenses": personal_expenses_payload(configured_portfolio_id(person))}
+        payload = cash_coverage_disclosure(payload, configured_portfolio_id(person))
         context_rows = dashboard_export_context(
             payload,
             person,
