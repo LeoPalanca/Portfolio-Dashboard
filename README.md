@@ -108,7 +108,7 @@ layout compatible.
 | Fineco | XLSX | Securities workbook or current-account `Movimenti` export; investment settlements, dividends, income, and transfers are excluded from expenses |
 | Interactive Brokers | PDF | Trade-confirmation report; requires `pdftotext` |
 | eToro | XLSX | Account-statement workbook |
-| Revolut | CSV | Account statement, including supported foreign-currency rows |
+| Revolut | CSV | Account statement or Italian consolidated statement, including native-currency transactions and net savings interest |
 | Intesa | XLSX | Account-operations workbook |
 | BBVA | XLS | Account workbook |
 | Personal trades | CSV or XLSX | Header-based template available during onboarding |

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.3 — 2026-11-02
+
+- Support Italian Revolut consolidated CSV statements alongside regular account statements, including native-currency transactions and net savings interest.
+- Ignore summaries and EUR conversion columns; preserve fees already included in cash amounts and mirror savings transfers to avoid reducing total cash.
+- Discover consolidated statements in Downloads when Downloads scanning is enabled.
+
 Notable changes to Portfolio Dashboard are documented here. The project follows
 [Semantic Versioning](https://semver.org/) while it remains pre-1.0.
 

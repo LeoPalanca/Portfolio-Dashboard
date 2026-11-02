@@ -57,6 +57,7 @@ from src.portfolio_dashboard.imports import (
 )
 from src.portfolio_dashboard.ingest import BrokerAdapter, FunctionBrokerAdapter
 from src.portfolio_dashboard.imports.fineco import read_fineco_security_rows
+from src.portfolio_dashboard.imports.revolut import read_revolut_rows
 from src.portfolio_dashboard.movements import MovementStore
 from src.portfolio_dashboard.movements.personal import PersonalLedger
 
@@ -489,16 +490,15 @@ def revolut_statement_profile(path: Path) -> tuple[tuple[str, ...], date, int] |
     latest_date: date | None = None
     completed_rows = 0
     try:
-        with path.open(newline="", encoding="utf-8-sig") as handle:
-            for row in csv.DictReader(handle):
-                if row.get("State") != "COMPLETATO":
-                    continue
-                event_time = parse_revolut_datetime(row.get("Data di completamento")) or parse_revolut_datetime(row.get("Data di inizio"))
-                if event_time is None:
-                    continue
-                currencies.add(normalize_currency_code(row.get("Valuta") or "EUR"))
-                latest_date = max(latest_date or event_time.date(), event_time.date())
-                completed_rows += 1
+        for row in read_revolut_rows(path):
+            if row.get("State") != "COMPLETATO":
+                continue
+            event_time = parse_revolut_datetime(row.get("Data di completamento")) or parse_revolut_datetime(row.get("Data di inizio"))
+            if event_time is None:
+                continue
+            currencies.add(normalize_currency_code(row.get("Valuta") or "EUR"))
+            latest_date = max(latest_date or event_time.date(), event_time.date())
+            completed_rows += 1
     except OSError:
         return None
     if not completed_rows or latest_date is None:
@@ -513,6 +513,7 @@ def revolut_statement_files() -> list[Path]:
     downloads = Path.home() / "Downloads"
     if SETTINGS.scan_downloads and downloads.exists():
         candidates.extend(downloads.glob(REVOLUT_DOWNLOADS_PATTERN))
+        candidates.extend(downloads.glob("consolidated_statement*.csv"))
 
     best_by_currency: dict[tuple[str, ...], tuple[date, int, float, Path]] = {}
     for path in candidates:
@@ -1234,6 +1235,8 @@ def is_revolut_internal_movement(row: dict[str, str]) -> bool:
         return True
     if description == "closing transaction":
         return True
+    if re.fullmatch(r"(?:a|da) [a-z]{3} conto deposito senza vincoli", description):
+        return True
     if description.startswith("prelievo da pocket"):
         return True
     if re.fullmatch(r"to [a-z]{3}", description):
@@ -1249,32 +1252,31 @@ def read_revolut_cash_events(paths: list[Path] | None = None) -> list[dict[str, 
 
     for path in source_paths:
         try:
-            handle = path.open(newline="", encoding="utf-8-sig")
+            rows = read_revolut_rows(path)
         except OSError:
             continue
-        with handle:
-            for row in csv.DictReader(handle):
-                if row.get("State") != "COMPLETATO":
-                    continue
-                event_time = parse_revolut_datetime(row.get("Data di completamento")) or parse_revolut_datetime(row.get("Data di inizio"))
-                if event_time is None:
-                    continue
-                amount = parse_decimal(row.get("Importo"))
-                fee = abs(parse_decimal(row.get("Costo")))
-                cash_change_native = amount - fee
-                if cash_change_native == ZERO:
-                    continue
-                currency = normalize_currency_code(row.get("Valuta") or "EUR")
-                contrib_change_native = ZERO if is_revolut_internal_movement(row) else cash_change_native
-                events.append(
-                    {
-                        "datetime": event_time,
-                        "date": event_time.date(),
-                        "cash_change": cash_change_native,
-                        "contrib_change": contrib_change_native,
-                        "currency": currency,
-                    }
-                )
+        for row in rows:
+            if row.get("State") != "COMPLETATO":
+                continue
+            event_time = parse_revolut_datetime(row.get("Data di completamento")) or parse_revolut_datetime(row.get("Data di inizio"))
+            if event_time is None:
+                continue
+            amount = parse_decimal(row.get("Importo"))
+            fee = abs(parse_decimal(row.get("Costo")))
+            cash_change_native = amount - fee
+            if cash_change_native == ZERO:
+                continue
+            currency = normalize_currency_code(row.get("Valuta") or "EUR")
+            contrib_change_native = ZERO if is_revolut_internal_movement(row) else cash_change_native
+            events.append(
+                {
+                    "datetime": event_time,
+                    "date": event_time.date(),
+                    "cash_change": cash_change_native,
+                    "contrib_change": contrib_change_native,
+                    "currency": currency,
+                }
+            )
 
     return sorted(events, key=lambda item: item["datetime"])
 
@@ -1643,6 +1645,10 @@ def revolut_expense_flow_kind(row: dict[str, str], cash_change_native: Decimal) 
         return "cash_withdrawal"
     if movement_type == "commissione" and cash_change_native < ZERO:
         return "fee"
+    if movement_type == "interessi":
+        return "income"
+    if movement_type == "accredito consolidato" and cash_change_native > ZERO:
+        return "income"
     if movement_type == "pagamento" and cash_change_native < ZERO:
         return "personal_transfer"
     return ""
@@ -1675,40 +1681,39 @@ def read_revolut_expense_events(
 
     for path in source_paths:
         try:
-            handle = path.open(newline="", encoding="utf-8-sig")
+            rows = read_revolut_rows(path)
         except OSError:
             continue
-        with handle:
-            for row in csv.DictReader(handle):
-                if row.get("State") != "COMPLETATO":
-                    continue
-                event_time = parse_revolut_datetime(row.get("Data di completamento")) or parse_revolut_datetime(row.get("Data di inizio"))
-                if event_time is None:
-                    continue
-                amount = parse_decimal(row.get("Importo"))
-                fee = abs(parse_decimal(row.get("Costo")))
-                cash_change_native = amount - fee
-                if cash_change_native == ZERO:
-                    continue
-                flow_kind = revolut_expense_flow_kind(row, cash_change_native)
-                if not flow_kind:
-                    continue
-                merchant = (row.get("Descrizione") or "").strip() or (row.get("Tipo") or "Revolut").strip()
-                description = (row.get("Descrizione") or row.get("Tipo") or "").strip()
-                if is_self_giroconto_expense("", merchant, description, flow_kind):
-                    continue
-                raw_events.append(
-                    {
-                        "date": event_time.date(),
-                        "datetime": event_time,
-                        "source": "revolut",
-                        "merchant": merchant,
-                        "description": description,
-                        "flow_kind": flow_kind,
-                        "currency": normalize_currency_code(row.get("Valuta") or "EUR"),
-                        "native_amount": cash_change_native,
-                    }
-                )
+        for row in rows:
+            if row.get("State") != "COMPLETATO":
+                continue
+            event_time = parse_revolut_datetime(row.get("Data di completamento")) or parse_revolut_datetime(row.get("Data di inizio"))
+            if event_time is None:
+                continue
+            amount = parse_decimal(row.get("Importo"))
+            fee = abs(parse_decimal(row.get("Costo")))
+            cash_change_native = amount - fee
+            if cash_change_native == ZERO:
+                continue
+            flow_kind = revolut_expense_flow_kind(row, cash_change_native)
+            if not flow_kind:
+                continue
+            merchant = (row.get("Descrizione") or "").strip() or (row.get("Tipo") or "Revolut").strip()
+            description = (row.get("Descrizione") or row.get("Tipo") or "").strip()
+            if is_self_giroconto_expense("", merchant, description, flow_kind):
+                continue
+            raw_events.append(
+                {
+                    "date": event_time.date(),
+                    "datetime": event_time,
+                    "source": "revolut",
+                    "merchant": merchant,
+                    "description": description,
+                    "flow_kind": flow_kind,
+                    "currency": normalize_currency_code(row.get("Valuta") or "EUR"),
+                    "native_amount": cash_change_native,
+                }
+            )
 
     if not raw_events:
         return []

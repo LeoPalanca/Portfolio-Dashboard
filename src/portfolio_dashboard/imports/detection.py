@@ -74,7 +74,7 @@ def detect_statement_source(path: Path, requested_source: str = "auto") -> str:
         headers = _normalized_headers(path)
         if {"type", "category", "shares", "amount"}.issubset(headers):
             return "trade_republic"
-        if {"tipo", "data di completamento", "descrizione", "importo", "state"}.issubset(headers):
+        if "conti correnti riepiloghi" in headers or {"tipo", "data di completamento", "descrizione", "importo", "state"}.issubset(headers):
             return "revolut"
         if PERSONAL_TRADE_REQUIRED_HEADERS.issubset(headers) or len(headers) >= 17:
             return "manual"
