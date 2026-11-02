@@ -61,6 +61,7 @@ PRODUCT_URL_BY_ISIN = {
 }
 
 DIRECT_HOLDINGS_URL_BY_ISIN = {
+    "IE00BL25JL35": "https://etf.dws.com/api/pdp/en-gb/etf/IE00BL25JL35/holdings",
     "IE00BK5BQT80": "https://www.vanguard.co.uk/professional/product/etf/equity/9679/ftse-all-world-ucits-etf-usd-accumulating",
     "IE00B5MTXJ97": "https://dng-api.invesco.com/cache/v1/accounts/en_IE/shareclasses/IE00B5MTXJ97/holdings/index?idType=isin",
     "IE00BGV5VN51": "https://etf.dws.com/api/pdp/en-gb/etf/IE00BGV5VN51/holdings",
@@ -80,6 +81,7 @@ STATIC_DOCUMENTS_BY_ISIN = {
 }
 
 ISSUER_BY_ISIN = {
+    "IE00BL25JL35": "Xtrackers",
     "IE00BK5BQT80": "Vanguard",
     "IE00B4L5Y983": "iShares",
     "IE00023EZQ82": "iShares",

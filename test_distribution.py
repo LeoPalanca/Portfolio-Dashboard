@@ -11,6 +11,38 @@ import app
 
 
 class DistributionAggregationTest(unittest.TestCase):
+    def test_crypto_is_a_direct_holding_without_composition_warning(self) -> None:
+        positions = [{"asset": "BTC", "isin": "", "symbol": "BTC-USD", "asset_class": "Crypto",
+                      "is_open": True, "market_value_eur": Decimal("25")}]
+        with patch.object(app, "read_etf_documents", return_value={}):
+            result = app.calculate_distribution(positions, {})
+        self.assertEqual(result["missing"], [])
+        self.assertEqual(result["covered_assets"], 1)
+        self.assertEqual(result["composition_sources"], [])
+        self.assertEqual(result["underlying"][0]["holding"], "BTC")
+        self.assertEqual(result["sectors"][0]["sector"], "Crypto")
+
+    def test_official_quality_snapshot_fills_missing_exposures(self) -> None:
+        with patch.object(app, "EXPOSURES_CSV", Path("/missing/exposures.csv")):
+            exposures = app.read_exposures()
+        rows = exposures[app.exposure_key("", "IE00BL25JL35")]
+        self.assertEqual(len(rows), 303)
+        self.assertAlmostEqual(float(sum(row["weight_pct"] for row in rows)), 100, places=2)
+        result = app.calculate_distribution(
+            [{"asset": "MSCI World Quality USD (Acc)", "isin": "IE00BL25JL35",
+              "is_open": True, "market_value_eur": Decimal("50")}], exposures)
+        self.assertEqual(result["missing"], [])
+        self.assertEqual(result["composition_sources"][0]["issuer"], "Xtrackers")
+
+    def test_bundled_exposures_preserve_private_fund_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "exposures.csv"
+            path.write_text("asset_name,isin,holding_name,weight_pct,sector,geo,asset_class\n"
+                            "Quality,IE00BL25JL35,Private holding,100,Technology,Global,Equity\n")
+            with patch.object(app, "EXPOSURES_CSV", path):
+                rows = app.read_exposures()[app.exposure_key("", "IE00BL25JL35")]
+        self.assertEqual([row["holding_name"] for row in rows], ["Private holding"])
+
     @staticmethod
     def sample_trade() -> app.Trade:
         return app.Trade(

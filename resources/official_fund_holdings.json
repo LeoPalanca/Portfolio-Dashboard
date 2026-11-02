@@ -1,0 +1,3053 @@
+{
+  "IE00BL25JL35": {
+    "isin": "IE00BL25JL35",
+    "asset_name": "MSCI World Quality USD (Acc)",
+    "issuer": "Xtrackers",
+    "status": "ok",
+    "fetched_at": "2026-11-02T19:18:35+00:00",
+    "official_only": true,
+    "product_url": "",
+    "holdings_url": "https://etf.dws.com/api/pdp/en-gb/etf/IE00BL25JL35/holdings",
+    "kid_url": "",
+    "factsheet_url": "",
+    "prospectus_url": "",
+    "parser": "dws_json",
+    "message": "",
+    "rows": 303,
+    "weight_sum": "99.999",
+    "normalized": false,
+    "data_path": "",
+    "holdings": [
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MICROSOFT",
+        "holding_ticker": "",
+        "weight_pct": "6.486",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "APPLE",
+        "holding_ticker": "",
+        "weight_pct": "5.98",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NVIDIA",
+        "holding_ticker": "",
+        "weight_pct": "4.812",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "VISA CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "3.924",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "META PLATFORMS CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "3.552",
+        "sector": "Communication Services",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ELI LILLY",
+        "holding_ticker": "",
+        "weight_pct": "3.055",
+        "sector": "Health Care",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ASML HOLDING",
+        "holding_ticker": "",
+        "weight_pct": "2.799",
+        "sector": "Information Technology",
+        "geo": "Netherlands",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MASTERCARD CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "2.259",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "TJX",
+        "holding_ticker": "",
+        "weight_pct": "1.995",
+        "sector": "Consumer Discretionary",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "LAM RESEARCH",
+        "holding_ticker": "",
+        "weight_pct": "1.533",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ALPHABET CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "1.407",
+        "sector": "Communication Services",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "JOHNSON & JOHNSON",
+        "holding_ticker": "",
+        "weight_pct": "1.276",
+        "sector": "Health Care",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "APPLIED MATERIAL INC",
+        "holding_ticker": "",
+        "weight_pct": "1.272",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ALPHABET CLASS C",
+        "holding_ticker": "",
+        "weight_pct": "1.111",
+        "sector": "Communication Services",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "TOTALENERGIES",
+        "holding_ticker": "",
+        "weight_pct": "0.974",
+        "sector": "Energy",
+        "geo": "France",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ROCHE PS PAR AG",
+        "holding_ticker": "",
+        "weight_pct": "0.953",
+        "sector": "Health Care",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "COSTCO WHOLESALE CORP",
+        "holding_ticker": "",
+        "weight_pct": "0.939",
+        "sector": "Consumer Staples",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MERCK & CO INC",
+        "holding_ticker": "",
+        "weight_pct": "0.924",
+        "sector": "Health Care",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "IBERDROLA",
+        "holding_ticker": "",
+        "weight_pct": "0.911",
+        "sector": "Utilities",
+        "geo": "Spain",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "KLA",
+        "holding_ticker": "",
+        "weight_pct": "0.903",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CATERPILLAR INC",
+        "holding_ticker": "",
+        "weight_pct": "0.895",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "WALMART",
+        "holding_ticker": "",
+        "weight_pct": "0.885",
+        "sector": "Consumer Staples",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NETFLIX",
+        "holding_ticker": "",
+        "weight_pct": "0.885",
+        "sector": "Communication Services",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "COCA-COLA",
+        "holding_ticker": "",
+        "weight_pct": "0.851",
+        "sector": "Consumer Staples",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "TEXAS INSTRUMENT",
+        "holding_ticker": "",
+        "weight_pct": "0.825",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PROCTER & GAMBLE",
+        "holding_ticker": "",
+        "weight_pct": "0.766",
+        "sector": "Consumer Staples",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ROSS STORES INC",
+        "holding_ticker": "",
+        "weight_pct": "0.714",
+        "sector": "Consumer Discretionary",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "INDUSTRIA DE DISENO TEXTIL SA",
+        "holding_ticker": "",
+        "weight_pct": "0.71",
+        "sector": "Consumer Discretionary",
+        "geo": "Spain",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CANADIAN NATURAL RESOURCES LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.707",
+        "sector": "Energy",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ADVANTEST",
+        "holding_ticker": "",
+        "weight_pct": "0.69",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ARISTA NETWORKS",
+        "holding_ticker": "",
+        "weight_pct": "0.65",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NOVARTIS AG",
+        "holding_ticker": "",
+        "weight_pct": "0.627",
+        "sector": "Health Care",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ASTRAZENECA PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.624",
+        "sector": "Health Care",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ALLIANZ",
+        "holding_ticker": "",
+        "weight_pct": "0.607",
+        "sector": "Financials",
+        "geo": "Germany",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "UNION PACIFIC",
+        "holding_ticker": "",
+        "weight_pct": "0.607",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "WESFARMERS",
+        "holding_ticker": "",
+        "weight_pct": "0.599",
+        "sector": "Consumer Discretionary",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "RECRUIT HOLDINGS",
+        "holding_ticker": "",
+        "weight_pct": "0.596",
+        "sector": "Industrials",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "LINDE PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.591",
+        "sector": "Materials",
+        "geo": "Ireland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "AUTOMATIC DATA PROCESSING INC",
+        "holding_ticker": "",
+        "weight_pct": "0.586",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "EOG RESOURCES",
+        "holding_ticker": "",
+        "weight_pct": "0.571",
+        "sector": "Energy",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "AMERICAN EXPRESS",
+        "holding_ticker": "",
+        "weight_pct": "0.57",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "AMPHENOL CORP CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "0.555",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "GILEAD SCIENCES",
+        "holding_ticker": "",
+        "weight_pct": "0.529",
+        "sector": "Health Care",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ACCENTURE PLC CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "0.525",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "FERRARI",
+        "holding_ticker": "",
+        "weight_pct": "0.52",
+        "sector": "Consumer Discretionary",
+        "geo": "Italy",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PROGRESSIVE",
+        "holding_ticker": "",
+        "weight_pct": "0.52",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BHP GROUP LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.518",
+        "sector": "Materials",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ADOBE INC",
+        "holding_ticker": "",
+        "weight_pct": "0.518",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BLACKROCK",
+        "holding_ticker": "",
+        "weight_pct": "0.514",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ABB LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.506",
+        "sector": "Industrials",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SLB",
+        "holding_ticker": "",
+        "weight_pct": "0.501",
+        "sector": "Energy",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "AMERICAN TOWER REIT",
+        "holding_ticker": "",
+        "weight_pct": "0.492",
+        "sector": "Real Estate",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CHIPOTLE MEXICAN GRILL",
+        "holding_ticker": "",
+        "weight_pct": "0.487",
+        "sector": "Consumer Discretionary",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ROLLS-ROYCE HOLDINGS PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.477",
+        "sector": "Industrials",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SUNCOR ENERGY INC (CANADA)",
+        "holding_ticker": "",
+        "weight_pct": "0.477",
+        "sector": "Energy",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NATIONAL GRID PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.46",
+        "sector": "Utilities",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CHARLES SCHWAB",
+        "holding_ticker": "",
+        "weight_pct": "0.455",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "COMPASS GROUP PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.453",
+        "sector": "Consumer Discretionary",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NOVO NORDISK CLASS B",
+        "holding_ticker": "",
+        "weight_pct": "0.431",
+        "sector": "Health Care",
+        "geo": "Denmark",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "S&P GLOBAL",
+        "holding_ticker": "",
+        "weight_pct": "0.429",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "EATON PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.42",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PEPSICO",
+        "holding_ticker": "",
+        "weight_pct": "0.419",
+        "sector": "Consumer Staples",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "WILLIAMS SONOMA INC",
+        "holding_ticker": "",
+        "weight_pct": "0.416",
+        "sector": "Consumer Discretionary",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "FORTINET",
+        "holding_ticker": "",
+        "weight_pct": "0.415",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ZURICH INSURANCE GROUP AG",
+        "holding_ticker": "",
+        "weight_pct": "0.414",
+        "sector": "Financials",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "TOKYO ELECTRON",
+        "holding_ticker": "",
+        "weight_pct": "0.407",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "LOCKHEED MARTIN",
+        "holding_ticker": "",
+        "weight_pct": "0.39",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CHUBB",
+        "holding_ticker": "",
+        "weight_pct": "0.377",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NESTLE SA",
+        "holding_ticker": "",
+        "weight_pct": "0.37",
+        "sector": "Consumer Staples",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PUBLIC STORAGE REIT",
+        "holding_ticker": "",
+        "weight_pct": "0.369",
+        "sector": "Real Estate",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "GARMIN",
+        "holding_ticker": "",
+        "weight_pct": "0.368",
+        "sector": "Consumer Discretionary",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CME GROUP CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "0.365",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "TOKIO MARINE HOLDINGS",
+        "holding_ticker": "",
+        "weight_pct": "0.362",
+        "sector": "Financials",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "TRANE TECHNOLOGIES PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.355",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MOODYS",
+        "holding_ticker": "",
+        "weight_pct": "0.353",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MARSH",
+        "holding_ticker": "",
+        "weight_pct": "0.35",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CINTAS",
+        "holding_ticker": "",
+        "weight_pct": "0.343",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HERMES INTERNATIONAL",
+        "holding_ticker": "",
+        "weight_pct": "0.342",
+        "sector": "Consumer Discretionary",
+        "geo": "France",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "3M",
+        "holding_ticker": "",
+        "weight_pct": "0.333",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ULTA BEAUTY INC",
+        "holding_ticker": "",
+        "weight_pct": "0.318",
+        "sector": "Consumer Discretionary",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "UNILEVER PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.312",
+        "sector": "Consumer Staples",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "DEVON ENERGY",
+        "holding_ticker": "",
+        "weight_pct": "0.307",
+        "sector": "Energy",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NEXT PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.29",
+        "sector": "Consumer Discretionary",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HOWMET AEROSPACE",
+        "holding_ticker": "",
+        "weight_pct": "0.289",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BLACKSTONE",
+        "holding_ticker": "",
+        "weight_pct": "0.288",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "WW GRAINGER INC",
+        "holding_ticker": "",
+        "weight_pct": "0.282",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "TRAVELERS COMPANIES",
+        "holding_ticker": "",
+        "weight_pct": "0.28",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "LAIR LIQUIDE SOCIETE ANONYME POUR",
+        "holding_ticker": "",
+        "weight_pct": "0.277",
+        "sector": "Materials",
+        "geo": "France",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MUENCHENER RUECKVERSICHERUNGS-GESE",
+        "holding_ticker": "",
+        "weight_pct": "0.274",
+        "sector": "Financials",
+        "geo": "Germany",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ILLINOIS TOOL INC",
+        "holding_ticker": "",
+        "weight_pct": "0.274",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CADENCE DESIGN SYSTEMS",
+        "holding_ticker": "",
+        "weight_pct": "0.264",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "VERTEX PHARMACEUTICALS",
+        "holding_ticker": "",
+        "weight_pct": "0.264",
+        "sector": "Health Care",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "FASTENAL",
+        "holding_ticker": "",
+        "weight_pct": "0.259",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "GLAXOSMITHKLINE",
+        "holding_ticker": "",
+        "weight_pct": "0.256",
+        "sector": "Health Care",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "UNITED PARCEL SERVICE INC CLASS B",
+        "holding_ticker": "",
+        "weight_pct": "0.254",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HONG KONG EXCHANGES AND CLEARING",
+        "holding_ticker": "",
+        "weight_pct": "0.254",
+        "sector": "Financials",
+        "geo": "Hong Kong",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SSE PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.251",
+        "sector": "Utilities",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SHERWIN WILLIAMS",
+        "holding_ticker": "",
+        "weight_pct": "0.248",
+        "sector": "Materials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "AMERIPRISE FINANCE INC",
+        "holding_ticker": "",
+        "weight_pct": "0.243",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "RELX PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.242",
+        "sector": "Industrials",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BRISTOL MYERS SQUIBB",
+        "holding_ticker": "",
+        "weight_pct": "0.242",
+        "sector": "Health Care",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ASICS",
+        "holding_ticker": "",
+        "weight_pct": "0.237",
+        "sector": "Consumer Discretionary",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CONSOLIDATED EDISON",
+        "holding_ticker": "",
+        "weight_pct": "0.231",
+        "sector": "Utilities",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "AON PLC CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "0.221",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "RIO TINTO",
+        "holding_ticker": "",
+        "weight_pct": "0.219",
+        "sector": "Materials",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CUMMINS INC",
+        "holding_ticker": "",
+        "weight_pct": "0.217",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "COMFORT SYSTEMS USA",
+        "holding_ticker": "",
+        "weight_pct": "0.213",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MANULIFE FINANCIAL",
+        "holding_ticker": "",
+        "weight_pct": "0.212",
+        "sector": "Financials",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "AUTODESK",
+        "holding_ticker": "",
+        "weight_pct": "0.212",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BEST BUY",
+        "holding_ticker": "",
+        "weight_pct": "0.211",
+        "sector": "Consumer Discretionary",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HONEYWELL INTERNATIONAL INC WHEN I",
+        "holding_ticker": "",
+        "weight_pct": "0.208",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "DEUTSCHE BOERSE AG",
+        "holding_ticker": "",
+        "weight_pct": "0.207",
+        "sector": "Financials",
+        "geo": "Germany",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "DARDEN RESTAURANTS INC",
+        "holding_ticker": "",
+        "weight_pct": "0.205",
+        "sector": "Consumer Discretionary",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ARISTOCRAT LEISURE",
+        "holding_ticker": "",
+        "weight_pct": "0.201",
+        "sector": "Consumer Discretionary",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CBRE GROUP CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "0.201",
+        "sector": "Real Estate",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "TEXAS PACIFIC LAND",
+        "holding_ticker": "",
+        "weight_pct": "0.195",
+        "sector": "Energy",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ATMOS ENERGY",
+        "holding_ticker": "",
+        "weight_pct": "0.188",
+        "sector": "Utilities",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ECOLAB",
+        "holding_ticker": "",
+        "weight_pct": "0.187",
+        "sector": "Materials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PAYPAL HOLDINGS",
+        "holding_ticker": "",
+        "weight_pct": "0.178",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "LOREAL SA",
+        "holding_ticker": "",
+        "weight_pct": "0.178",
+        "sector": "Consumer Staples",
+        "geo": "France",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "APPLOVIN CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "0.176",
+        "sector": "Communication Services",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PULTEGROUP",
+        "holding_ticker": "",
+        "weight_pct": "0.176",
+        "sector": "Consumer Discretionary",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NVR",
+        "holding_ticker": "",
+        "weight_pct": "0.168",
+        "sector": "Consumer Discretionary",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "RHEINMETALL AG",
+        "holding_ticker": "",
+        "weight_pct": "0.166",
+        "sector": "Industrials",
+        "geo": "Germany",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "AFLAC",
+        "holding_ticker": "",
+        "weight_pct": "0.165",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "FERGUSON ENTERPRISES",
+        "holding_ticker": "",
+        "weight_pct": "0.157",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ATLAS COPCO CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "0.157",
+        "sector": "Industrials",
+        "geo": "Sweden",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HALLIBURTON",
+        "holding_ticker": "",
+        "weight_pct": "0.156",
+        "sector": "Energy",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PAYCHEX",
+        "holding_ticker": "",
+        "weight_pct": "0.155",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "IDEXX LABORATORIES",
+        "holding_ticker": "",
+        "weight_pct": "0.152",
+        "sector": "Health Care",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "TRACTOR SUPPLY",
+        "holding_ticker": "",
+        "weight_pct": "0.152",
+        "sector": "Consumer Discretionary",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ROCKWELL AUTOMATION INC",
+        "holding_ticker": "",
+        "weight_pct": "0.147",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "DECKERS OUTDOOR",
+        "holding_ticker": "",
+        "weight_pct": "0.147",
+        "sector": "Consumer Discretionary",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HONEYWELL AEROSPACE INC",
+        "holding_ticker": "",
+        "weight_pct": "0.146",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MS&AD INSURANCE GROUP HOLDINGS",
+        "holding_ticker": "",
+        "weight_pct": "0.138",
+        "sector": "Financials",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NASDAQ INC",
+        "holding_ticker": "",
+        "weight_pct": "0.136",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MONSTER BEVERAGE",
+        "holding_ticker": "",
+        "weight_pct": "0.135",
+        "sector": "Consumer Staples",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SHIN ETSU CHEMICAL",
+        "holding_ticker": "",
+        "weight_pct": "0.132",
+        "sector": "Materials",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CBOE GLOBAL MARKETS",
+        "holding_ticker": "",
+        "weight_pct": "0.132",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HARTFORD INSURANCE GROUP",
+        "holding_ticker": "",
+        "weight_pct": "0.128",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CELESTICA",
+        "holding_ticker": "",
+        "weight_pct": "0.124",
+        "sector": "Information Technology",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "WHEATON PRECIOUS METALS",
+        "holding_ticker": "",
+        "weight_pct": "0.124",
+        "sector": "Materials",
+        "geo": "Brazil",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SUN LIFE FINANCIAL INC",
+        "holding_ticker": "",
+        "weight_pct": "0.122",
+        "sector": "Financials",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HOYA",
+        "holding_ticker": "",
+        "weight_pct": "0.121",
+        "sector": "Health Care",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "EMCOR GROUP",
+        "holding_ticker": "",
+        "weight_pct": "0.121",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "EXPERIAN PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.121",
+        "sector": "Industrials",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ENDESA SA",
+        "holding_ticker": "",
+        "weight_pct": "0.12",
+        "sector": "Utilities",
+        "geo": "Spain",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "3I GROUP FUND PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.118",
+        "sector": "Financials",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "INTACT FINANCIAL CORP",
+        "holding_ticker": "",
+        "weight_pct": "0.113",
+        "sector": "Financials",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "OLD DOMINION FREIGHT LINE",
+        "holding_ticker": "",
+        "weight_pct": "0.112",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ARCH CAPITAL GROUP",
+        "holding_ticker": "",
+        "weight_pct": "0.111",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "EXPEDITORS INTERNATIONAL OF WASHIN",
+        "holding_ticker": "",
+        "weight_pct": "0.111",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "GIVAUDAN SA",
+        "holding_ticker": "",
+        "weight_pct": "0.11",
+        "sector": "Materials",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "US DOLLAR",
+        "holding_ticker": "",
+        "weight_pct": "0.107",
+        "sector": "Unknown",
+        "geo": "United States",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "VIVMARK RESIDENTIAL",
+        "holding_ticker": "",
+        "weight_pct": "0.107",
+        "sector": "Real Estate",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PRUDENTIAL PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.103",
+        "sector": "Financials",
+        "geo": "Hong Kong",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "EVOLUTION",
+        "holding_ticker": "",
+        "weight_pct": "0.101",
+        "sector": "Consumer Discretionary",
+        "geo": "Sweden",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SUN HUNG KAI PROPERTIES LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.101",
+        "sector": "Real Estate",
+        "geo": "Hong Kong",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "IMPERIAL OIL LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.1",
+        "sector": "Energy",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "RIO TINTO",
+        "holding_ticker": "",
+        "weight_pct": "0.099",
+        "sector": "Materials",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "GEBERIT AG",
+        "holding_ticker": "",
+        "weight_pct": "0.099",
+        "sector": "Industrials",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "JABIL",
+        "holding_ticker": "",
+        "weight_pct": "0.099",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "WILLIS TOWERS WATSON",
+        "holding_ticker": "",
+        "weight_pct": "0.098",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "FRANCO NEVADA",
+        "holding_ticker": "",
+        "weight_pct": "0.097",
+        "sector": "Materials",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "QBE INSURANCE GROUP",
+        "holding_ticker": "",
+        "weight_pct": "0.096",
+        "sector": "Financials",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ADYEN",
+        "holding_ticker": "",
+        "weight_pct": "0.096",
+        "sector": "Financials",
+        "geo": "Netherlands",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SAMPO CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "0.095",
+        "sector": "Financials",
+        "geo": "Finland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "RAYMOND JAMES",
+        "holding_ticker": "",
+        "weight_pct": "0.092",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "VERALTO",
+        "holding_ticker": "",
+        "weight_pct": "0.091",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "WATERS CORP",
+        "holding_ticker": "",
+        "weight_pct": "0.09",
+        "sector": "Health Care",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CLP HOLDINGS",
+        "holding_ticker": "",
+        "weight_pct": "0.09",
+        "sector": "Utilities",
+        "geo": "Hong Kong",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "KONE CLASS B",
+        "holding_ticker": "",
+        "weight_pct": "0.089",
+        "sector": "Industrials",
+        "geo": "Finland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PARTNERS GROUP HOLDING AG",
+        "holding_ticker": "",
+        "weight_pct": "0.089",
+        "sector": "Financials",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "RECKITT BENCKISER GROUP PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.089",
+        "sector": "Consumer Staples",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "DAIWA HOUSE INDUSTRY",
+        "holding_ticker": "",
+        "weight_pct": "0.088",
+        "sector": "Real Estate",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "DISCO CORP",
+        "holding_ticker": "",
+        "weight_pct": "0.087",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PANDORA",
+        "holding_ticker": "",
+        "weight_pct": "0.085",
+        "sector": "Consumer Discretionary",
+        "geo": "Denmark",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "POWER ASSETS HOLDINGS",
+        "holding_ticker": "",
+        "weight_pct": "0.085",
+        "sector": "Utilities",
+        "geo": "Hong Kong",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "T ROWE PRICE GROUP",
+        "holding_ticker": "",
+        "weight_pct": "0.085",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "WHITECAP RESOURCES INC",
+        "holding_ticker": "",
+        "weight_pct": "0.082",
+        "sector": "Energy",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MONCLER",
+        "holding_ticker": "",
+        "weight_pct": "0.082",
+        "sector": "Consumer Discretionary",
+        "geo": "Italy",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ATLAS COPCO CLASS B",
+        "holding_ticker": "",
+        "weight_pct": "0.081",
+        "sector": "Industrials",
+        "geo": "Sweden",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "LASERTEC",
+        "holding_ticker": "",
+        "weight_pct": "0.077",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BROADRIDGE FINANCIAL SOLUTIONS INC",
+        "holding_ticker": "",
+        "weight_pct": "0.076",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SEGRO REIT PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.076",
+        "sector": "Real Estate",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "IMPERIAL BRANDS PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.074",
+        "sector": "Consumer Staples",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "AKER BP",
+        "holding_ticker": "",
+        "weight_pct": "0.074",
+        "sector": "Energy",
+        "geo": "Norway",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "LPL FINANCIAL HOLDINGS",
+        "holding_ticker": "",
+        "weight_pct": "0.074",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "REGIONS FINANCIAL",
+        "holding_ticker": "",
+        "weight_pct": "0.074",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "COPART INC",
+        "holding_ticker": "",
+        "weight_pct": "0.072",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ZOETIS INC CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "0.07",
+        "sector": "Health Care",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "KINROSS GOLD",
+        "holding_ticker": "",
+        "weight_pct": "0.069",
+        "sector": "Materials",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "DEXCOM INC",
+        "holding_ticker": "",
+        "weight_pct": "0.069",
+        "sector": "Health Care",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SIKA AG",
+        "holding_ticker": "",
+        "weight_pct": "0.069",
+        "sector": "Materials",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HANNOVER RUECK",
+        "holding_ticker": "",
+        "weight_pct": "0.067",
+        "sector": "Financials",
+        "geo": "Germany",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NATURGY ENERGY GROUP SA",
+        "holding_ticker": "",
+        "weight_pct": "0.066",
+        "sector": "Utilities",
+        "geo": "Spain",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ADMIRAL GROUP PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.065",
+        "sector": "Financials",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HUBBELL INC",
+        "holding_ticker": "",
+        "weight_pct": "0.064",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "VAT GROUP AG",
+        "holding_ticker": "",
+        "weight_pct": "0.064",
+        "sector": "Industrials",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BRAMBLES",
+        "holding_ticker": "",
+        "weight_pct": "0.064",
+        "sector": "Industrials",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "RESMED",
+        "holding_ticker": "",
+        "weight_pct": "0.063",
+        "sector": "Health Care",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CDW",
+        "holding_ticker": "",
+        "weight_pct": "0.062",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HONG KONG AND CHINA GAS LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.06",
+        "sector": "Utilities",
+        "geo": "Hong Kong",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PPG INDUSTRIES",
+        "holding_ticker": "",
+        "weight_pct": "0.058",
+        "sector": "Materials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "F5",
+        "holding_ticker": "",
+        "weight_pct": "0.058",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MTU AERO ENGINES HOLDING AG",
+        "holding_ticker": "",
+        "weight_pct": "0.057",
+        "sector": "Industrials",
+        "geo": "Germany",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CK ASSET HOLDINGS LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.055",
+        "sector": "Real Estate",
+        "geo": "Hong Kong",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "THE SAGE GROUP",
+        "holding_ticker": "",
+        "weight_pct": "0.055",
+        "sector": "Information Technology",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SINGAPORE EXCHANGE",
+        "holding_ticker": "",
+        "weight_pct": "0.054",
+        "sector": "Financials",
+        "geo": "Singapore",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "WR BERKLEY",
+        "holding_ticker": "",
+        "weight_pct": "0.054",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "COMPUTERSHARE LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.053",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BROWN & BROWN INC",
+        "holding_ticker": "",
+        "weight_pct": "0.053",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CHUGAI PHARMACEUTICAL LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.052",
+        "sector": "Health Care",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "GREAT WEST LIFECO INC",
+        "holding_ticker": "",
+        "weight_pct": "0.052",
+        "sector": "Financials",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "TENARIS SA",
+        "holding_ticker": "",
+        "weight_pct": "0.052",
+        "sector": "Energy",
+        "geo": "Luxembourg",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "DAITO TRUST CONSTRUCTION LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.052",
+        "sector": "Real Estate",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SNAP ON INC",
+        "holding_ticker": "",
+        "weight_pct": "0.052",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "LENNOX INTERNATIONAL",
+        "holding_ticker": "",
+        "weight_pct": "0.052",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "LOGITECH INTERNATIONAL",
+        "holding_ticker": "",
+        "weight_pct": "0.051",
+        "sector": "Information Technology",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "UNIVERSAL MUSIC GROUP",
+        "holding_ticker": "",
+        "weight_pct": "0.05",
+        "sector": "Communication Services",
+        "geo": "Netherlands",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CH ROBINSON WORLDWIDE",
+        "holding_ticker": "",
+        "weight_pct": "0.049",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "JAPAN EXCHANGE GROUP",
+        "holding_ticker": "",
+        "weight_pct": "0.049",
+        "sector": "Financials",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "FINECOBANK BANCA FINECO",
+        "holding_ticker": "",
+        "weight_pct": "0.048",
+        "sector": "Financials",
+        "geo": "Italy",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "EURO CURRENCY",
+        "holding_ticker": "",
+        "weight_pct": "0.047",
+        "sector": "Unknown",
+        "geo": "--",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "TRADEWEB MARKETS INC CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "0.047",
+        "sector": "Financials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CHECK POINT SOFTWARE TECHNOLOGIES",
+        "holding_ticker": "",
+        "weight_pct": "0.047",
+        "sector": "Information Technology",
+        "geo": "Israel",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CF INDUSTRIES HOLDINGS INC",
+        "holding_ticker": "",
+        "weight_pct": "0.047",
+        "sector": "Materials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PHOENIX FINANCIAL LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.046",
+        "sector": "Financials",
+        "geo": "Israel",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HERSHEY FOODS",
+        "holding_ticker": "",
+        "weight_pct": "0.046",
+        "sector": "Consumer Staples",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "OMNICOM GROUP INC",
+        "holding_ticker": "",
+        "weight_pct": "0.046",
+        "sector": "Communication Services",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "IA FINANCIAL INC",
+        "holding_ticker": "",
+        "weight_pct": "0.045",
+        "sector": "Financials",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SCHINDLER HOLDING PAR AG",
+        "holding_ticker": "",
+        "weight_pct": "0.045",
+        "sector": "Industrials",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SITC INTERNATIONAL HOLDINGS LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.045",
+        "sector": "Industrials",
+        "geo": "China",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "EURONEXT NV",
+        "holding_ticker": "",
+        "weight_pct": "0.045",
+        "sector": "Financials",
+        "geo": "Netherlands",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "KONGSBERG GRUPPEN",
+        "holding_ticker": "",
+        "weight_pct": "0.044",
+        "sector": "Industrials",
+        "geo": "Norway",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "KUEHNE UND NAGEL INTERNATIONAL AG",
+        "holding_ticker": "",
+        "weight_pct": "0.044",
+        "sector": "Industrials",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "WARTSILA",
+        "holding_ticker": "",
+        "weight_pct": "0.043",
+        "sector": "Industrials",
+        "geo": "Finland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ROLLINS INC",
+        "holding_ticker": "",
+        "weight_pct": "0.043",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "EPIROC CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "0.042",
+        "sector": "Industrials",
+        "geo": "Sweden",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "FORTESCUE LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.041",
+        "sector": "Materials",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ROCHE HOLDING AG",
+        "holding_ticker": "",
+        "weight_pct": "0.041",
+        "sector": "Health Care",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "INTERTEK GROUP PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.04",
+        "sector": "Industrials",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "UNITED THERAPEUTICS",
+        "holding_ticker": "",
+        "weight_pct": "0.04",
+        "sector": "Health Care",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "EVOLUTION MINING",
+        "holding_ticker": "",
+        "weight_pct": "0.04",
+        "sector": "Materials",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "VERBUND AG",
+        "holding_ticker": "",
+        "weight_pct": "0.039",
+        "sector": "Utilities",
+        "geo": "Austria",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CHURCH AND DWIGHT INC",
+        "holding_ticker": "",
+        "weight_pct": "0.038",
+        "sector": "Consumer Staples",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CHEUNG KONG INFRASTRUCTURE HOLDING",
+        "holding_ticker": "",
+        "weight_pct": "0.038",
+        "sector": "Utilities",
+        "geo": "Hong Kong",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "REDEIA CORPORACION SA",
+        "holding_ticker": "",
+        "weight_pct": "0.038",
+        "sector": "Utilities",
+        "geo": "Spain",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "COEUR MINING",
+        "holding_ticker": "",
+        "weight_pct": "0.038",
+        "sector": "Materials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BELIMO N AG",
+        "holding_ticker": "",
+        "weight_pct": "0.038",
+        "sector": "Industrials",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "AGEAS",
+        "holding_ticker": "",
+        "weight_pct": "0.037",
+        "sector": "Financials",
+        "geo": "Belgium",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MEDIBANK PRIVATE",
+        "holding_ticker": "",
+        "weight_pct": "0.037",
+        "sector": "Financials",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SMITHS GROUP PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.036",
+        "sector": "Industrials",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BE SEMICONDUCTOR INDUSTRIES NV",
+        "holding_ticker": "",
+        "weight_pct": "0.034",
+        "sector": "Information Technology",
+        "geo": "Netherlands",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NITTO DENKO",
+        "holding_ticker": "",
+        "weight_pct": "0.034",
+        "sector": "Materials",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "UNIPOL ASSICURAZIONI SPA",
+        "holding_ticker": "",
+        "weight_pct": "0.034",
+        "sector": "Financials",
+        "geo": "Italy",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "KONAMI GROUP",
+        "holding_ticker": "",
+        "weight_pct": "0.033",
+        "sector": "Communication Services",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "GEA GROUP AG",
+        "holding_ticker": "",
+        "weight_pct": "0.033",
+        "sector": "Industrials",
+        "geo": "Germany",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "YANGZIJIANG SHIPBUILDING (HOLDINGS",
+        "holding_ticker": "",
+        "weight_pct": "0.033",
+        "sector": "Industrials",
+        "geo": "China",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "PRO MEDICUS",
+        "holding_ticker": "",
+        "weight_pct": "0.031",
+        "sector": "Health Care",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ORION CLASS B",
+        "holding_ticker": "",
+        "weight_pct": "0.031",
+        "sector": "Health Care",
+        "geo": "Finland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ASX LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.031",
+        "sector": "Financials",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "WISE PLC CLASS A",
+        "holding_ticker": "",
+        "weight_pct": "0.031",
+        "sector": "Financials",
+        "geo": "Jersey",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "WATSCO",
+        "holding_ticker": "",
+        "weight_pct": "0.029",
+        "sector": "Industrials",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SINO LAND LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.027",
+        "sector": "Real Estate",
+        "geo": "Hong Kong",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "LUNDIN GOLD",
+        "holding_ticker": "",
+        "weight_pct": "0.026",
+        "sector": "Materials",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ENDEAVOUR MINING",
+        "holding_ticker": "",
+        "weight_pct": "0.025",
+        "sector": "Materials",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ADDTECH CLASS B",
+        "holding_ticker": "",
+        "weight_pct": "0.025",
+        "sector": "Industrials",
+        "geo": "Sweden",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "EMS-CHEMIE HOLDING AG",
+        "holding_ticker": "",
+        "weight_pct": "0.023",
+        "sector": "Materials",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CONTACT ENERGY LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.023",
+        "sector": "Utilities",
+        "geo": "New Zealand",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CCL INDUSTRIES CLASS B",
+        "holding_ticker": "",
+        "weight_pct": "0.022",
+        "sector": "Materials",
+        "geo": "Canada",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "TRYG",
+        "holding_ticker": "",
+        "weight_pct": "0.022",
+        "sector": "Financials",
+        "geo": "Denmark",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "STRAUMANN HOLDING AG",
+        "holding_ticker": "",
+        "weight_pct": "0.022",
+        "sector": "Health Care",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "EPIROC CLASS B",
+        "holding_ticker": "",
+        "weight_pct": "0.022",
+        "sector": "Industrials",
+        "geo": "Sweden",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SCHINDLER HOLDING AG",
+        "holding_ticker": "",
+        "weight_pct": "0.022",
+        "sector": "Industrials",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "GJENSIDIGE FORSIKRING",
+        "holding_ticker": "",
+        "weight_pct": "0.021",
+        "sector": "Financials",
+        "geo": "Norway",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MCCORMICK & CO NON-VOTING",
+        "holding_ticker": "",
+        "weight_pct": "0.02",
+        "sector": "Consumer Staples",
+        "geo": "United States",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "AMUNDI SA",
+        "holding_ticker": "",
+        "weight_pct": "0.019",
+        "sector": "Financials",
+        "geo": "France",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "COCA COLA HBC AG",
+        "holding_ticker": "",
+        "weight_pct": "0.019",
+        "sector": "Consumer Staples",
+        "geo": "Italy",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "FUTU HOLDINGS ADR",
+        "holding_ticker": "",
+        "weight_pct": "0.018",
+        "sector": "Financials",
+        "geo": "Hong Kong",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BANCA MEDIOLANUM",
+        "holding_ticker": "",
+        "weight_pct": "0.018",
+        "sector": "Financials",
+        "geo": "Italy",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CAPCOM LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.018",
+        "sector": "Communication Services",
+        "geo": "Japan",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BKW N AG",
+        "holding_ticker": "",
+        "weight_pct": "0.018",
+        "sector": "Utilities",
+        "geo": "Switzerland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "REA GROUP LTD",
+        "holding_ticker": "",
+        "weight_pct": "0.016",
+        "sector": "Communication Services",
+        "geo": "Australia",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "FRESNILLO PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.015",
+        "sector": "Materials",
+        "geo": "United Kingdom",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CVC CAPITAL PARTNERS PLC",
+        "holding_ticker": "",
+        "weight_pct": "0.014",
+        "sector": "Financials",
+        "geo": "Jersey",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "RATIONAL AG",
+        "holding_ticker": "",
+        "weight_pct": "0.013",
+        "sector": "Industrials",
+        "geo": "Germany",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "AUSTRALIAN DOLLAR",
+        "holding_ticker": "",
+        "weight_pct": "0.013",
+        "sector": "Unknown",
+        "geo": "Australia",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "POUND STERLING",
+        "holding_ticker": "",
+        "weight_pct": "0.013",
+        "sector": "Unknown",
+        "geo": "United Kingdom",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "MAPFRE SA",
+        "holding_ticker": "",
+        "weight_pct": "0.012",
+        "sector": "Financials",
+        "geo": "Spain",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "ELISA",
+        "holding_ticker": "",
+        "weight_pct": "0.012",
+        "sector": "Communication Services",
+        "geo": "Finland",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "CANADIAN DOLLAR",
+        "holding_ticker": "",
+        "weight_pct": "0.012",
+        "sector": "Unknown",
+        "geo": "Canada",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "LOTUS BAKERIES NV",
+        "holding_ticker": "",
+        "weight_pct": "0.011",
+        "sector": "Consumer Staples",
+        "geo": "Belgium",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "BUZZI",
+        "holding_ticker": "",
+        "weight_pct": "0.009",
+        "sector": "Materials",
+        "geo": "Italy",
+        "asset_class": "Equities"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "JAPANESE YEN",
+        "holding_ticker": "",
+        "weight_pct": "0.007",
+        "sector": "Unknown",
+        "geo": "Japan",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "DANISH KRONE",
+        "holding_ticker": "",
+        "weight_pct": "0.006",
+        "sector": "Unknown",
+        "geo": "Denmark",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SWISS FRANC",
+        "holding_ticker": "",
+        "weight_pct": "0.005",
+        "sector": "Unknown",
+        "geo": "Switzerland",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SWEDISH KRONA",
+        "holding_ticker": "",
+        "weight_pct": "0.003",
+        "sector": "Unknown",
+        "geo": "Sweden",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NEW ZEALAND DOLLAR",
+        "holding_ticker": "",
+        "weight_pct": "0.002",
+        "sector": "Unknown",
+        "geo": "New Zealand",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "HONG KONG DOLLAR",
+        "holding_ticker": "",
+        "weight_pct": "0.002",
+        "sector": "Unknown",
+        "geo": "Hong Kong",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NEW ISRAELI SHEQEL",
+        "holding_ticker": "",
+        "weight_pct": "0.002",
+        "sector": "Unknown",
+        "geo": "Israel",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "NORWEGIAN KRONE",
+        "holding_ticker": "",
+        "weight_pct": "0.002",
+        "sector": "Unknown",
+        "geo": "Norway",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI World Quality USD (Acc)",
+        "isin": "IE00BL25JL35",
+        "holding_name": "SINGAPORE DOLLAR",
+        "holding_ticker": "",
+        "weight_pct": "0.001",
+        "sector": "Unknown",
+        "geo": "Singapore",
+        "asset_class": "Cash"
+      }
+    ]
+  }
+}

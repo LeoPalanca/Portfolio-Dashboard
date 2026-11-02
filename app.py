@@ -101,6 +101,7 @@ FAMILY_PORTFOLIOS = SETTINGS.family_portfolios
 MAPPINGS_CSV = SETTINGS.data_path("asset_mappings.csv")
 EXPOSURES_CSV = SETTINGS.data_path("asset_exposures.csv")
 ETF_DOCUMENTS_JSON = APP_DIR / "data" / "etf_documents.json"
+BUNDLED_FUND_HOLDINGS_JSON = APP_DIR / "resources" / "official_fund_holdings.json"
 BERKSHIRE_HOLDINGS_CSV = APP_DIR / "data" / "berkshire_holdings.csv"
 BERKSHIRE_ISIN = "US0846707026"
 PROXY_EXPOSURES_CSV = APP_DIR / "data" / "proxy_exposures.csv"
@@ -284,6 +285,7 @@ def dashboard_source_signature() -> str:
         CRYPTO_WALLET_POSITIONS_CSV,
         CRYPTO_WALLET_TRANSACTIONS_CSV,
         ETF_DOCUMENTS_JSON,
+        BUNDLED_FUND_HOLDINGS_JSON,
         BERKSHIRE_HOLDINGS_CSV,
         PROXY_EXPOSURES_CSV,
         EXPENSE_RULES_CSV,
@@ -4073,6 +4075,13 @@ def read_exposures(berkshire_mode: str = "stock", proxy_mode: str = "off") -> di
                 if asset_name and isin:
                     exposures.setdefault(exposure_key(asset_name, ""), []).append(item)
 
+    # Public issuer snapshots fill missing funds without replacing private rows.
+    for isin, document in read_bundled_fund_holdings().items():
+        key = exposure_key("", isin)
+        if key not in exposures:
+            rows = [exposure_row_item(row) for row in document.get("holdings", [])]
+            exposures[key] = [row for row in rows if row]
+
     if berkshire_mode == "lookthrough":
         rows = load_berkshire_lookthrough_rows()
         if rows:
@@ -4167,7 +4176,22 @@ def is_equity_benchmark_asset(trade: Trade, ref: dict[str, str], mapping: dict[s
     return bool(trade.isin or symbol)
 
 
+def read_bundled_fund_holdings() -> dict[str, dict[str, Any]]:
+    try:
+        payload = json.loads(BUNDLED_FUND_HOLDINGS_JSON.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def read_etf_documents() -> dict[str, dict[str, Any]]:
+    documents = {isin: {k: v for k, v in row.items() if k != "holdings"}
+                 for isin, row in read_bundled_fund_holdings().items()}
+    documents.update(read_private_etf_documents())
+    return documents
+
+
+def read_private_etf_documents() -> dict[str, dict[str, Any]]:
     if not ETF_DOCUMENTS_JSON.exists():
         return {}
     try:
@@ -4650,8 +4674,14 @@ def calculate_distribution(
         asset = str(position.get("asset") or "").strip()
         isin = str(position.get("isin") or "").strip().upper()
         rows = exposures.get(exposure_key(asset, isin)) or exposures.get(exposure_key(asset, ""))
+        is_crypto = str(position.get("asset_class") or "").casefold() == "crypto"
+        if not rows and is_crypto:
+            rows = [{
+                "holding_name": asset, "holding_ticker": str(position.get("symbol") or asset),
+                "weight_pct": Decimal("100"), "sector": "Crypto", "geo": "Global", "asset_class": "Crypto",
+            }]
         document = documents.get(isin)
-        source_row = composition_source_row(position, rows, document)
+        source_row = None if is_crypto else composition_source_row(position, rows, document)
         if source_row:
             composition_sources.append(source_row)
         if not rows:
@@ -4705,7 +4735,7 @@ def calculate_distribution(
             if raw_holding == "Other issuer holdings":
                 holding = f"Other issuer holdings - {asset}"
             else:
-                holding = canonical_holding_name(raw_holding)
+                holding = raw_holding if is_crypto else canonical_holding_name(raw_holding)
             add_distribution_amount(by_holding, holding, amount)
             if source_label:
                 by_holding_sources.setdefault(holding, set()).add(source_label)

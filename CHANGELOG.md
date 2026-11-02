@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.4 — 2026-11-02
+
+- Treat crypto positions as direct holdings in distribution coverage, without missing constituent warnings.
+- Fill missing MSCI World Quality ETF exposures (IE00BL25JL35) with a bundled 303-row official DWS holdings snapshot; preserve existing private fund rows.
+- Register the fund's official holdings URL for future refreshes.
+
 ## 0.10.3 — 2026-11-02
 
 - Support Italian Revolut consolidated CSV statements alongside regular account statements, including native-currency transactions and net savings interest.
