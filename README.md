@@ -326,8 +326,8 @@ Released under the [MIT License](LICENSE).
 
 ## IBKR research monitor
 
-Open **IBKR monitor** in the header (`/ibkr`), select the Gateway port and enter the
-last four account digits. The suffix must uniquely identify an accessible account.
+Open **IBKR research** in the header (`/ibkr`), expand Account connection, select
+the Gateway session and enter the last four account digits. The suffix must uniquely identify an accessible account.
 Gateway must be logged in with **Read-Only API** enabled and reachable at
 `127.0.0.1:4001` (live) or `127.0.0.1:4002` (paper) on the dashboard host.
 An SSH reverse tunnel can forward that loopback port from Gateway on another machine.
@@ -343,8 +343,13 @@ returns a masked suffix and cash totals, and exposes no order functions. The
 dashboard itself needs no new runtime dependency, so existing code-only app
 updates remain compatible. Keep this port on loopback; no public listener is needed.
 
-**Check cash and prices** runs a background snapshot. It compares the lower of
-TotalCashValue and AvailableFunds (clamped at zero) with Yahoo Finance reference
+**Refresh snapshot** runs a background snapshot. The stock scan supports ticker
+search, All/Within budget/Declining filters and sorting by decline, price or ticker.
+Cash, account equity, snapshot age and watchlist breadth remain visible beside the
+formatted agent notebook. Light/dark selection follows the main dashboard theme.
+Reports refresh in the browser without requesting new broker snapshots.
+
+The snapshot compares the lower of TotalCashValue and AvailableFunds (clamped at zero) with Yahoo Finance reference
 prices and reference FX. It is an indicative affordability check, not a verification
 of settled USD cash or an order preview. Each purchase estimate reserves USD 1;
 actual fees, FX, spread and sale costs vary. Fractional eligibility is unverified.

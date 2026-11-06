@@ -285,7 +285,9 @@ def create_ibkr_blueprint(data_dir: Path) -> Blueprint:
 
     @blueprint.get("/ibkr")
     def page():
-        return render_template("ibkr.html", token=token)
+        from .version import APP_VERSION
+
+        return render_template("ibkr.html", token=token, app_version=APP_VERSION)
 
     @blueprint.get("/api/ibkr")
     def api_status():

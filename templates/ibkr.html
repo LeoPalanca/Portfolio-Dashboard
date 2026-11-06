@@ -4,52 +4,63 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="ibkr-token" content="{{ token }}">
-  <title>IBKR monitor · Portfolio Dashboard</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <title>IBKR research · Portfolio Dashboard</title>
   <script>try { const t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (_) {}</script>
-  <script src="{{ url_for('static', filename='ibkr.js') }}" defer></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v={{ app_version }}">
+  <script src="{{ url_for('static', filename='ibkr.js') }}?v={{ app_version }}" defer></script>
 </head>
 <body class="ibkr-page">
-  <header>
-    <div><a href="/">← Portfolio Dashboard</a><h1>IBKR monitor</h1></div>
-    <span class="ibkr-mode">Read only · manual review before first purchase</span>
+  <header class="ibkr-header">
+    <a class="ibkr-back" href="/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg> Portfolio Dashboard</a>
+    <div class="ibkr-header-right"><span class="ibkr-mode"><span></span>Research only</span><button id="ibkr-theme" type="button" aria-label="Switch colour theme">Light / dark</button></div>
   </header>
   <main class="ibkr-main">
-    <section class="ibkr-panel">
-      <h2>Cash and market check</h2>
-      <p>Review the 100-stock watchlist against available cash. There is no 10% position limit and no order submission.</p>
-      <form id="ibkr-form" class="ibkr-form">
-        <label>Last four account digits <input id="ibkr-account" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autocomplete="off"></label>
-        <label>Gateway session <select id="ibkr-port"><option value="4001">Live · read only</option><option value="4002">Paper</option></select></label>
-        <button id="ibkr-refresh" type="submit">Check cash and prices</button>
-      </form>
-      <p id="ibkr-status" role="status" aria-live="polite">Enter your account suffix to request a fresh read-only snapshot.</p>
-      <p class="subtle">Gateway must be logged in with Read-Only API enabled. Use localhost or the existing SSH tunnel. No IBKR password is stored here.</p>
-    </section>
-    <section id="ibkr-results" class="ibkr-panel" hidden>
-      <div class="ibkr-summary">
-        <div><span>Cash budget estimate</span><strong id="ibkr-cash"></strong></div>
-        <div><span>Whole-share candidates</span><strong id="ibkr-count"></strong></div>
-        <div><span>Account equity</span><strong id="ibkr-equity"></strong></div>
-      </div>
-      <p id="ibkr-time" class="subtle"></p>
-      <p>Reference prices from Yahoo Finance may be delayed or from the last market session. This comparison is not an executable order preview. Cash is capped at the lower of cash value and available funds; settlement, USD cash and FX conversion still need verification.</p>
-      <p>Whole-share estimates reserve $1 per purchase. Actual commissions, spread, FX and sale costs may differ. Fractional eligibility is unverified. The dated universe includes separate share classes and is not refreshed automatically.</p>
-      <div class="ibkr-table-wrap"><table>
-        <thead><tr><th>Stock</th><th>Reference USD</th><th>Session move</th><th>Whole shares with cash</th><th>Price timestamp</th></tr></thead>
-        <tbody id="ibkr-rows"></tbody>
-      </table></div>
-    </section>
-    <section class="ibkr-panel">
-      <h2>OpenCode research</h2>
-      <p id="ibkr-analysis-time" class="subtle">No research report available yet.</p>
-      <pre id="ibkr-analysis" class="ibkr-research">The agent reviews public reference prices. Its commentary is unverified and cannot submit orders.</pre>
-    </section>
-    <section class="ibkr-panel">
-      <h2>First purchase review</h2>
-      <p>No purchase is proposed yet. A first-order review must show the stock, reason for the drop, quantity, current bid/ask, limit price, estimated costs and exit plan. Your manual confirmation is required before submitting it.</p>
-      <p>Autonomous execution is disabled. A separately configured research timer can run OpenCode every 30 minutes during the regular US session. Observing a price drop does not establish that a stock will recover.</p>
-    </section>
+    <div class="ibkr-heading">
+      <div><div class="ibkr-eyebrow">INTERACTIVE BROKERS <span>/</span> RESEARCH DESK</div><h1>IBKR research</h1><p>Your 100-stock watchlist, filtered by available cash.</p></div>
+      <details id="ibkr-connection" class="ibkr-connection" open>
+        <summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v5m6-5v5M7 8h10v4a5 5 0 0 1-10 0V8Zm5 9v4"/></svg>Account connection<span id="ibkr-account-label">Set up</span></summary>
+        <form id="ibkr-form" class="ibkr-form">
+          <label>Account suffix<input id="ibkr-account" placeholder="Last 4 digits" aria-describedby="ibkr-connection-note" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autocomplete="off"></label>
+          <label>Session<select id="ibkr-port"><option value="4001">Live · read only</option><option value="4002">Paper</option></select></label>
+          <button id="ibkr-refresh" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L3 9m0-5v5h5m-4 4a8 8 0 0 0 14 5l3-3m0 5v-5h-5"/></svg><span>Refresh snapshot</span></button>
+          <p id="ibkr-connection-note">Keep Gateway signed in with Read-Only API enabled.</p>
+        </form>
+      </details>
+    </div>
+    <div id="ibkr-status" class="ibkr-status" role="status" aria-live="polite">Connect your account to check cash and reference prices.</div>
+    <div class="ibkr-ledger" aria-label="Account snapshot">
+      <div><span>Cash budget <small>estimate</small></span><strong id="ibkr-cash">—</strong><p>Cash only · no margin</p></div>
+      <div><span>Within cash budget</span><strong id="ibkr-count">— <small>/ 100</small></strong><p>Whole shares, before final cost checks</p></div>
+      <div><span>Account equity</span><strong id="ibkr-equity">—</strong><p id="ibkr-time">No snapshot yet</p></div>
+      <div class="ibkr-review-state"><span>First purchase</span><strong>Manual review</strong><p>No orders submitted by this monitor</p></div>
+    </div>
+    <div class="ibkr-workspace">
+      <section class="ibkr-panel ibkr-scan" aria-labelledby="ibkr-scan-title">
+        <div class="ibkr-panel-head"><div><div class="ibkr-eyebrow">MARKET SCAN</div><h2 id="ibkr-scan-title">The watchlist</h2></div><span class="ibkr-source-badge">Reference prices</span></div>
+        <div class="ibkr-breadth"><div class="ibkr-breadth-copy"><span>Watchlist breadth</span><span id="ibkr-breadth-label">Waiting for a snapshot</span></div><div id="ibkr-breadth-bar" class="ibkr-breadth-bar" aria-hidden="true"></div></div>
+        <div class="ibkr-scan-tools">
+          <div class="ibkr-filters" role="group" aria-label="Filter stocks"><button type="button" data-filter="all" aria-pressed="true">All <span id="ibkr-all-count">100</span></button><button type="button" data-filter="affordable" aria-pressed="false">Within budget <span id="ibkr-fit-count">—</span></button><button type="button" data-filter="falling" aria-pressed="false">Declining</button></div>
+          <label class="ibkr-search"><span class="sr-only">Search stock ticker</span><input id="ibkr-search" type="search" placeholder="Find ticker…" autocomplete="off"></label>
+        </div>
+        <div class="ibkr-scan-caption"><span id="ibkr-visible-count">100-stock research universe</span><label>Sort <select id="ibkr-sort" aria-label="Sort stocks"><option value="drop">Largest decline</option><option value="price">Lowest price</option><option value="ticker">Ticker A–Z</option></select></label></div>
+        <div class="ibkr-table-wrap"><table>
+          <caption class="sr-only">Reference prices and estimated whole-share affordability</caption>
+          <thead><tr><th scope="col">Stock</th><th scope="col">USD price</th><th scope="col">Session</th><th scope="col">Whole shares</th><th scope="col">Price as of</th></tr></thead>
+          <tbody id="ibkr-rows"><tr><td colspan="5" class="ibkr-table-empty"><strong>Your scan starts here.</strong><span>Connect your account to compare all 100 stocks with your available cash.</span></td></tr></tbody>
+        </table></div>
+        <div class="ibkr-table-foot"><span>Yahoo Finance · prices may be delayed</span><span id="ibkr-universe-date">Dated universe</span></div>
+      </section>
+      <aside class="ibkr-aside">
+        <section class="ibkr-panel ibkr-agent" aria-labelledby="ibkr-agent-title">
+          <div class="ibkr-panel-head"><div><div class="ibkr-eyebrow">AGENT NOTEBOOK</div><h2 id="ibkr-agent-title">A second look</h2></div><span class="ibkr-model-badge">Big Pickle</span></div>
+          <p id="ibkr-analysis-time" class="ibkr-note-meta">No report available yet</p>
+          <div id="ibkr-analysis" class="ibkr-research"><div class="ibkr-report-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5v18h14V3h-3M8 3v4h8V3H8Zm0 8h8m-8 4h5"/></svg><h3>Research before action.</h3><p>The agent's latest analysis will appear here. Scheduled research runs every 30 minutes during the regular US session when configured.</p></div></div>
+          <div class="ibkr-agent-foot">Model commentary needs verification. Source timestamps in the stock table take precedence.</div>
+        </section>
+        <section class="ibkr-panel ibkr-first-review" aria-labelledby="ibkr-review-title"><div class="ibkr-eyebrow">BEFORE THE FIRST ORDER</div><h2 id="ibkr-review-title">You make the call.</h2><p>Review the reason for the drop, current broker quote, quantity, costs and exit plan before confirming a purchase.</p><div class="ibkr-stages"><span class="is-current">Research</span><span>Manual review</span><span>Execution off</span></div></section>
+      </aside>
+    </div>
+    <details class="ibkr-assumptions"><summary>How to read this screen</summary><div><p><strong>Cash and costs.</strong> The cash budget is the lower of total cash and available funds, clamped at zero. Whole-share estimates reserve $1 per purchase. Actual commissions, spread, FX and sale costs may differ. Settlement and available USD still need checking. No percentage position cap is applied; fractional eligibility is unverified.</p><p><strong>Data freshness.</strong> Quotes are public Yahoo Finance reference prices, possibly from the previous session. Missing prices, missing FX and prices older than four days have unknown affordability. Account snapshots older than 30 minutes are marked stale. Reference prices cannot be used as executable quotes.</p><p><strong>Universe and agent.</strong> This dated market-cap watchlist includes separate share classes, is not the S&amp;P 100 index and is not refreshed automatically. The agent sees public market data and a locally selected candidate list, without your cash balance or account identity. This monitor cannot submit orders or enable autonomous execution.</p></div></details>
   </main>
 </body>
 </html>

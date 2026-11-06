@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.6 — 2026-11-06
+
+- Redesign the IBKR monitor as a responsive research workspace with a cash summary, stock scan and agent notebook.
+- Add ticker search, affordability/decline filters, sorting, session breadth and safe Markdown formatting for agent reports.
+- Add light/dark controls, compact connection settings and background status refresh; preserve read-only broker behavior.
+
+
 ## 0.10.5 — 2026-11-06
 
 - Add a read-only IBKR monitor with account-scoped cash and indicative whole-share affordability for a dated 100-stock S&P 500 watchlist.
