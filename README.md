@@ -476,3 +476,12 @@ status. Tool permissions remain denied for both models. If neither model respond
 the report explicitly contains calculated statistics only; no new AI conclusion is
 claimed. The last successful AI report is retained separately in `last_ai_report.json`.
 Use a 720-second systemd timeout for collection plus model attempts.
+
+Proposed exit preferences can be stored privately in the research state directory's
+`strategy.json`, with `take_profit_pct`, `take_profit_basis` set to
+`entry_price_before_costs`, and `max_holding_months`. Only these whitelisted
+preferences enter the model prompt. The target is actual entry multiplied by
+(1 + percentage/100) in the trade currency, before costs. It is a planning objective,
+not a forecast or an active sell order. Fees, spread, FX and tax effects remain
+separate. No loss limit is inferred, and `execution_authorized` remains false
+regardless of the file's contents.

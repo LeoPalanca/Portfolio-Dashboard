@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.1 — 2026-11-06
+
+- Load private proposed take-profit and holding-horizon preferences into research reports, without authorizing any exit orders.
+- Define price-return targets separately from fees/FX and flag the still-unagreed downside rule.
+
+
 ## 0.11.0 — 2026-11-06
 
 - Run 30-minute research outside US market hours and continue public analysis with explicitly cached/unknown cash if Gateway is unavailable.

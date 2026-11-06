@@ -56,7 +56,28 @@ def research_snapshot(port: int, suffix: str, state_dir: Path) -> dict:
     return snapshot
 
 
-def public_prompt(snapshot: dict, evidence: dict | None = None) -> str:
+def read_strategy(state_dir: Path) -> dict | None:
+    path = state_dir / "strategy.json"
+    if not path.exists():
+        return None
+    raw = json.loads(path.read_text())
+    target = raw.get("take_profit_pct")
+    months = raw.get("max_holding_months")
+    if type(target) not in (int, float) or not 0 < target <= 1000 or type(months) is not int or not 1 <= months <= 120:
+        raise ValueError("Invalid proposed profit target or holding horizon")
+    if raw.get("take_profit_basis") != "entry_price_before_costs":
+        raise ValueError("Unsupported take-profit basis")
+    # Only explicitly supported research preferences may enter a public-data prompt.
+    return {
+        "take_profit_pct": target,
+        "take_profit_basis": "entry_price_before_costs",
+        "max_holding_months": months,
+        "stop_loss_pct": None,
+        "execution_authorized": False,
+    }
+
+
+def public_prompt(snapshot: dict, evidence: dict | None = None, strategy: dict | None = None) -> str:
     # Only public records enter the model: never account IDs, cash, equity or quantities.
     quotes = []
     for row in snapshot["rows"]:
@@ -112,6 +133,14 @@ def public_prompt(snapshot: dict, evidence: dict | None = None) -> str:
         "check before any order and does not establish current affordability. "
         "Snapshot UTC: "
         + snapshot["captured_at"]
+        + "\nPROPOSED RESEARCH EXIT PREFERENCES (not broker instructions):\n"
+        + json.dumps(strategy or {"take_profit_pct": None}, allow_nan=False)
+        + "\nIf a profit target is configured, base it on actual purchase price in the trade currency, "
+        "before costs: target = actual entry * (1 + take_profit_pct / 100). Fees, spread, FX and taxes "
+        "can reduce net profit and must be shown separately. A reference close is only an illustration, "
+        "not an actual entry or active sell order. Profit-taking may happen before the maximum holding "
+        "horizon. Stop-loss remains unagreed: identify the missing downside rule and thesis invalidation; "
+        "do not invent an approved loss limit. No exit order is authorized by these preferences.\n"
         + "\nPublic price context:\n"
         + json.dumps(quotes, allow_nan=False)
         + "\nBEGIN UNTRUSTED PUBLIC EVIDENCE DATA\n"
@@ -303,7 +332,8 @@ def main() -> None:
     workspace.mkdir(parents=True, exist_ok=True)
     config = {"$schema": "https://opencode.ai/config.json", "model": "opencode/big-pickle", "permission": {"*": "deny"}}
     (workspace / "opencode.json").write_text(json.dumps(config))
-    outcome = run_models(args.opencode, public_prompt(snapshot, evidence), workspace, args.state_dir)
+    strategy = read_strategy(args.state_dir)
+    outcome = run_models(args.opencode, public_prompt(snapshot, evidence, strategy), workspace, args.state_dir)
     report = {
         "captured_at": snapshot["captured_at"],
         "completed_at": datetime.now(UTC).isoformat(),
@@ -314,6 +344,7 @@ def main() -> None:
         "review_last_session": args.review_last_session,
         "market_session": session,
         "cash_status": snapshot["cash_status"],
+        "proposed_strategy": strategy,
         "report": outcome.get("report") or statistics_report(evidence),
         "evidence": evidence,
     }

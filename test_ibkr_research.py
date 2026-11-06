@@ -13,6 +13,7 @@ from scripts.ibkr_research import (
     PRIMARY_MODEL,
     main,
     public_prompt,
+    read_strategy,
     research_snapshot,
     run_models,
     text_output,
@@ -20,6 +21,30 @@ from scripts.ibkr_research import (
 
 
 class ResearchTests(unittest.TestCase):
+    def test_exit_preferences_are_proposals_and_do_not_authorize_orders(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state = Path(folder)
+            self.assertIsNone(read_strategy(state))
+            (state / "strategy.json").write_text(
+                json.dumps(
+                    {
+                        "take_profit_pct": 15,
+                        "take_profit_basis": "entry_price_before_costs",
+                        "max_holding_months": 12,
+                        "execution_authorized": True,
+                        "private_field": "DO_NOT_SEND",
+                    }
+                )
+            )
+            strategy = read_strategy(state)
+            self.assertEqual(strategy["take_profit_pct"], 15)
+            self.assertFalse(strategy["execution_authorized"])
+            self.assertIsNone(strategy["stop_loss_pct"])
+            prompt = public_prompt({"rows": [], "captured_at": "2026-01-01T00:00:00Z"}, {"symbols": []}, strategy)
+            self.assertIn('"take_profit_pct": 15', prompt)
+            self.assertNotIn("DO_NOT_SEND", prompt)
+            self.assertIn("Stop-loss remains unagreed", prompt)
+
     def test_quota_uses_openrouter_fallback_and_honors_retry_time(self):
         import time
 
