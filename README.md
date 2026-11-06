@@ -348,7 +348,8 @@ with `ib_async==2.1.0` (`uv sync --extra ibkr` for a new installation):
 python scripts/ibkr_cash_bridge.py
 ```
 
-The bridge binds to `127.0.0.1:8766`. It makes only account-summary requests,
+The bridge binds to `127.0.0.1:8766`. It uses the protocol handshake directly to avoid ib_async 2.1.0’s unconditional
+position synchronization, and makes only account-summary requests,
 returns a masked suffix and cash totals, and exposes no order functions. The
 dashboard itself needs no new runtime dependency, so existing code-only app
 updates remain compatible. Keep this port on loopback; no public listener is needed.

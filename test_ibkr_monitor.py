@@ -34,6 +34,7 @@ class AffordabilityTests(unittest.TestCase):
             client = app.test_client()
             page = client.get("/ibkr").text
             import re
+
             token = re.search(r'name="ibkr-token" content="([^"]+)"', page).group(1)
             self.assertNotIn('id="ibkr-account"', page)
             self.assertNotIn('id="ibkr-port"', page)
@@ -67,8 +68,9 @@ class AffordabilityTests(unittest.TestCase):
 
     def test_broker_scope_excludes_margin_and_other_accounts(self):
         ib = MagicMock()
-        ib.connectAsync = AsyncMock()
-        ib.managedAccounts.return_value = ["U0001111", "U0002222"]
+        ib.connectAsync = AsyncMock(side_effect=ConnectionError("positions request timed out"))
+        ib.client.connectAsync = AsyncMock()
+        ib.client.getAccounts.return_value = ["U0001111", "U0002222"]
         ib.accountSummaryAsync = AsyncMock(
             return_value=[
                 SimpleNamespace(account="U0001111", tag=tag, value=value, currency="EUR")
@@ -80,13 +82,17 @@ class AffordabilityTests(unittest.TestCase):
             result = asyncio.run(broker_cash(4001, "1111"))
         self.assertEqual(result["cash_budget_base"], 100)
         self.assertEqual(result["account_masked"], "•••1111")
-        self.assertTrue(ib.connectAsync.call_args.kwargs["readonly"])
+        ib.connectAsync.assert_not_called()
+        ib.reqPositionsAsync.assert_not_called()
+        ib.reqOpenOrdersAsync.assert_not_called()
+        ib.placeOrder.assert_not_called()
+        ib.client.connectAsync.assert_awaited_once_with("127.0.0.1", 4001, clientId=71, timeout=12)
         ib.disconnect.assert_called_once()
 
     def test_ambiguous_account_selection_fails_and_disconnects(self):
         ib = MagicMock()
-        ib.connectAsync = AsyncMock()
-        ib.managedAccounts.return_value = ["U0001111", "D0001111"]
+        ib.client.connectAsync = AsyncMock()
+        ib.client.getAccounts.return_value = ["U0001111", "D0001111"]
         with patch("ib_async.IB", return_value=ib), self.assertRaises(ValueError):
             asyncio.run(broker_cash(4001, "1111"))
         ib.accountSummaryAsync.assert_not_called()

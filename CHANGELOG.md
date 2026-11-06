@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.10 — 2026-11-06
+
+- Fix saved IBKR cash refresh failures caused by ib_async’s unconditional position synchronization during connection startup.
+- Use a protocol handshake followed only by account-summary requests; preserve exact saved-account selection and Gateway read-only enforcement.
+
+
 ## 0.10.9 — 2026-11-06
 
 - Let the research agent propose an unapproved, conditional rebound-entry idea for manual review, alongside a precise WAIT rationale.

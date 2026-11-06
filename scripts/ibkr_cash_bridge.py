@@ -39,14 +39,16 @@ def saved_connection(path: Path | None = None) -> tuple[int, str, str]:
 
 async def broker_cash(port: int, suffix: str, account: str | None = None) -> dict[str, Any]:
     # Import inside an active loop: ib_async's event utilities require one on Python 3.14+.
-    from ib_async import IB, StartupFetch
+    from ib_async import IB
 
     ib = IB()
     try:
-        await ib.connectAsync(
-            "127.0.0.1", port, clientId=71, timeout=12, readonly=True, raiseSyncErrors=True, fetchFields=StartupFetch(0)
-        )
-        accounts = [a for a in ib.managedAccounts() if (a == account if account is not None else a.endswith(suffix))]
+        # ib_async 2.1.0's IB.connectAsync unconditionally requests positions,
+        # ignoring StartupFetch.POSITIONS. Use the protocol handshake directly:
+        # this endpoint only requests account summaries, never orders/positions.
+        # Gateway's Read-Only API setting remains the enforcement boundary.
+        await ib.client.connectAsync("127.0.0.1", port, clientId=71, timeout=12)
+        accounts = [a for a in ib.client.getAccounts() if (a == account if account is not None else a.endswith(suffix))]
         if len(accounts) != 1:
             raise ValueError("Account suffix must match exactly one accessible account")
         summary = await asyncio.wait_for(ib.accountSummaryAsync(accounts[0]), timeout=12)
