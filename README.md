@@ -390,3 +390,34 @@ remain on the dashboard host; no orders, order approvals or autonomy controls ex
 The first purchase still requires a review of the reason for the drop, current
 broker bid/ask, quantity, limit, actual cost preview and exit rules, followed by
 manual confirmation. Current Gateway read-only protection must remain enabled.
+
+### Evidence for the research agent
+
+The research runner uses the dashboard's existing `/api/news?symbols=...` feed
+with an explicit list, so it never falls back to private portfolio holdings. Set
+`--dashboard-url http://HOST:8050` if the dashboard uses a private interface instead
+of localhost. Public headlines retain source links, publication dates and the
+dashboard cache's generated timestamp. Only headline content is fetched; neither
+the collector nor the model has verified the full articles.
+
+For the six largest session declines that fit local cash, the collector adds
+split/dividend-adjusted daily history, drawdown from 20/60/252-session highs, worst
+peak-to-trough drawdown inside each window, 5/20-session returns and relative
+20-session performance against SPY when the last bar dates match. The newest daily
+bar may be partial during trading. History windows with insufficient observations
+remain unknown. The 100-stock table still provides the broader price context.
+
+Yahoo/yfinance supplies analyst consensus, Buy/Hold/Sell counts, low/mean/median/high
+price targets, up to five dated rating changes and available valuation ratios.
+Retrieval dates are not issue dates: summary rating/target issue dates are unknown
+unless supplied separately. Targets are provider consensus, typically long-horizon,
+and are not short-term exit prices or guaranteed returns. Partial lookups stay
+partial and failed lookups stay unavailable.
+
+The isolated research environment needs the dashboard's existing `yfinance`
+dependency as well as its IBKR dependency. Evidence collection is bounded to 150
+seconds in a child process. Timeout/failure gives the model no verified candidate
+list and a WAIT instruction. Raise the example research service timeout to 600
+seconds to cover collection plus model response. The agent receives public evidence
+only, delimited as untrusted data with source IDs; tool permissions remain denied.
+Reports include structured coverage and source links for manual verification.

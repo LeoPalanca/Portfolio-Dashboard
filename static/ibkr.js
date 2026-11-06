@@ -2,7 +2,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let pending = false, snapshot = null, activeFilter = 'all', initialized = false, lastReport = '';
-let pollTimer;
+let pollTimer, lastEvidenceTimestamp = null;
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const number = value => finite(value) ? value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
 const when = value => value && Number.isFinite(new Date(value).getTime()) ? new Date(value).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'Unavailable';
@@ -44,6 +44,34 @@ function renderReport(text) {
     const node = el(heading ? 'h3' : 'p'); inline(node, heading ? heading[1] : line); fragment.append(node);
   }
   $('ibkr-analysis').replaceChildren(fragment);
+}
+function renderEvidence(evidence) {
+  const coverage = $('ibkr-evidence-coverage');
+  const sources = $('ibkr-evidence-sources');
+  if (!evidence || !evidence.coverage) { coverage.hidden = true; sources.hidden = true; return; }
+  const c = evidence.coverage;
+  coverage.hidden = false;
+  coverage.textContent = `Deep checks · ${c.stocks} stocks · News ${c.news_symbols}/${c.stocks} · History ${c.histories}/${c.stocks} · Analyst coverage ${c.analysts}/${c.stocks}${evidence.status === 'unavailable' ? ' · Evidence unavailable' : ''}`;
+  const list = document.createDocumentFragment();
+  for (const stock of evidence.stocks || []) {
+    const history = stock.history || {}, analysts = stock.analysts || {};
+    const title = el('strong', stock.symbol);
+    const item = el('div', undefined, 'ibkr-source-item'); item.append(title);
+    item.append(el('p', `History: ${history.status || 'unavailable'}${history.last_bar_date ? ` · through ${history.last_bar_date}` : ''}. Analysts: ${analysts.status || 'unavailable'} · retrieved ${when(analysts.retrieved_at)}. Individual rating/target dates may be unknown.`));
+    list.append(item);
+  }
+  for (const news of evidence.news?.items || []) {
+    let url;
+    try { url = new URL(news.link); } catch (_) { continue; }
+    if (!['http:', 'https:'].includes(url.protocol)) continue;
+    const item = el('div', undefined, 'ibkr-source-item');
+    const link = el('a', `${news.id} · ${news.symbol} · ${news.title}`);
+    link.href = url.href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    item.append(link, el('p', `${news.source} · ${news.published || 'Publication date unavailable'} · Headline only`));
+    list.append(item);
+  }
+  $('ibkr-source-list').replaceChildren(list);
+  sources.hidden = !$('ibkr-source-list').childNodes.length;
 }
 function renderRows() {
   if (!snapshot || !Array.isArray(snapshot.rows)) return;
@@ -89,6 +117,9 @@ function render(data) {
     if (data.analysis.report !== lastReport) { renderReport(data.analysis.report); lastReport = data.analysis.report; }
     const age = Date.now() - new Date(data.analysis.completed_at).getTime();
     $('ibkr-analysis-time').textContent = `${when(data.analysis.completed_at)} · ${age > 1800000 ? 'Older than 30 minutes' : 'Latest report'} · Manual review`;
+    if (data.analysis.completed_at !== lastEvidenceTimestamp) {
+      renderEvidence(data.analysis.evidence); lastEvidenceTimestamp = data.analysis.completed_at;
+    }
   }
   const s = data.snapshot;
   if (!s || !Array.isArray(s.rows)) return;

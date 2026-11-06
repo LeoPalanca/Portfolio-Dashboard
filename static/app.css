@@ -2758,3 +2758,11 @@ main > section { backdrop-filter: none; background-color: var(--surface-panel); 
 @media (max-width: 640px) { .ibkr-page .ibkr-header { padding: var(--space-3) var(--space-4); flex-wrap: wrap; gap: var(--space-3); } .ibkr-header-right { gap: var(--space-3); } .ibkr-main { padding: var(--space-4); } .ibkr-heading { flex-direction: column; } .ibkr-connection { width: 100%; } .ibkr-aside { grid-template-columns: minmax(0, 1fr); } .ibkr-page h1 { font-size: 25px; } .ibkr-ledger strong { font-size: var(--text-2xl); } .ibkr-ledger p { font-size: var(--text-2xs); } .ibkr-scan-tools { padding-inline: var(--space-3); } .ibkr-filters button { font-size: var(--text-xs); padding: var(--space-2); } .ibkr-search { flex: 1 1 100%; } .ibkr-search input { max-width: none; } .ibkr-breadth-copy { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { .ibkr-page *, .ibkr-page *::before, .ibkr-page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 .ibkr-page .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.ibkr-evidence-coverage { padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: var(--text-xs); line-height: 1.7; background: var(--tint-subtle); }
+.ibkr-evidence-sources { padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border); font-size: var(--text-xs); color: var(--text-muted); }
+.ibkr-evidence-sources summary { cursor: pointer; }
+.ibkr-source-item { padding-block: var(--space-3); border-bottom: 1px solid var(--border); line-height: 1.7; }
+.ibkr-source-item:last-child { border-bottom: 0; }
+.ibkr-source-item strong { color: var(--text-secondary); font-family: ui-monospace, monospace; }
+.ibkr-source-item a { color: var(--accent); }
+.ibkr-source-item p { margin-top: var(--space-1); }

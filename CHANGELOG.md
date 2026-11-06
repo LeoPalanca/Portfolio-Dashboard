@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.7 — 2026-11-06
+
+- Feed OpenCode the dashboard’s existing news headlines, adjusted-price drawdowns and analyst ratings, targets and recent changes for six locally affordable research candidates.
+- Track 20/60/252-session drawdowns and relative 20-session performance against SPY; preserve data sources, dates, partial coverage and unavailable fields.
+- Show evidence coverage and linked news sources in the agent notebook; keep account data out of model prompts and preserve manual first-purchase review.
+
+
 ## 0.10.6 — 2026-11-06
 
 - Redesign the IBKR monitor as a responsive research workspace with a cash summary, stock scan and agent notebook.

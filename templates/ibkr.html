@@ -54,8 +54,10 @@
         <section class="ibkr-panel ibkr-agent" aria-labelledby="ibkr-agent-title">
           <div class="ibkr-panel-head"><div><div class="ibkr-eyebrow">AGENT NOTEBOOK</div><h2 id="ibkr-agent-title">A second look</h2></div><span class="ibkr-model-badge">Big Pickle</span></div>
           <p id="ibkr-analysis-time" class="ibkr-note-meta">No report available yet</p>
+          <p id="ibkr-evidence-coverage" class="ibkr-evidence-coverage" hidden></p>
           <div id="ibkr-analysis" class="ibkr-research"><div class="ibkr-report-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5v18h14V3h-3M8 3v4h8V3H8Zm0 8h8m-8 4h5"/></svg><h3>Research before action.</h3><p>The agent's latest analysis will appear here. Scheduled research runs every 30 minutes during the regular US session when configured.</p></div></div>
-          <div class="ibkr-agent-foot">Model commentary needs verification. Source timestamps in the stock table take precedence.</div>
+          <details id="ibkr-evidence-sources" class="ibkr-evidence-sources" hidden><summary>Sources inspected</summary><div id="ibkr-source-list"></div></details>
+          <div class="ibkr-agent-foot">Model commentary needs verification. Source timestamps take precedence. Headlines are not full-article verification; analyst targets are not short-term exit prices.</div>
         </section>
         <section class="ibkr-panel ibkr-first-review" aria-labelledby="ibkr-review-title"><div class="ibkr-eyebrow">BEFORE THE FIRST ORDER</div><h2 id="ibkr-review-title">You make the call.</h2><p>Review the reason for the drop, current broker quote, quantity, costs and exit plan before confirming a purchase.</p><div class="ibkr-stages"><span class="is-current">Research</span><span>Manual review</span><span>Execution off</span></div></section>
       </aside>
