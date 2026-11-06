@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.5 — 2026-11-06
+
+- Add a read-only IBKR monitor with account-scoped cash and indicative whole-share affordability for a dated 100-stock S&P 500 watchlist.
+- Show session moves, source timestamps, unknown prices and stale snapshots without presenting reference data as executable quotes.
+- Add an optional 30-minute, market-session-gated OpenCode Big Pickle research runner with public-data-only prompts, tools denied and manual-review reports.
+- Repair existing static-type errors in release-version parsing, Revolut date parsing and movement ID tracking without changing their normal behavior.
+- Reserve estimated fees and exclude margin from the cash estimate; no position percentage cap, order submission or autonomous trading is enabled.
+
+
 ## 0.10.4 — 2026-11-02
 
 - Treat crypto positions as direct holdings in distribution coverage, without missing constituent warnings.

@@ -6,7 +6,6 @@ import re
 import tomllib
 import urllib.request
 
-
 GITHUB_RAW = "https://raw.githubusercontent.com/LeoPalanca/Portfolio-Dashboard/main"
 RELEASE_HEADING = re.compile(r"^## (\d+\.\d+\.\d+)\b.*$", re.MULTILINE)
 
@@ -15,7 +14,7 @@ def version_tuple(value: str) -> tuple[int, int, int]:
     match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", value)
     if not match:
         raise ValueError(f"Invalid release version: {value}")
-    return tuple(int(part) for part in match.groups())
+    return int(match[1]), int(match[2]), int(match[3])
 
 
 def newer_release_notes(changelog: str, current_version: str) -> str:

@@ -1,0 +1,10 @@
+[Unit]
+Description=Review the stock watchlist every 30 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00,30:00
+Persistent=false
+Unit=ibkr-research.service
+
+[Install]
+WantedBy=timers.target

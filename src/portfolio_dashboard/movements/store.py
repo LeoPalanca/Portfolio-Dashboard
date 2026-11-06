@@ -321,7 +321,7 @@ class MovementStore:
             if cursor.lastrowid is None:  # pragma: no cover - SQLite always supplies this value
                 raise RuntimeError("SQLite did not return an import id")
             import_id = cursor.lastrowid
-            claimed = set()
+            claimed: set[int] = set()
             for canonical in self._canonical_batch(source_kind, movements):
                 fingerprint = _movement_fingerprint(canonical)
                 matched = self._reconcile_movement(connection, owner, source_kind, canonical, claimed)
@@ -358,7 +358,8 @@ class MovementStore:
                     ),
                 )
                 if result.rowcount:
-                    claimed.add(result.lastrowid)
+                    if result.lastrowid is not None:
+                        claimed.add(result.lastrowid)
                     inserted += 1
                 else:
                     duplicates += 1
@@ -392,7 +393,7 @@ class MovementStore:
         inserted = 0
         duplicates = 0
         with closing(self._connect()) as connection, connection:
-            claimed = set()
+            claimed: set[int] = set()
             for canonical in self._canonical_batch(record.source_kind, movements):
                 fingerprint = _movement_fingerprint(canonical)
                 matched = self._reconcile_movement(
@@ -431,7 +432,8 @@ class MovementStore:
                     ),
                 )
                 if result.rowcount:
-                    claimed.add(result.lastrowid)
+                    if result.lastrowid is not None:
+                        claimed.add(result.lastrowid)
                     inserted += 1
                 else:
                     duplicates += 1

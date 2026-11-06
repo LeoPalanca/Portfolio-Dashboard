@@ -323,3 +323,65 @@ is in [SECURITY.md](SECURITY.md), and release notes are in
 ## License
 
 Released under the [MIT License](LICENSE).
+
+## IBKR research monitor
+
+Open **IBKR monitor** in the header (`/ibkr`), select the Gateway port and enter the
+last four account digits. The suffix must uniquely identify an accessible account.
+Gateway must be logged in with **Read-Only API** enabled and reachable at
+`127.0.0.1:4001` (live) or `127.0.0.1:4002` (paper) on the dashboard host.
+An SSH reverse tunnel can forward that loopback port from Gateway on another machine.
+Run the read-only loopback cash bridge on the dashboard host using an environment
+with `ib_async==2.1.0` (`uv sync --extra ibkr` for a new installation):
+
+```sh
+python scripts/ibkr_cash_bridge.py
+```
+
+The bridge binds to `127.0.0.1:8766`. It makes only account-summary requests,
+returns a masked suffix and cash totals, and exposes no order functions. The
+dashboard itself needs no new runtime dependency, so existing code-only app
+updates remain compatible. Keep this port on loopback; no public listener is needed.
+
+**Check cash and prices** runs a background snapshot. It compares the lower of
+TotalCashValue and AvailableFunds (clamped at zero) with Yahoo Finance reference
+prices and reference FX. It is an indicative affordability check, not a verification
+of settled USD cash or an order preview. Each purchase estimate reserves USD 1;
+actual fees, FX, spread and sale costs vary. Fractional eligibility is unverified.
+The 10% position cap is not applied.
+
+The bundled 100-security universe is a dated market-cap research list sourced from
+[Slickcharts](https://www.slickcharts.com/sp500/marketcap), including separate share
+classes. It is not the S&P 100 index and is not refreshed automatically. Quotes
+more than four days old, missing quotes and missing FX yield unknown affordability.
+Snapshots older than 30 minutes are marked stale. Latest reference data may be a
+previous session close; session changes are not executable entry signals.
+
+Snapshots are written to private `data_dir/ibkr_monitor.json` with mode 0600. Only
+a masked account suffix is retained. Public price requests contain stock/FX symbols
+and no account identifier or balance. GET requests do not contact IBKR. Refresh
+POST requests require a page token and same-origin browser request.
+
+### Optional OpenCode research on the dashboard host
+
+`scripts/ibkr_research.py` collects the reference universe through the local cash
+bridge, then runs standard OpenCode with `opencode/big-pickle`, a private server
+and tools denied. Only public symbol/price/change/timestamp records enter the model
+prompt: account identity, holdings, cash and quantities are excluded. Provider
+processing of those public prompts follows the OpenCode provider's own terms.
+
+Copy and customize the example units under `deploy/systemd/user/`. The timer wakes
+every 30 minutes; the script exits outside Yahoo's dated regular US session interval.
+Missing session metadata fails the run; this is not an authoritative exchange calendar.
+A systemd oneshot unit prevents overlapping scheduled runs. Use
+`--review-last-session` for an explicit off-hours research report, never for trading.
+
+Set the bridge's `IBKR_RESEARCH_STATE` to the research script's `--state-dir` (default
+`research` relative to the bridge working directory). The dashboard reads its latest
+report from the fixed loopback `/analysis` endpoint. Model commentary is unverified,
+and old reports are labelled by completion time. Reports and OpenCode session data
+remain on the dashboard host; no orders, order approvals or autonomy controls exist.
+
+The first purchase still requires a review of the reason for the drop, current
+broker bid/ask, quantity, limit, actual cost preview and exit rules, followed by
+manual confirmation. Current Gateway read-only protection must remain enabled.

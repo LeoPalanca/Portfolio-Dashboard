@@ -34,6 +34,7 @@ from werkzeug.utils import secure_filename
 
 from src.portfolio_dashboard import APP_VERSION, display_version
 from src.portfolio_dashboard.updates import github_release_status
+from src.portfolio_dashboard.ibkr_monitor import create_ibkr_blueprint
 from src.portfolio_dashboard.cache import HistoryStore
 from src.portfolio_dashboard.config import get_settings
 from src.portfolio_dashboard.domain import (
@@ -188,6 +189,7 @@ BBVA_INTEREST_NET_RATE = Decimal(1) - SETTINGS.bbva_interest_tax_rate
 _CACHE_WRITE_LOCK = threading.RLock()
 
 app = Flask(__name__)
+app.register_blueprint(create_ibkr_blueprint(SETTINGS.data_dir))
 app.config["MAX_CONTENT_LENGTH"] = SETTINGS.import_max_bytes
 app.jinja_env.keep_trailing_newline = True
 

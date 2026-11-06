@@ -15,8 +15,8 @@ def consolidated_date(value: str) -> date | None:
         if "/" in value:
             day, month, year = map(int, value.split("/"))
             return date(2000 + year, month, day)
-        day, month, year = value.split()
-        return date(int(year), MONTHS[month.lower()], int(day))
+        day_text, month_text, year_text = value.split()
+        return date(int(year_text), MONTHS[month_text.lower()], int(day_text))
     except (ValueError, KeyError):
         return None
 
