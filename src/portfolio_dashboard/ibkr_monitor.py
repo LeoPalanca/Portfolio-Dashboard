@@ -187,9 +187,11 @@ def affordability(
     return rows
 
 
-def broker_cash(port: int, suffix: str) -> dict[str, Any]:
+def broker_cash(port: int | None = None, suffix: str | None = None) -> dict[str, Any]:
     """Use the fixed loopback bridge; the web app needs no broker SDK or credentials."""
-    url = f"http://127.0.0.1:8766/cash?port={port}&suffix={suffix}"
+    url = "http://127.0.0.1:8766/cash"
+    if port is not None and suffix is not None:
+        url += f"?port={port}&suffix={suffix}"
     with urllib.request.urlopen(url, timeout=30) as response:
         raw = response.read(64001)
     if len(raw) > 64000:
@@ -203,7 +205,7 @@ def broker_cash(port: int, suffix: str) -> dict[str, Any]:
     return result
 
 
-def collect(port: int, suffix: str) -> dict[str, Any]:
+def collect(port: int | None = None, suffix: str | None = None) -> dict[str, Any]:
     cash = broker_cash(port, suffix)
     currency = cash["base_currency"]
     symbols = WATCHLIST + ((currency + "USD=X",) if currency != "USD" else ())
@@ -262,7 +264,7 @@ def create_ibkr_blueprint(data_dir: Path) -> Blueprint:
             result["snapshot_stale"] = True
         return result
 
-    def refresh(port: int, suffix: str) -> None:
+    def refresh(port: int | None = None, suffix: str | None = None) -> None:
         try:
             snapshot = collect(port, suffix)
             snapshot_path.parent.mkdir(parents=True, exist_ok=True)
@@ -277,7 +279,7 @@ def create_ibkr_blueprint(data_dir: Path) -> Blueprint:
             # Broker exception text may include identifiers. Never return it to the browser.
             with lock:
                 state["error"] = (
-                    "Refresh failed. Check Gateway login, port, account suffix and the local cash bridge (127.0.0.1:8766)."
+                    "Could not refresh the saved IBKR connection. Check that Gateway on your Mac is signed in and connected to Karin."
                 )
         finally:
             with lock:
@@ -302,9 +304,9 @@ def create_ibkr_blueprint(data_dir: Path) -> Blueprint:
             return jsonify(error="Reload the monitor page before refreshing."), 403
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
-            return jsonify(error="Provide the last four account digits and Gateway port."), 400
+            return jsonify(error="Invalid refresh request."), 400
         suffix, port = body.get("account_suffix"), body.get("port")
-        if (
+        if body and (
             not isinstance(suffix, str)
             or not re.fullmatch(r"\d{4}", suffix)
             or type(port) is not int

@@ -1,8 +1,8 @@
 /* Read-only research workspace. All broker/model content is rendered as text. */
 'use strict';
 const $ = id => document.getElementById(id);
-let pending = false, snapshot = null, activeFilter = 'all', initialized = false, lastReport = '';
-let pollTimer, lastEvidenceTimestamp = null;
+let pending = false, snapshot = null, activeFilter = 'all', lastReport = '';
+let pollTimer, lastEvidenceTimestamp = null, autoRefreshRequested = false;
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const number = value => finite(value) ? value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
 const when = value => value && Number.isFinite(new Date(value).getTime()) ? new Date(value).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'Unavailable';
@@ -112,7 +112,7 @@ function render(data) {
   status.classList.toggle('is-stale', Boolean(data.snapshot_stale && data.snapshot));
   status.textContent = data.error || (pending ? 'Reading cash and reference prices. Your previous snapshot stays visible.' :
     data.snapshot ? (data.snapshot_stale ? 'Snapshot older than 30 minutes. Refresh before reviewing affordability.' : 'Snapshot ready. Prices are references, not executable quotes.') :
-    'Connect your account to check cash and reference prices.');
+    'Loading your saved IBKR connection…');
   if (data.analysis && typeof data.analysis.report === 'string' && data.analysis.report) {
     if (data.analysis.report !== lastReport) { renderReport(data.analysis.report); lastReport = data.analysis.report; }
     const age = Date.now() - new Date(data.analysis.completed_at).getTime();
@@ -133,11 +133,7 @@ function render(data) {
   $('ibkr-time').textContent = `${s.account_masked} · ${when(s.broker_captured_at)}`;
   $('ibkr-universe-date').textContent = `Universe · ${s.universe_date}`;
   $('ibkr-account-label').textContent = s.account_masked;
-  if (!initialized) {
-    if (!$('ibkr-account').value) $('ibkr-account').value = String(s.account_masked).slice(-4);
-    $('ibkr-connection').open = false;
-    initialized = true;
-  }
+
   const up = s.rows.filter(r => finite(r.change_pct) && r.change_pct > 0).length;
   const down = s.rows.filter(r => finite(r.change_pct) && r.change_pct < 0).length;
   const flat = s.rows.filter(r => r.change_pct === 0).length;
@@ -153,22 +149,26 @@ async function poll() {
   try {
     const response = await fetch('/api/ibkr', {cache: 'no-store'});
     if (!response.ok) throw new Error('Could not read monitor status. Try refreshing the page.');
-    render(await response.json());
+    const data = await response.json();
+    render(data);
+    if (!data.snapshot && !data.running && !data.error && !autoRefreshRequested) {
+      autoRefreshRequested = true; await refreshSnapshot(); return;
+    }
   } catch (error) { $('ibkr-status').textContent = error.message; $('ibkr-status').classList.add('is-error'); }
   pollTimer = setTimeout(poll, pending ? 1500 : 60000);
 }
-$('ibkr-form').addEventListener('submit', async event => {
-  event.preventDefault();
+async function refreshSnapshot() {
   $('ibkr-refresh').disabled = true;
   try {
     const response = await fetch('/api/ibkr/refresh', {method: 'POST', headers: {
       'Content-Type': 'application/json', 'X-IBKR-Token': document.querySelector('meta[name="ibkr-token"]').content},
-    body: JSON.stringify({account_suffix: $('ibkr-account').value, port: Number($('ibkr-port').value)})});
+    body: JSON.stringify({})});
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Refresh could not start.');
     pending = true; await poll();
   } catch (error) { $('ibkr-status').textContent = error.message; $('ibkr-status').classList.add('is-error'); $('ibkr-refresh').disabled = false; }
-});
+}
+$('ibkr-refresh').addEventListener('click', refreshSnapshot);
 document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => {
   activeFilter = button.dataset.filter;
   document.querySelectorAll('[data-filter]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));

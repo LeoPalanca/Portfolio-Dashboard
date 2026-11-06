@@ -21,7 +21,23 @@ from urllib.parse import parse_qs, urlsplit
 CASH_LOCK = Lock()
 
 
-async def broker_cash(port: int, suffix: str) -> dict[str, Any]:
+def saved_connection(path: Path | None = None) -> tuple[int, str, str]:
+    config_path = path or Path(os.environ.get("IBKR_CONNECTION_CONFIG", "account_config.json"))
+    config = json.loads(config_path.read_text())
+    account = config.get("account")
+    endpoint_ports = {"gateway-live": 4001, "gateway-paper": 4002}
+    port = config.get("port", endpoint_ports.get(config.get("endpoint")))
+    if (
+        not isinstance(account, str)
+        or not re.fullmatch(r"[A-Za-z0-9]+\d{4}", account)
+        or type(port) is not int
+        or port not in (4001, 4002)
+    ):
+        raise ValueError("Saved IBKR account connection is incomplete")
+    return port, account[-4:], account
+
+
+async def broker_cash(port: int, suffix: str, account: str | None = None) -> dict[str, Any]:
     # Import inside an active loop: ib_async's event utilities require one on Python 3.14+.
     from ib_async import IB, StartupFetch
 
@@ -30,7 +46,7 @@ async def broker_cash(port: int, suffix: str) -> dict[str, Any]:
         await ib.connectAsync(
             "127.0.0.1", port, clientId=71, timeout=12, readonly=True, raiseSyncErrors=True, fetchFields=StartupFetch(0)
         )
-        accounts = [a for a in ib.managedAccounts() if a.endswith(suffix)]
+        accounts = [a for a in ib.managedAccounts() if (a == account if account is not None else a.endswith(suffix))]
         if len(accounts) != 1:
             raise ValueError("Account suffix must match exactly one accessible account")
         summary = await asyncio.wait_for(ib.accountSummaryAsync(accounts[0]), timeout=12)
@@ -94,15 +110,21 @@ class CashHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        if parsed.path != "/cash" or not re.fullmatch(r"\d{4}", suffix) or port not in {"4001", "4002"}:
+        if parsed.path != "/cash" or (query and (not re.fullmatch(r"\d{4}", suffix) or port not in {"4001", "4002"})):
             self.send_error(400)
             return
         try:
+            selected_account = None
+            if not query:
+                saved_port, suffix, selected_account = saved_connection()
+                port = str(saved_port)
             with CASH_LOCK:
-                payload = asyncio.run(broker_cash(int(port), suffix))
+                payload = asyncio.run(broker_cash(int(port), suffix, selected_account))
             code = 200
         except Exception:
-            payload = {"error": "Broker cash unavailable. Check Gateway login, API port and unique account suffix."}
+            payload = {
+                "error": "Saved broker connection unavailable. Check Gateway login and saved account configuration."
+            }
             code = 503
         body = json.dumps(payload, allow_nan=False).encode()
         self.send_response(code)

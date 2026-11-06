@@ -326,8 +326,18 @@ Released under the [MIT License](LICENSE).
 
 ## IBKR research monitor
 
-Open **IBKR research** in the header (`/ibkr`), expand Account connection, select
-the Gateway session and enter the last four account digits. The suffix must uniquely identify an accessible account.
+Open **IBKR research** in the header (`/ibkr`). It uses the account already saved
+on the dashboard host. No account suffix or session selection is required in the
+browser. If no snapshot exists, the page requests one automatically; use
+**Refresh snapshot** for subsequent checks.
+
+The read-only bridge loads its private `account_config.json` from its working
+directory, or the file named by `IBKR_CONNECTION_CONFIG`. That file contains the
+previously selected full account ID and Gateway endpoint. It must already exist;
+missing configuration never falls back to the first accessible account. The
+saved full ID must match an accessible account exactly. Only a masked suffix is
+returned to the dashboard.
+
 Gateway must be logged in with **Read-Only API** enabled and reachable at
 `127.0.0.1:4001` (live) or `127.0.0.1:4002` (paper) on the dashboard host.
 An SSH reverse tunnel can forward that loopback port from Gateway on another machine.

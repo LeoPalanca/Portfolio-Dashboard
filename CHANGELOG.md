@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.8 — 2026-11-06
+
+- Remove the IBKR account setup form and reuse the host’s saved account connection automatically.
+- Load the first snapshot on opening the monitor; keep a single refresh action and preserve read-only access.
+- Require the saved full account ID to match exactly, without choosing another account implicitly.
+
+
 ## 0.10.7 — 2026-11-06
 
 - Feed OpenCode the dashboard’s existing news headlines, adjusted-price drawdowns and analyst ratings, targets and recent changes for six locally affordable research candidates.
