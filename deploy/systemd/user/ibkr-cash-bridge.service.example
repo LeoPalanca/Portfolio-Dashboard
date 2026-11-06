@@ -1,0 +1,20 @@
+[Unit]
+Description=IBKR cash, research jobs and manual order bridge
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/ibkr_agent
+ExecStart=%h/ibkr_agent/.venv/bin/python %h/ibkr_agent/ibkr_cash_bridge.py
+Environment=IBKR_DASHBOARD_URL=http://127.0.0.1:8050
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/ibkr_agent/research %h/ibkr_agent/orders
+ReadWritePaths=%h/.local/share/opencode %h/.local/state/opencode %h/.cache/opencode %h/.config/opencode
+
+[Install]
+WantedBy=default.target

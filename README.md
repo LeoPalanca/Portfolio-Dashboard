@@ -331,17 +331,17 @@ on the dashboard host. No account suffix or session selection is required in the
 browser. If no snapshot exists, the page requests one automatically; use
 **Refresh snapshot** for subsequent checks.
 
-The read-only bridge loads its private `account_config.json` from its working
+The bridge loads its private `account_config.json` from its working
 directory, or the file named by `IBKR_CONNECTION_CONFIG`. That file contains the
 previously selected full account ID and Gateway endpoint. It must already exist;
 missing configuration never falls back to the first accessible account. The
 saved full ID must match an accessible account exactly. Only a masked suffix is
 returned to the dashboard.
 
-Gateway must be logged in with **Read-Only API** enabled and reachable at
+For research, keep Gateway logged in with **Read-Only API** enabled and reachable at
 `127.0.0.1:4001` (live) or `127.0.0.1:4002` (paper) on the dashboard host.
 An SSH reverse tunnel can forward that loopback port from Gateway on another machine.
-Run the read-only loopback cash bridge on the dashboard host using an environment
+Run the loopback bridge on the dashboard host using an environment
 with `ib_async==2.1.0` (`uv sync --extra ibkr` for a new installation):
 
 ```sh
@@ -349,8 +349,9 @@ python scripts/ibkr_cash_bridge.py
 ```
 
 The bridge binds to `127.0.0.1:8766`. It uses the protocol handshake directly to avoid ib_async 2.1.0’s unconditional
-position synchronization, and makes only account-summary requests,
-returns a masked suffix and cash totals, and exposes no order functions. The
+position synchronization on the cash endpoint, which makes only account-summary
+requests and returns a masked suffix and cash totals. Manual order endpoints are
+separate and disabled by default (see version 0.12 below). The
 dashboard itself needs no new runtime dependency, so existing code-only app
 updates remain compatible. Keep this port on loopback; no public listener is needed.
 
@@ -398,11 +399,12 @@ Set the bridge's `IBKR_RESEARCH_STATE` to the research script's `--state-dir` (d
 `research` relative to the bridge working directory). The dashboard reads its latest
 report from the fixed loopback `/analysis` endpoint. Model commentary is unverified,
 and old reports are labelled by completion time. Reports and OpenCode session data
-remain on the dashboard host; no orders, order approvals or autonomy controls exist.
+remain on the dashboard host. Research has no order approval or execution tools.
 
 The first purchase still requires a review of the reason for the drop, current
 broker bid/ask, quantity, limit, actual cost preview and exit rules, followed by
-manual confirmation. Current Gateway read-only protection must remain enabled.
+manual confirmation in the separate order desk. Keep Gateway read-only until the
+manual execution setup below has been reviewed.
 
 ### Evidence for the research agent
 
@@ -485,3 +487,61 @@ preferences enter the model prompt. The target is actual entry multiplied by
 not a forecast or an active sell order. Fees, spread, FX and tax effects remain
 separate. No loss limit is inferred, and `execution_authorized` remains false
 regardless of the file's contents.
+
+### Manual analysis, stock chat and first-order execution (0.12)
+
+The IBKR page has **Run analysis now** and a ticker-specific research chat. Both
+use the standard OpenCode runner, Big Pickle first and the configured DeepSeek
+Flash fallback. Requests collect fresh public evidence. A stock conversation does
+not replace the 100-stock report. Jobs serialize with scheduled research; keep the
+page open to receive the result. Closing the page does not cancel the job. Model
+tools remain denied and neither news nor chat can authorize an order.
+
+The private strategy now records `loss_policy: "hold_for_now"`: no automatic
+stop-loss or liquidation at the 12-month research horizon. Review deteriorating
+theses manually. This preference does not itself authorize broker orders.
+
+**Preview with IBKR → review → confirm purchase** is a separate, human-controlled
+first-order flow. It supports whole shares of watchlist USD stocks, regular hours,
+DAY limit buys, and one attached GTC limit profit sell. The profit price is rounded
+up to the contract minimum tick at 115% of the **buy limit**. A lower actual entry
+therefore increases the gross percentage return. This is before commissions, FX
+and taxes; there is no stop order. Partial fills, rejected orders, manual position
+changes and the validity/expiry of a GTC order require supervision in IBKR.
+
+Submission rechecks the saved exact account, qualified USD stock, broker liquid
+hours, real-time bid/ask (maximum age 10 seconds), spread, current positions,
+account open orders, USD cash and settlement, available funds and a broker what-if
+commission estimate. It blocks existing positions and any account open orders.
+There is no margin, automatic currency conversion or fractional-share assumption.
+Missing broker fields fail closed. A preview expires after 60 seconds and its token
+is single-use. Browser edits invalidate the visible preview. The confirmed draft
+comes from server memory and all broker checks run again before transmission.
+
+The bridge persists a private, fsynced order intent **before** transmitting, sends
+the parent with `transmit=False`, then the profit child with `transmit=True`.
+Acknowledgement means receipt, not a fill or guaranteed profit. Exceptions or
+uncertain broker states require review; they never trigger an automatic retry.
+Only one purchase intent is supported in this first-order release. After an order
+has been submitted, reconcile parent, child, fills and positions in IBKR before an
+operator archives the intent and permits another purchase. Do not simply delete
+an unresolved intent. Manage/cancel submitted orders in IBKR. Autonomous entries
+remain disabled.
+
+Deployment: copy `scripts/ibkr_orders.py` alongside `ibkr_cash_bridge.py` in the
+bridge directory, and update the isolated `research_source` runner/modules too.
+The bridge service needs writable `research/`, `orders/` and OpenCode runtime
+directories, as shown in its service example; create these directories first. Set
+`IBKR_DASHBOARD_URL` to the existing dashboard address so jobs reuse its news feed.
+Execution defaults off: the private connection config must explicitly contain
+`execution_enabled: true` and `read_only: false`, and Gateway's **Read-Only API**
+must be disabled by the account owner before a live preview can work. Keep both
+settings off until the implementation and order flow are reviewed. This release
+does not activate live trading or send an order during installation. For a paper
+account, use the saved paper endpoint and its own account; never infer accounts.
+
+The bridge remains loopback-only, with fixed endpoint proxies, JSON bounds,
+host/origin checks and dashboard same-origin CSRF tokens. Broker errors are
+redacted. Protect access to the dashboard itself: users who can open the page
+can obtain its action token. The broker SDK is still isolated and optional; the
+main app needs no new dependency.

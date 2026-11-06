@@ -43,7 +43,8 @@ class ResearchTests(unittest.TestCase):
             prompt = public_prompt({"rows": [], "captured_at": "2026-01-01T00:00:00Z"}, {"symbols": []}, strategy)
             self.assertIn('"take_profit_pct": 15', prompt)
             self.assertNotIn("DO_NOT_SEND", prompt)
-            self.assertIn("Stop-loss remains unagreed", prompt)
+            self.assertIn("hold losses with no automatic stop-loss", prompt)
+            self.assertEqual(strategy["loss_policy"], "hold_for_now")
 
     def test_quota_uses_openrouter_fallback_and_honors_retry_time(self):
         import time

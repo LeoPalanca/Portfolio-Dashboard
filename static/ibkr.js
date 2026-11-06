@@ -1,4 +1,4 @@
-/* Read-only research workspace. All broker/model content is rendered as text. */
+/* Research and explicitly confirmed manual orders. Model content never runs as code. */
 'use strict';
 const $ = id => document.getElementById(id);
 let pending = false, snapshot = null, activeFilter = 'all', lastReport = '';
@@ -21,7 +21,7 @@ function inline(parent, text) {
     else parent.append(document.createTextNode(chunk));
   }
 }
-function renderReport(text) {
+function renderReport(text, target = $('ibkr-analysis')) {
   const fragment = document.createDocumentFragment();
   let list = null, table = null;
   for (const raw of text.split('\n')) {
@@ -44,11 +44,9 @@ function renderReport(text) {
     const heading = line.match(/^#{1,6}\s+(.+)/);
     const node = el(heading ? 'h3' : 'p'); inline(node, heading ? heading[1] : line); fragment.append(node);
   }
-  $('ibkr-analysis').replaceChildren(fragment);
+  target.replaceChildren(fragment);
 }
-function renderEvidence(evidence) {
-  const coverage = $('ibkr-evidence-coverage');
-  const sources = $('ibkr-evidence-sources');
+function renderEvidence(evidence, coverage = $('ibkr-evidence-coverage'), sources = $('ibkr-evidence-sources'), sourceList = $('ibkr-source-list')) {
   if (!evidence || !evidence.coverage) { coverage.hidden = true; sources.hidden = true; return; }
   const c = evidence.coverage;
   coverage.hidden = false;
@@ -71,8 +69,8 @@ function renderEvidence(evidence) {
     item.append(link, el('p', `${news.source} · ${news.published || 'Publication date unavailable'} · Headline only`));
     list.append(item);
   }
-  $('ibkr-source-list').replaceChildren(list);
-  sources.hidden = !$('ibkr-source-list').childNodes.length;
+  sourceList.replaceChildren(list);
+  sources.hidden = !sourceList.childNodes.length;
 }
 function renderRows() {
   if (!snapshot || !Array.isArray(snapshot.rows)) return;
@@ -200,3 +198,116 @@ $('ibkr-theme').addEventListener('click', () => {
   try { localStorage.setItem('theme', theme); } catch (_) {}
 });
 poll();
+
+// Explicit manual actions are separate from research/model output.
+const deskToken = document.querySelector('meta[name="ibkr-token"]').content;
+async function deskRequest(operation, body) {
+  const response = await fetch('/api/ibkr/desk/' + operation, body === undefined ? {} : {
+    method: 'POST', headers: {'Content-Type': 'application/json', 'X-IBKR-Token': deskToken}, body: JSON.stringify(body)
+  });
+  const result = await response.json();
+  if (!response.ok || result.error) throw new Error(result.error || 'Request failed');
+  return result;
+}
+let analysisBusy = false, chatHistory = [], chatSymbol = '', orderPreview = null, previewExpiry;
+function analysisButtons(busy) {
+  analysisBusy = busy;
+  $('ibkr-run-analysis').disabled = busy;
+  $('ibkr-chat-send').disabled = busy;
+}
+async function runAnalysis(symbol = '', question = '') {
+  if (analysisBusy) return;
+  const status = $(symbol ? 'ibkr-chat-status' : 'ibkr-job-status');
+  analysisButtons(true);
+  status.textContent = 'Collecting evidence and asking the agent… This can take several minutes.';
+  try {
+    if (symbol !== chatSymbol) { chatHistory = []; chatSymbol = symbol; $('ibkr-chat-messages').replaceChildren(); }
+    const started = await deskRequest('research/start', {symbol, question, history: symbol ? chatHistory.slice(-8) : []});
+    // Jobs continue server-side even if this page closes.
+    let result;
+    for (let attempt = 0; attempt < 800; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const job = await deskRequest('research/jobs/' + started.job_id);
+      if (job.state === 'complete') { result = job.result; break; }
+      if (job.state === 'failed' || job.state === 'unknown') throw new Error(job.error || 'Analysis unavailable');
+      status.textContent = job.state === 'queued' ? 'Queued behind another analysis…' : 'Analyzing fresh evidence…';
+    }
+    if (!result) throw new Error('Analysis is taking longer than expected. Check the scheduled report before retrying.');
+    status.textContent = `${result.model || 'Statistics only — AI unavailable'} · ${when(result.completed_at)}`;
+    if (symbol) {
+      const user = el('p', `${symbol} · ${question}`, 'ibkr-chat-question');
+      const answer = el('div', undefined, 'ibkr-research');
+      renderReport(result.report, answer);
+      const coverage = el('p', undefined, 'ibkr-evidence-coverage');
+      const sources = el('details', undefined, 'ibkr-evidence-sources');
+      const sourceList = el('div');
+      sources.append(el('summary', 'Sources for this answer'), sourceList);
+      renderEvidence(result.evidence, coverage, sources, sourceList);
+      $('ibkr-chat-messages').append(user, answer, coverage, sources);
+      chatHistory.push({role: 'user', content: question}, {role: 'assistant', content: result.report.slice(0, 4000)});
+    } else { lastReport = ''; await poll(); }
+  } catch (error) { status.textContent = error.message; }
+  finally { analysisButtons(false); }
+}
+$('ibkr-run-analysis').addEventListener('click', () => runAnalysis());
+$('ibkr-chat-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const symbol = $('ibkr-chat-symbol').value.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9.-]{0,14}$/.test(symbol)) { $('ibkr-chat-status').textContent = 'Enter a stock ticker.'; return; }
+  runAnalysis(symbol, $('ibkr-chat-question').value.trim());
+});
+function clearPreview() {
+  orderPreview = null;
+  clearTimeout(previewExpiry);
+  $('ibkr-order-review').hidden = true;
+  $('ibkr-order-agree').checked = false;
+  $('ibkr-order-confirm').disabled = true;
+}
+$('ibkr-order-form').addEventListener('input', clearPreview);
+$('ibkr-order-agree').addEventListener('change', () => {
+  $('ibkr-order-confirm').disabled = !orderPreview || !$('ibkr-order-agree').checked;
+});
+async function loadOrderStatus() {
+  try {
+    const state = await deskRequest('orders/status');
+    const intent = state.intent;
+    $('ibkr-order-status').textContent = intent ? `${intent.symbol}: ${intent.state}. Review buy and profit orders in IBKR before another purchase.` :
+      state.execution_enabled ? 'Manual execution enabled. Preview required. Autonomous entries disabled.' : 'Execution disabled. Gateway remains read-only until activation.';
+    $('ibkr-order-preview').disabled = !state.execution_enabled || !!intent;
+  } catch (error) { $('ibkr-order-status').textContent = error.message; $('ibkr-order-preview').disabled = true; }
+}
+$('ibkr-order-form').addEventListener('submit', async event => {
+  event.preventDefault(); clearPreview();
+  $('ibkr-order-preview').disabled = true;
+  $('ibkr-order-status').textContent = 'Checking broker quote, settled cash, existing orders and commission…';
+  try {
+    const result = await deskRequest('orders/preview', {
+      symbol: $('ibkr-order-symbol').value.trim().toUpperCase(),
+      quantity: Number($('ibkr-order-quantity').value), limit_price: Number($('ibkr-order-limit').value)
+    });
+    orderPreview = result;
+    const details = document.createDocumentFragment();
+    for (const [label, value] of [
+      ['Account', result.account_masked], ['Buy', `${result.quantity} ${result.symbol} · DAY limit $${number(result.limit_price)}`],
+      ['Broker bid / ask', `$${number(result.bid)} / $${number(result.ask)}`], ['Cost reserve', `$${number(result.commission_reserve_usd)}`],
+      ['Profit sell', `GTC limit $${number(result.take_profit_price)} · ${result.target_basis}`], ['Losses', 'Hold for now · no automatic stop-loss']
+    ]) { details.append(el('dt', label), el('dd', value)); }
+    $('ibkr-order-details').replaceChildren(details);
+    $('ibkr-order-review').hidden = false;
+    $('ibkr-order-status').textContent = 'Preview valid for 60 seconds. No order submitted.';
+    previewExpiry = setTimeout(() => { clearPreview(); $('ibkr-order-status').textContent = 'Preview expired. Request a fresh preview.'; }, Math.max(0, result.expires_at * 1000 - Date.now()));
+  } catch (error) { $('ibkr-order-status').textContent = error.message; }
+  finally { $('ibkr-order-preview').disabled = false; }
+});
+$('ibkr-order-confirm').addEventListener('click', async () => {
+  if (!orderPreview || !$('ibkr-order-agree').checked) return;
+  const token = orderPreview.preview_token;
+  clearPreview(); $('ibkr-order-preview').disabled = true;
+  $('ibkr-order-status').textContent = 'Submitting confirmed order. Do not retry; check IBKR if the connection drops.';
+  try {
+    const result = await deskRequest('orders/submit', {preview_token: token, confirm: 'BUY'});
+    $('ibkr-order-status').textContent = `${result.state} · Buy: ${result.buy_status}; profit sell: ${result.profit_status}. Confirm fills and any partial fills in IBKR.`;
+  } catch (error) { $('ibkr-order-status').textContent = error.message; }
+  await loadOrderStatus();
+});
+loadOrderStatus();

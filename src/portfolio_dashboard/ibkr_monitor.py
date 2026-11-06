@@ -1,6 +1,6 @@
-"""Read-only broker cash and indicative whole-share affordability.
+"""Broker research, indicative affordability and a human-confirmed order desk.
 
-No order interfaces are exposed. Yahoo reference prices are never execution quotes.
+Yahoo reference prices are never execution quotes. Research cannot place orders.
 """
 
 from __future__ import annotations
@@ -210,10 +210,10 @@ def collect(port: int | None = None, suffix: str | None = None) -> dict[str, Any
     return collect_market(cash)
 
 
-def collect_market(cash: dict[str, Any]) -> dict[str, Any]:
+def collect_market(cash: dict[str, Any], universe: tuple[str, ...] = WATCHLIST) -> dict[str, Any]:
     """Public market scan, also usable by research with explicitly cached/unknown cash."""
     currency = cash["base_currency"]
-    symbols = WATCHLIST + ((currency + "USD=X",) if currency != "USD" else ())
+    symbols = universe + ((currency + "USD=X",) if currency != "USD" else ())
     with ThreadPoolExecutor(max_workers=5) as pool:
         quotes = list(pool.map(reference_quote, symbols))
     fx = quotes.pop() if currency != "USD" else None
@@ -324,5 +324,45 @@ def create_ibkr_blueprint(data_dir: Path) -> Blueprint:
             state.update(running=True, error=None)
         threading.Thread(target=refresh, args=(port, suffix), daemon=True, name="ibkr-monitor").start()
         return jsonify(running=True), 202
+
+    @blueprint.route("/api/ibkr/desk/<path:operation>", methods=["GET", "POST"])
+    def desk(operation: str):
+        allowed_get = operation == "orders/status" or bool(re.fullmatch(r"research/jobs/[a-f0-9]{32}", operation))
+        allowed_post = operation in {"research/start", "orders/preview", "orders/submit"}
+        if not ((request.method == "GET" and allowed_get) or (request.method == "POST" and allowed_post)):
+            return jsonify(error="Unknown operation."), 404
+        if request.method == "POST":
+            origin = request.headers.get("Origin")
+            if not secrets.compare_digest(request.headers.get("X-IBKR-Token", ""), token) or (
+                origin and origin.rstrip("/") != request.host_url.rstrip("/")
+            ):
+                return jsonify(error="Reload the IBKR page before continuing."), 403
+            if request.content_length is None or request.content_length > 16000:
+                return jsonify(error="Request too large."), 400
+            body = request.get_json(silent=True)
+            if not isinstance(body, dict):
+                return jsonify(error="Invalid JSON request."), 400
+            data = json.dumps(body).encode()
+        else:
+            data = None
+        req = urllib.request.Request(
+            "http://127.0.0.1:8766/" + operation,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method=request.method,
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=90) as response:
+                raw, code = response.read(160001), response.status
+        except urllib.error.HTTPError as exc:
+            raw, code = exc.read(160001), exc.code
+        except OSError:
+            return jsonify(error="IBKR bridge unavailable. Check IBKR before retrying an order."), 503
+        try:
+            if len(raw) > 160000:
+                raise ValueError("Response too large")
+            return jsonify(json.loads(raw)), code
+        except ValueError:
+            return jsonify(error="Invalid bridge response."), 502
 
     return blueprint

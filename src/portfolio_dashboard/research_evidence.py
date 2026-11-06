@@ -256,7 +256,7 @@ def analyst_views(symbol: str) -> dict[str, Any]:
 
 
 def build_evidence(snapshot: dict[str, Any], dashboard_url: str) -> dict[str, Any]:
-    symbols = shortlist(snapshot)
+    symbols = [snapshot["rows"][0]["symbol"]] if len(snapshot["rows"]) == 1 else shortlist(snapshot)
     universe = [r["symbol"] for r in snapshot["rows"]]
     # Cash checks constrain proposals, not public volatility coverage.
     with ThreadPoolExecutor(max_workers=6) as pool:

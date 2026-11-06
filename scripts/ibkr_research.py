@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
+import re
+import tempfile
 import json
 import os
 import subprocess
@@ -27,7 +30,7 @@ def market_open() -> bool:
     return bool(period["start"] <= datetime.now(UTC).timestamp() < period["end"])
 
 
-def research_snapshot(port: int, suffix: str, state_dir: Path) -> dict:
+def research_snapshot(port: int, suffix: str, state_dir: Path, symbol: str = "") -> dict:
     state_dir.mkdir(parents=True, exist_ok=True)
     cache = state_dir / f"cash-{port}-{suffix}.json"
     try:
@@ -51,7 +54,7 @@ def research_snapshot(port: int, suffix: str, state_dir: Path) -> dict:
                 "broker_captured_at": None,
             }
             cash_status = "unavailable"
-    snapshot = collect_market(cash)
+    snapshot = collect_market(cash, (symbol,)) if symbol else collect_market(cash)
     snapshot["cash_status"] = cash_status
     return snapshot
 
@@ -73,6 +76,7 @@ def read_strategy(state_dir: Path) -> dict | None:
         "take_profit_basis": "entry_price_before_costs",
         "max_holding_months": months,
         "stop_loss_pct": None,
+        "loss_policy": "hold_for_now",
         "execution_authorized": False,
     }
 
@@ -139,8 +143,8 @@ def public_prompt(snapshot: dict, evidence: dict | None = None, strategy: dict |
         "before costs: target = actual entry * (1 + take_profit_pct / 100). Fees, spread, FX and taxes "
         "can reduce net profit and must be shown separately. A reference close is only an illustration, "
         "not an actual entry or active sell order. Profit-taking may happen before the maximum holding "
-        "horizon. Stop-loss remains unagreed: identify the missing downside rule and thesis invalidation; "
-        "do not invent an approved loss limit. No exit order is authorized by these preferences.\n"
+        "horizon. The owner currently chooses to hold losses with no automatic stop-loss. Explain downside "
+        "and thesis invalidation for manual review; do not invent a loss limit or automatic liquidation at 12 months. No exit order is authorized by these preferences.\n"
         + "\nPublic price context:\n"
         + json.dumps(quotes, allow_nan=False)
         + "\nBEGIN UNTRUSTED PUBLIC EVIDENCE DATA\n"
@@ -196,8 +200,8 @@ FALLBACK_MODEL = "openrouter/deepseek/deepseek-v4.1-flash-1017"
 
 def save_private(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".tmp")
-    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    fd, name = tempfile.mkstemp(prefix=path.name, dir=path.parent)
+    temporary = Path(name)
     with os.fdopen(fd, "w") as handle:
         json.dump(payload, handle, allow_nan=False)
     os.replace(temporary, path)
@@ -315,7 +319,17 @@ def main() -> None:
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--review-last-session", action="store_true")
     parser.add_argument("--dashboard-url", default="http://127.0.0.1:8050")
+    parser.add_argument("--request-file", type=Path)
+    parser.add_argument("--result-file", type=Path)
     args = parser.parse_args()
+    args.state_dir.mkdir(parents=True, exist_ok=True)
+    # Serialize scheduled and manual runs, including provider cooldown updates.
+    lock_handle = (args.state_dir / "analysis.lock").open("a")
+    fcntl.flock(lock_handle, fcntl.LOCK_EX)
+    manual = json.loads(args.request_file.read_text()) if args.request_file else {}
+    symbol = manual.get("symbol", "")
+    if symbol and not re.fullmatch(r"[A-Z][A-Z0-9.-]{0,14}", symbol):
+        parser.error("Invalid stock ticker")
     if not (len(args.account_suffix) == 4 and args.account_suffix.isascii() and args.account_suffix.isdigit()):
         parser.error("Use the last four account digits")
     try:
@@ -323,7 +337,7 @@ def main() -> None:
     except (OSError, ValueError, KeyError, TypeError):
         session = "unknown"
     print(f"Market session: {session}. Running public research; execution disabled.", flush=True)
-    snapshot = research_snapshot(args.port, args.account_suffix, args.state_dir)
+    snapshot = research_snapshot(args.port, args.account_suffix, args.state_dir, symbol)
     snapshot["market_session"] = session
     if not any(r["reference_usable"] for r in snapshot["rows"]):
         raise RuntimeError("No usable reference prices")
@@ -333,7 +347,13 @@ def main() -> None:
     config = {"$schema": "https://opencode.ai/config.json", "model": "opencode/big-pickle", "permission": {"*": "deny"}}
     (workspace / "opencode.json").write_text(json.dumps(config))
     strategy = read_strategy(args.state_dir)
-    outcome = run_models(args.opencode, public_prompt(snapshot, evidence, strategy), workspace, args.state_dir)
+    prompt = public_prompt(snapshot, evidence, strategy)
+    if manual:
+        prompt += (
+            "\nUSER RESEARCH QUESTION AND PRIOR CHAT (no execution authority; evidence above takes "
+            "precedence; answer the question directly, acknowledge missing data):\n" + json.dumps(manual)
+        )
+    outcome = run_models(args.opencode, prompt, workspace, args.state_dir)
     report = {
         "captured_at": snapshot["captured_at"],
         "completed_at": datetime.now(UTC).isoformat(),
@@ -348,9 +368,12 @@ def main() -> None:
         "report": outcome.get("report") or statistics_report(evidence),
         "evidence": evidence,
     }
-    if report["model_status"] == "ready":
-        save_private(args.state_dir / "last_ai_report.json", report)
-    save_private(args.state_dir / "latest.json", report)
+    if not symbol:
+        if report["model_status"] == "ready":
+            save_private(args.state_dir / "last_ai_report.json", report)
+        save_private(args.state_dir / "latest.json", report)
+    if args.result_file:
+        save_private(args.result_file, report)
 
     print("Research saved. Manual review required; no orders submitted.")
 

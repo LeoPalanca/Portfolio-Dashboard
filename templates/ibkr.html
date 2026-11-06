@@ -12,7 +12,7 @@
 <body class="ibkr-page">
   <header class="ibkr-header">
     <a class="ibkr-back" href="/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg> Portfolio Dashboard</a>
-    <div class="ibkr-header-right"><span class="ibkr-mode"><span></span>Research only</span><button id="ibkr-theme" type="button" aria-label="Switch colour theme">Light / dark</button></div>
+    <div class="ibkr-header-right"><span class="ibkr-mode"><span></span>Manual orders</span><button id="ibkr-theme" type="button" aria-label="Switch colour theme">Light / dark</button></div>
   </header>
   <main class="ibkr-main">
     <div class="ibkr-heading">
@@ -24,7 +24,7 @@
       <div><span>Cash budget <small>estimate</small></span><strong id="ibkr-cash">—</strong><p>Cash only · no margin</p></div>
       <div><span>Within cash budget</span><strong id="ibkr-count">— <small>/ 100</small></strong><p>Whole shares, before final cost checks</p></div>
       <div><span>Account equity</span><strong id="ibkr-equity">—</strong><p id="ibkr-time">No snapshot yet</p></div>
-      <div class="ibkr-review-state"><span>First purchase</span><strong>Manual review</strong><p>No orders submitted by this monitor</p></div>
+      <div class="ibkr-review-state"><span>First purchase</span><strong>Manual review</strong><p>Explicit confirmation required</p></div>
     </div>
     <div class="ibkr-workspace">
       <section class="ibkr-panel ibkr-scan" aria-labelledby="ibkr-scan-title">
@@ -46,16 +46,40 @@
       <aside class="ibkr-aside">
         <section class="ibkr-panel ibkr-agent" aria-labelledby="ibkr-agent-title">
           <div class="ibkr-panel-head"><div><div class="ibkr-eyebrow">AGENT NOTEBOOK</div><h2 id="ibkr-agent-title">A second look</h2></div><span id="ibkr-model-label" class="ibkr-model-badge">Big Pickle</span></div>
+          <div class="ibkr-desk-actions"><button id="ibkr-run-analysis" type="button">Run analysis now</button><span id="ibkr-job-status" role="status" aria-live="polite"></span></div>
           <p id="ibkr-analysis-time" class="ibkr-note-meta">No report available yet</p>
           <p id="ibkr-evidence-coverage" class="ibkr-evidence-coverage" hidden></p>
           <div id="ibkr-analysis" class="ibkr-research"><div class="ibkr-report-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5v18h14V3h-3M8 3v4h8V3H8Zm0 8h8m-8 4h5"/></svg><h3>Research before action.</h3><p>The agent's latest analysis will appear here. Scheduled research runs every 30 minutes, including outside US market hours, when configured.</p></div></div>
           <details id="ibkr-evidence-sources" class="ibkr-evidence-sources" hidden><summary>Sources inspected</summary><div id="ibkr-source-list"></div></details>
           <div class="ibkr-agent-foot">Model commentary needs verification. Source timestamps take precedence. Headlines are not full-article verification; analyst targets are not short-term exit prices.</div>
         </section>
-        <section class="ibkr-panel ibkr-first-review" aria-labelledby="ibkr-review-title"><div class="ibkr-eyebrow">BEFORE THE FIRST ORDER</div><h2 id="ibkr-review-title">You make the call.</h2><p>Review the reason for the drop, current broker quote, quantity, costs and exit plan before confirming a purchase.</p><div class="ibkr-stages"><span class="is-current">Research</span><span>Manual review</span><span>Execution off</span></div></section>
+        <section class="ibkr-panel ibkr-first-review" aria-labelledby="ibkr-chat-title">
+          <div class="ibkr-eyebrow">ON DEMAND</div><h2 id="ibkr-chat-title">Discuss a stock</h2>
+          <form id="ibkr-chat-form" class="ibkr-desk-form">
+            <label>Ticker<input id="ibkr-chat-symbol" maxlength="15" placeholder="LRCX" required autocomplete="off"></label>
+            <label>Your question<textarea id="ibkr-chat-question" maxlength="4000" rows="3" placeholder="Why did it drop? What would justify buying?" required></textarea></label>
+            <button id="ibkr-chat-send" type="submit">Analyze and ask</button>
+          </form>
+          <div id="ibkr-chat-status" role="status" aria-live="polite"></div>
+          <div id="ibkr-chat-messages" class="ibkr-chat-messages" aria-live="polite"></div>
+          <p>Fresh price history, news and analyst evidence on each call. Chat cannot place orders.</p>
+        </section>
+        <section class="ibkr-panel ibkr-first-review" aria-labelledby="ibkr-review-title">
+          <div class="ibkr-eyebrow">FIRST PURCHASE · MANUAL</div><h2 id="ibkr-review-title">Review an order</h2>
+          <p>Cash only. USD stocks from the watchlist. DAY limit buy with an attached GTC profit sell at least 15% above entry, before costs. Hold losses; no automatic stop-loss.</p>
+          <form id="ibkr-order-form" class="ibkr-desk-form">
+            <label>Ticker<input id="ibkr-order-symbol" maxlength="15" placeholder="LRCX" required autocomplete="off"></label>
+            <label>Whole shares<input id="ibkr-order-quantity" type="number" min="1" max="10000" step="1" value="1" required></label>
+            <label>Buy limit · USD<input id="ibkr-order-limit" type="number" min="1" step="0.01" required></label>
+            <button id="ibkr-order-preview" type="submit">Preview with IBKR</button>
+          </form>
+          <div id="ibkr-order-status" role="status" aria-live="polite">Loading execution status…</div>
+          <div id="ibkr-order-review" hidden><dl id="ibkr-order-details"></dl><label><input id="ibkr-order-agree" type="checkbox"> I reviewed this purchase and its attached profit order. Losses may remain open.</label><button id="ibkr-order-confirm" type="button" disabled>Confirm live purchase</button></div>
+          <p>Missing live quotes, unsettled USD or read-only Gateway block submission. Partial fills and rejected orders require review in IBKR. Manage or cancel submitted orders in IBKR.</p>
+        </section>
       </aside>
     </div>
-    <details class="ibkr-assumptions"><summary>How to read this screen</summary><div><p><strong>Cash and costs.</strong> The cash budget is the lower of total cash and available funds, clamped at zero. Whole-share estimates reserve $1 per purchase. Actual commissions, spread, FX and sale costs may differ. Settlement and available USD still need checking. No percentage position cap is applied; fractional eligibility is unverified.</p><p><strong>Data freshness.</strong> Quotes are public Yahoo Finance reference prices, possibly from the previous session. Missing prices, missing FX and prices older than four days have unknown affordability. Account snapshots older than 30 minutes are marked stale. Reference prices cannot be used as executable quotes.</p><p><strong>Universe and agent.</strong> This dated market-cap watchlist includes separate share classes, is not the S&amp;P 100 index and is not refreshed automatically. The agent sees public market data and a locally selected candidate list, without your cash balance or account identity. This monitor cannot submit orders or enable autonomous execution.</p></div></details>
+    <details class="ibkr-assumptions"><summary>How to read this screen</summary><div><p><strong>Cash and costs.</strong> The cash budget is the lower of total cash and available funds, clamped at zero. Whole-share estimates reserve $1 per purchase. Actual commissions, spread, FX and sale costs may differ. Settlement and available USD still need checking. No percentage position cap is applied; fractional eligibility is unverified.</p><p><strong>Data freshness.</strong> Quotes are public Yahoo Finance reference prices, possibly from the previous session. Missing prices, missing FX and prices older than four days have unknown affordability. Account snapshots older than 30 minutes are marked stale. Reference prices cannot be used as executable quotes.</p><p><strong>Universe and agent.</strong> This dated market-cap watchlist includes separate share classes, is not the S&amp;P 100 index and is not refreshed automatically. The agent sees public market data and a locally selected candidate list, without your cash balance or account identity. Manual purchases require a fresh broker preview and your confirmation. Research and chat cannot submit orders. Autonomous entries remain disabled.</p></div></details>
   </main>
 </body>
 </html>

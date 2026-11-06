@@ -1,7 +1,7 @@
-"""Local read-only cash bridge. Requires the optional ibkr dependencies.
+"""Local cash/research bridge with separately activated manual order execution.
 
 Run using the existing IBKR virtualenv. Binds only to 127.0.0.1:8766.
-No account IDs, credentials, positions or order functions are exposed.
+Account identifiers and credentials are never returned. Research cannot place orders.
 """
 
 from __future__ import annotations
@@ -11,14 +11,82 @@ import json
 import math
 import os
 import re
+import subprocess
+import sys
+import uuid
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from threading import Lock
+from threading import Lock, Thread
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 CASH_LOCK = Lock()
+ORDER_LOCK = Lock()
+JOB_LOCK = Lock()
+JOBS: dict[str, dict] = {}
+# The bridge is also deployed alongside research_source, outside the app checkout.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "research_source"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ibkr_orders import OrderBlocked, OrderDesk  # noqa: E402
+
+DESK = OrderDesk(Path(os.environ.get("IBKR_ORDER_STATE", "orders")))
+
+
+def execution_enabled() -> bool:
+    try:
+        config = json.loads(Path(os.environ.get("IBKR_CONNECTION_CONFIG", "account_config.json")).read_text())
+        return config.get("execution_enabled") is True and config.get("read_only") is False
+    except (OSError, ValueError):
+        return False
+
+
+def run_job(job_id: str, request: dict) -> None:
+    state = Path(os.environ.get("IBKR_RESEARCH_STATE", "research")).resolve()
+    job_dir = state / "jobs"
+    job_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    request_path = job_dir / (job_id + "-request.json")
+    result_path = job_dir / (job_id + ".json")
+    try:
+        fd = os.open(request_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as handle:
+            json.dump(request, handle)
+        port, suffix, _ = saved_connection()
+        root = Path(__file__).resolve().parent / "research_source"
+        executable = os.environ.get(
+            "IBKR_OPENCODE",
+            str(Path.home() / ".nodeterm-server-app/runtime/node/lib/node_modules/@opencode/cli/bin/opencode.exe"),
+        )
+        JOBS[job_id] = {"state": "running"}
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(root / "scripts/ibkr_research.py"),
+                "--account-suffix",
+                suffix,
+                "--port",
+                str(port),
+                "--opencode",
+                executable,
+                "--state-dir",
+                str(state),
+                "--dashboard-url",
+                os.environ.get("IBKR_DASHBOARD_URL", "http://127.0.0.1:8050"),
+                "--request-file",
+                str(request_path),
+                "--result-file",
+                str(result_path),
+            ],
+            capture_output=True,
+            timeout=1500,
+            check=False,
+        )
+        if result.returncode:
+            raise ValueError("Analysis failed")
+        report = json.loads(result_path.read_text())
+        JOBS[job_id] = {"state": "complete", "result": report}
+    except Exception:
+        JOBS[job_id] = {"state": "failed", "error": "Analysis failed or timed out. Scheduled research is unchanged."}
 
 
 def saved_connection(path: Path | None = None) -> tuple[int, str, str]:
@@ -85,6 +153,80 @@ class CashHandler(BaseHTTPRequestHandler):
     def log_message(self, *_args: Any) -> None:
         pass  # Do not log account suffixes.
 
+    def json_response(self, payload: dict, code: int = 200) -> None:
+        body = json.dumps(payload, allow_nan=False).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self) -> None:
+        if self.headers.get("Host") not in {"127.0.0.1:8766", "localhost:8766"} or self.headers.get("Origin"):
+            self.send_error(403)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= 16000 or self.headers.get("Content-Type") != "application/json":
+                raise ValueError("Invalid JSON request")
+            body = json.loads(self.rfile.read(length))
+            if not isinstance(body, dict):
+                raise ValueError("Invalid JSON request")
+            if self.path == "/research/start":
+                symbol = body.get("symbol", "")
+                question = body.get("question", "")
+                history = body.get("history", [])
+                if not isinstance(symbol, str) or (symbol and not re.fullmatch(r"[A-Z][A-Z0-9.-]{0,14}", symbol)):
+                    raise ValueError("Invalid ticker")
+                if (
+                    not isinstance(question, str)
+                    or len(question) > 4000
+                    or not isinstance(history, list)
+                    or len(history) > 8
+                ):
+                    raise ValueError("Question or history too long")
+                if any(
+                    not isinstance(m, dict)
+                    or m.get("role") not in {"user", "assistant"}
+                    or not isinstance(m.get("content"), str)
+                    or len(m["content"]) > 4000
+                    for m in history
+                ):
+                    raise ValueError("Invalid chat history")
+                with JOB_LOCK:
+                    if any(j["state"] in {"queued", "running"} for j in JOBS.values()):
+                        self.json_response({"error": "An analysis is already running."}, 409)
+                        return
+                    JOBS.clear()
+                    job_id = uuid.uuid4().hex
+                    JOBS[job_id] = {"state": "queued"}
+                    Thread(
+                        target=run_job,
+                        args=(job_id, {"symbol": symbol, "question": question, "history": history}),
+                        daemon=True,
+                    ).start()
+                self.json_response({"job_id": job_id}, 202)
+                return
+            if self.path not in {"/orders/preview", "/orders/submit"}:
+                self.send_error(404)
+                return
+            with ORDER_LOCK:
+                port, _, account = saved_connection()
+                payload = asyncio.run(
+                    DESK.execute(self.path.rsplit("/", 1)[1], body, port, account, execution_enabled())
+                )
+            self.json_response(payload)
+        except (ValueError, TypeError) as exc:
+            self.json_response({"error": str(exc) if isinstance(exc, OrderBlocked) else "Invalid request."}, 400)
+        except Exception:
+            self.json_response(
+                {
+                    "error": "Broker operation unavailable. Check IBKR before retrying; any submitted intent requires reconciliation."
+                },
+                503,
+            )
+
     def do_GET(self) -> None:
         parsed = urlsplit(self.path)
         query = parse_qs(parsed.query)
@@ -92,6 +234,18 @@ class CashHandler(BaseHTTPRequestHandler):
         port = query.get("port", [""])[0]
         if self.headers.get("Host") not in {"127.0.0.1:8766", "localhost:8766"}:
             self.send_error(403)
+            return
+        if parsed.path == "/orders/status":
+            try:
+                self.json_response({**DESK.status(), "execution_enabled": execution_enabled()})
+            except (OSError, ValueError):
+                self.json_response({"error": "Order state unreadable. Execution must remain disabled."}, 503)
+            return
+        if parsed.path.startswith("/research/jobs/"):
+            job_id = parsed.path.rsplit("/", 1)[1]
+            self.json_response(
+                JOBS.get(job_id, {"state": "unknown", "error": "Job not found; the bridge may have restarted."})
+            )
             return
         if parsed.path == "/analysis":
             path = Path(os.environ.get("IBKR_RESEARCH_STATE", "research")) / "latest.json"
