@@ -431,3 +431,13 @@ list and a WAIT instruction. Raise the example research service timeout to 600
 seconds to cover collection plus model response. The agent receives public evidence
 only, delimited as untrusted data with source IDs; tool permissions remain denied.
 Reports include structured coverage and source links for manual verification.
+
+Research reports may now conclude `BUY_PROPOSAL` or `WAIT`. A BUY_PROPOSAL is an
+unapproved research draft: one candidate, cited thesis, conditional entry, holding
+horizon, downside/invalidation and exit logic. Numeric levels must be supported
+by supplied evidence; missing levels and risk parameters require manual agreement.
+Missing broker quotes or cost previews block execution, without forcing every
+research conclusion to WAIT. A WAIT report must identify a decision-critical
+blocker, an observable change condition and a next review point. The agent weighs
+panic-driven overshoot against fundamental repricing and does not have to agree
+with a desire to buy. No execution endpoint or autonomous trading is added.

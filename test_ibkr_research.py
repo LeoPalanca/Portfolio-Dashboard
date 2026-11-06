@@ -18,6 +18,10 @@ class ResearchTests(unittest.TestCase):
             self.assertNotIn(marker, prompt)
         self.assertIn("DEMO", prompt)
         self.assertIn("No autonomous trading is authorized", prompt)
+        self.assertIn("BUY_PROPOSAL", prompt)
+        self.assertIn("All proposals remain UNAPPROVED", prompt)
+        self.assertIn("competing hypotheses", prompt)
+        self.assertIn("decision-critical blocker", prompt)
 
     def test_only_text_events_become_report(self):
         raw = '\n'.join(json.dumps(event) for event in [

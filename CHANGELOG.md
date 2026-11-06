@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.9 — 2026-11-06
+
+- Let the research agent propose an unapproved, conditional rebound-entry idea for manual review, alongside a precise WAIT rationale.
+- Compare panic-driven overshoot with fundamental repricing; separate execution checks from research conclusions and keep all order submission disabled.
+
+
 ## 0.10.8 — 2026-11-06
 
 - Remove the IBKR account setup form and reuse the host’s saved account connection automatically.
