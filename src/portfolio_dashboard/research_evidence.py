@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import statistics
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -28,7 +29,7 @@ def shortlist(snapshot: dict[str, Any], limit: int = 6) -> list[str]:
         r
         for r in snapshot["rows"]
         if r.get("reference_usable")
-        and (numeric(r.get("whole_shares_with_cash")) or 0) > 0
+        and ((numeric(r.get("whole_shares_with_cash")) or 0) > 0 or snapshot.get("cash_status") == "unavailable")
         and numeric(r.get("change_pct")) is not None
     ]
     rows.sort(key=lambda r: (r["change_pct"], r["symbol"]))
@@ -56,7 +57,7 @@ def dashboard_news(url: str, symbols: list[str]) -> dict[str, Any]:
     if not symbols:
         return result
     try:
-        query = urllib.parse.urlencode({"symbols": ",".join(symbols)})
+        query = urllib.parse.urlencode({"symbols": ",".join(symbols), "refresh": "1"})
         payload = read_json(url.rstrip("/") + "/api/news?" + query, timeout=90)
         result["dashboard_generated_at"] = payload.get("generated_at")
         counts: dict[str, int] = {}
@@ -93,7 +94,7 @@ def dashboard_news(url: str, symbols: list[str]) -> dict[str, Any]:
     return result
 
 
-def history_metrics(payload: dict[str, Any]) -> dict[str, Any]:
+def history_metrics(payload: dict[str, Any], now_ts: float | None = None) -> dict[str, Any]:
     result = payload["chart"]["result"][0]
     series = result["indicators"]["adjclose"][0]["adjclose"]
     bars = []
@@ -136,6 +137,30 @@ def history_metrics(payload: dict[str, Any]) -> dict[str, Any]:
         result_data[f"return_{sessions}_sessions_pct"] = (
             (latest / bars[-sessions - 1][1] - 1) * 100 if len(bars) > sessions else None
         )
+    # Volatility uses completed sessions only when the current regular session is known.
+    completed = bars
+    period = result.get("meta", {}).get("currentTradingPeriod", {}).get("regular", {})
+    end, start = numeric(period.get("end")), numeric(period.get("start"))
+    current = now_ts if now_ts is not None else datetime.now(UTC).timestamp()
+    if end is not None and start is not None and current < end:
+        completed = [bar for bar in bars if bar[0] < start]
+    returns = [math.log(completed[i][1] / completed[i - 1][1]) for i in range(1, len(completed))]
+    volatility: dict[str, Any] = {
+        "basis": "sample standard deviation of adjusted daily log returns, annualized with sqrt(252); completed sessions",
+        "as_of": datetime.fromtimestamp(completed[-1][0], UTC).date().isoformat() if completed else None,
+    }
+    for sessions in (20, 60, 252):
+        sigma = statistics.stdev(returns[-sessions:]) if len(returns) >= sessions else None
+        volatility[f"annualized_{sessions}_pct"] = (
+            (0.0 if sigma < 1e-12 else sigma * math.sqrt(252) * 100) if sigma is not None else None
+        )
+    volatility["last_close_sigma"] = None
+    if len(returns) >= 21:
+        baseline = returns[-21:-1]
+        sigma = statistics.stdev(baseline)
+        if sigma > 1e-12:
+            volatility["last_close_sigma"] = (returns[-1] - statistics.mean(baseline)) / sigma
+    result_data["volatility"] = volatility
     return result_data
 
 
@@ -232,15 +257,18 @@ def analyst_views(symbol: str) -> dict[str, Any]:
 
 def build_evidence(snapshot: dict[str, Any], dashboard_url: str) -> dict[str, Any]:
     symbols = shortlist(snapshot)
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    universe = [r["symbol"] for r in snapshot["rows"]]
+    # Cash checks constrain proposals, not public volatility coverage.
+    with ThreadPoolExecutor(max_workers=6) as pool:
         news_future = pool.submit(dashboard_news, dashboard_url, symbols)
         benchmark_future = pool.submit(price_history, "SPY")
-        histories = {s: pool.submit(price_history, s) for s in symbols}
+        histories = {s: pool.submit(price_history, s) for s in universe}
         analysts = {s: pool.submit(analyst_views, s) for s in symbols}
         news, benchmark = news_future.result(), benchmark_future.result()
+        all_histories = {s: future.result() for s, future in histories.items()}
         stocks: list[dict[str, Any]] = []
         for symbol in symbols:
-            history, views = histories[symbol].result(), analysts[symbol].result()
+            history, views = all_histories[symbol], analysts[symbol].result()
             if (
                 history.get("status") == "available"
                 and benchmark.get("status") == "available"
@@ -262,12 +290,36 @@ def build_evidence(snapshot: dict[str, Any], dashboard_url: str) -> dict[str, An
                     "analysts": views,
                 }
             )
+    volatility_rows = []
+    for row in snapshot["rows"]:
+        history = all_histories[row["symbol"]]
+        vol = history.get("volatility", {})
+        volatility_rows.append(
+            {
+                "symbol": row["symbol"],
+                "status": history.get("status"),
+                "price_usd": row.get("price_usd"),
+                "change_pct": row.get("change_pct"),
+                "price_time": row.get("price_time"),
+                "as_of": vol.get("as_of"),
+                "vol20_pct": vol.get("annualized_20_pct"),
+                "vol60_pct": vol.get("annualized_60_pct"),
+                "vol252_pct": vol.get("annualized_252_pct"),
+                "last_close_sigma": vol.get("last_close_sigma"),
+            }
+        )
     return {
         "generated_at": now_iso(),
-        "scope": "Six largest session declines within the local candidate list",
+        "scope": "Six largest session declines; cash screen based on live/cached local data when available",
         "symbols": symbols,
         "news": news,
         "benchmark": benchmark,
+        "volatility_scan": {
+            "universe_count": len(universe),
+            "available": sum(r["vol20_pct"] is not None for r in volatility_rows),
+            "basis": "Annualized adjusted-close log-return volatility; last-close sigma uses the prior 20 sessions excluding that close. Not implied volatility or a probability forecast.",
+            "rows": volatility_rows,
+        },
         "stocks": stocks,
         "coverage": {
             "stocks": len(symbols),

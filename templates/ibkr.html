@@ -34,20 +34,21 @@
           <div class="ibkr-filters" role="group" aria-label="Filter stocks"><button type="button" data-filter="all" aria-pressed="true">All <span id="ibkr-all-count">100</span></button><button type="button" data-filter="affordable" aria-pressed="false">Within budget <span id="ibkr-fit-count">—</span></button><button type="button" data-filter="falling" aria-pressed="false">Declining</button></div>
           <label class="ibkr-search"><span class="sr-only">Search stock ticker</span><input id="ibkr-search" type="search" placeholder="Find ticker…" autocomplete="off"></label>
         </div>
-        <div class="ibkr-scan-caption"><span id="ibkr-visible-count">100-stock research universe</span><label>Sort <select id="ibkr-sort" aria-label="Sort stocks"><option value="drop">Largest decline</option><option value="price">Lowest price</option><option value="ticker">Ticker A–Z</option></select></label></div>
+        <div class="ibkr-scan-caption"><span id="ibkr-visible-count">100-stock research universe</span><label>Sort <select id="ibkr-sort" aria-label="Sort stocks"><option value="drop">Largest decline</option><option value="price">Lowest price</option><option value="ticker">Ticker A–Z</option><option value="volatility">Highest volatility</option></select></label></div>
+        <p id="ibkr-volatility-meta" class="ibkr-volatility-meta">Volatility study awaiting the next research report.</p>
         <div class="ibkr-table-wrap"><table>
           <caption class="sr-only">Reference prices and estimated whole-share affordability</caption>
-          <thead><tr><th scope="col">Stock</th><th scope="col">USD price</th><th scope="col">Session</th><th scope="col">Whole shares</th><th scope="col">Price as of</th></tr></thead>
-          <tbody id="ibkr-rows"><tr><td colspan="5" class="ibkr-table-empty"><strong>Your scan starts here.</strong><span>Your saved account will load automatically to compare all 100 stocks with available cash.</span></td></tr></tbody>
+          <thead><tr><th scope="col">Stock</th><th scope="col">USD price</th><th scope="col">Session</th><th scope="col" title="20-session annualized realized volatility">20d vol /yr</th><th scope="col" title="Latest completed session versus the prior 20 sessions">Close σ</th><th scope="col">Whole shares</th><th scope="col">Price as of</th></tr></thead>
+          <tbody id="ibkr-rows"><tr><td colspan="7" class="ibkr-table-empty"><strong>Your scan starts here.</strong><span>Your saved account will load automatically to compare all 100 stocks with available cash.</span></td></tr></tbody>
         </table></div>
         <div class="ibkr-table-foot"><span>Yahoo Finance · prices may be delayed</span><span id="ibkr-universe-date">Dated universe</span></div>
       </section>
       <aside class="ibkr-aside">
         <section class="ibkr-panel ibkr-agent" aria-labelledby="ibkr-agent-title">
-          <div class="ibkr-panel-head"><div><div class="ibkr-eyebrow">AGENT NOTEBOOK</div><h2 id="ibkr-agent-title">A second look</h2></div><span class="ibkr-model-badge">Big Pickle</span></div>
+          <div class="ibkr-panel-head"><div><div class="ibkr-eyebrow">AGENT NOTEBOOK</div><h2 id="ibkr-agent-title">A second look</h2></div><span id="ibkr-model-label" class="ibkr-model-badge">Big Pickle</span></div>
           <p id="ibkr-analysis-time" class="ibkr-note-meta">No report available yet</p>
           <p id="ibkr-evidence-coverage" class="ibkr-evidence-coverage" hidden></p>
-          <div id="ibkr-analysis" class="ibkr-research"><div class="ibkr-report-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5v18h14V3h-3M8 3v4h8V3H8Zm0 8h8m-8 4h5"/></svg><h3>Research before action.</h3><p>The agent's latest analysis will appear here. Scheduled research runs every 30 minutes during the regular US session when configured.</p></div></div>
+          <div id="ibkr-analysis" class="ibkr-research"><div class="ibkr-report-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5v18h14V3h-3M8 3v4h8V3H8Zm0 8h8m-8 4h5"/></svg><h3>Research before action.</h3><p>The agent's latest analysis will appear here. Scheduled research runs every 30 minutes, including outside US market hours, when configured.</p></div></div>
           <details id="ibkr-evidence-sources" class="ibkr-evidence-sources" hidden><summary>Sources inspected</summary><div id="ibkr-source-list"></div></details>
           <div class="ibkr-agent-foot">Model commentary needs verification. Source timestamps take precedence. Headlines are not full-article verification; analyst targets are not short-term exit prices.</div>
         </section>

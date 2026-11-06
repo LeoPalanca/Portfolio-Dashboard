@@ -375,20 +375,22 @@ previous session close; session changes are not executable entry signals.
 
 Snapshots are written to private `data_dir/ibkr_monitor.json` with mode 0600. Only
 a masked account suffix is retained. Public price requests contain stock/FX symbols
-and no account identifier or balance. GET requests do not contact IBKR. Refresh
+and no account identifier or balance. Dashboard status GETs do not contact IBKR. Refresh
 POST requests require a page token and same-origin browser request.
 
 ### Optional OpenCode research on the dashboard host
 
 `scripts/ibkr_research.py` collects the reference universe through the local cash
-bridge, then runs standard OpenCode with `opencode/big-pickle`, a private server
-and tools denied. Only public symbol/price/change/timestamp records enter the model
+bridge when available, then runs standard OpenCode with Big Pickle primary and
+DeepSeek Flash/OpenRouter fallback, a private server and tools denied. Only public
+price/history/news/analyst evidence and eligibility freshness metadata enter the model
 prompt: account identity, holdings, cash and quantities are excluded. Provider
 processing of those public prompts follows the OpenCode provider's own terms.
 
 Copy and customize the example units under `deploy/systemd/user/`. The timer wakes
-every 30 minutes; the script exits outside Yahoo's dated regular US session interval.
-Missing session metadata fails the run; this is not an authoritative exchange calendar.
+every 30 minutes, including outside regular US market hours using explicitly dated
+closing/reference data. Missing session metadata is labelled unknown and does not
+stop public research; this is not an authoritative exchange calendar.
 A systemd oneshot unit prevents overlapping scheduled runs. Use
 `--review-last-session` for an explicit off-hours research report, never for trading.
 
@@ -426,9 +428,9 @@ and are not short-term exit prices or guaranteed returns. Partial lookups stay
 partial and failed lookups stay unavailable.
 
 The isolated research environment needs the dashboard's existing `yfinance`
-dependency as well as its IBKR dependency. Evidence collection is bounded to 150
+dependency as well as its IBKR dependency. Evidence collection is bounded to 240
 seconds in a child process. Timeout/failure gives the model no verified candidate
-list and a WAIT instruction. Raise the example research service timeout to 600
+list and a WAIT instruction. Raise the example research service timeout to 720
 seconds to cover collection plus model response. The agent receives public evidence
 only, delimited as untrusted data with source IDs; tool permissions remain denied.
 Reports include structured coverage and source links for manual verification.
@@ -442,3 +444,35 @@ research conclusion to WAIT. A WAIT report must identify a decision-critical
 blocker, an observable change condition and a next review point. The agent weighs
 panic-driven overshoot against fundamental repricing and does not have to agree
 with a desire to buy. No execution endpoint or autonomous trading is added.
+
+### Continuous research, volatility and model fallback
+
+The 30-minute timer runs research at night and on closed-market days too. Yahoo’s
+regular-session interval labels the run as regular, closed or unknown; it no longer
+skips outside hours. This does not authorize orders. News is refreshed through the
+existing dashboard endpoint each cycle.
+
+Volatility covers all 100 dated-universe stocks, including those outside the cash
+budget. It is the sample standard deviation of adjusted daily log returns, multiplied
+by sqrt(252) and 100, over 20/60/252 completed sessions. A known unfinished session
+is excluded. Last-close sigma compares the last completed return with its prior
+20 returns, excluding the return being assessed. Zero variance and insufficient
+history stay unknown where a ratio cannot be calculated. These are historical
+variability measures, not implied volatility, normal-distribution probabilities or
+rebound forecasts. The notebook receives the complete scan and six deeper news/analyst
+checks; the table adds annualized 20-session volatility and last-close sigma.
+
+A private account-scoped cash cache supports research if the Mac/Gateway disconnects.
+Cached cash is labelled cached and never verifies current buying capacity. Without
+a cache, public market research still runs and affordability is unknown. Broker
+refresh on the dashboard itself continues to require a fresh broker response.
+
+Standard OpenCode uses Big Pickle first and falls back to
+`openrouter/deepseek/deepseek-v4.1-flash-1017`, using the existing OpenRouter
+authentication. The fallback consumes OpenRouter credits. Provider quota retry times
+are persisted privately so exhausted Big Pickle calls are not repeated every cycle;
+the primary is retried after expiry. Reports identify the actual model and fallback
+status. Tool permissions remain denied for both models. If neither model responds,
+the report explicitly contains calculated statistics only; no new AI conclusion is
+claimed. The last successful AI report is retained separately in `last_ai_report.json`.
+Use a 720-second systemd timeout for collection plus model attempts.

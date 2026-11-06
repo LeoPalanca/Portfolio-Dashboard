@@ -2,6 +2,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let pending = false, snapshot = null, activeFilter = 'all', lastReport = '';
+let volatilityRows = {};
 let pollTimer, lastEvidenceTimestamp = null, autoRefreshRequested = false;
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const number = value => finite(value) ? value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
@@ -82,12 +83,12 @@ function renderRows() {
     (activeFilter !== 'affordable' || fits(row)) &&
     (activeFilter !== 'falling' || (finite(row.change_pct) && row.change_pct < 0)));
   rows.sort((a, b) => sort === 'ticker' ? a.symbol.localeCompare(b.symbol) :
-    (sort === 'price' ? (a.price_usd ?? Infinity) - (b.price_usd ?? Infinity) :
+    (sort === 'volatility' ? (volatilityRows[b.symbol]?.vol20_pct ?? -Infinity) - (volatilityRows[a.symbol]?.vol20_pct ?? -Infinity) : sort === 'price' ? (a.price_usd ?? Infinity) - (b.price_usd ?? Infinity) :
       (a.change_pct ?? Infinity) - (b.change_pct ?? Infinity)) || a.symbol.localeCompare(b.symbol));
   $('ibkr-visible-count').textContent = `${rows.length} of ${snapshot.rows.length} stocks`;
   if (!rows.length) {
     const tr = el('tr'), td = el('td', 'No stocks match. Try another ticker or filter.', 'ibkr-table-empty');
-    td.colSpan = 5; tr.append(td); $('ibkr-rows').replaceChildren(tr); return;
+    td.colSpan = 7; tr.append(td); $('ibkr-rows').replaceChildren(tr); return;
   }
   $('ibkr-rows').replaceChildren(...rows.map(row => {
     const tr = el('tr');
@@ -96,6 +97,12 @@ function renderRows() {
     const direction = finite(row.change_pct) ? (row.change_pct < 0 ? 'negative' : row.change_pct > 0 ? 'positive' : 'flat') : 'unknown';
     const move = finite(row.change_pct) ? `${row.change_pct > 0 ? '+' : ''}${number(row.change_pct)}%` : '—';
     tr.append(el('td', move, `ibkr-move is-${direction}`));
+    const vol = volatilityRows[row.symbol] || {};
+    const volatility = el('td', finite(vol.vol20_pct) ? `${number(vol.vol20_pct)}%` : '—', 'ibkr-price');
+    volatility.title = `Annualized historical volatility · completed bars through ${vol.as_of || 'unknown'}`;
+    const sigma = el('td', finite(vol.last_close_sigma) ? `${number(vol.last_close_sigma)}σ` : '—', 'ibkr-price-time');
+    sigma.title = `Last completed session shock vs its prior 20 sessions · ${vol.as_of || 'unknown'} · not an intraday probability`;
+    tr.append(volatility, sigma);
     const quantity = el('td');
     quantity.append(el('span', !finite(row.whole_shares_with_cash) ? 'Unknown' : fits(row) ? `${row.whole_shares_with_cash} ${row.whole_shares_with_cash === 1 ? 'share' : 'shares'}` : 'Above budget', `ibkr-quantity ${fits(row) ? 'is-fit' : 'is-muted'}`));
     tr.append(quantity, el('td', when(row.price_time ? row.price_time * 1000 : null), 'ibkr-price-time'));
@@ -113,23 +120,33 @@ function render(data) {
   status.textContent = data.error || (pending ? 'Reading cash and reference prices. Your previous snapshot stays visible.' :
     data.snapshot ? (data.snapshot_stale ? 'Snapshot older than 30 minutes. Refresh before reviewing affordability.' : 'Snapshot ready. Prices are references, not executable quotes.') :
     'Loading your saved IBKR connection…');
+  if (data.analysis) {
+    $('ibkr-model-label').textContent = data.analysis.model_status === 'unavailable' ? 'AI unavailable' : String(data.analysis.model || '').includes('deepseek') ? 'DeepSeek Flash · fallback' : 'Big Pickle';
+  }
   if (data.analysis && typeof data.analysis.report === 'string' && data.analysis.report) {
     if (data.analysis.report !== lastReport) { renderReport(data.analysis.report); lastReport = data.analysis.report; }
     const age = Date.now() - new Date(data.analysis.completed_at).getTime();
-    $('ibkr-analysis-time').textContent = `${when(data.analysis.completed_at)} · ${age > 1800000 ? 'Older than 30 minutes' : 'Latest report'} · Manual review`;
+    $('ibkr-analysis-time').textContent = `${when(data.analysis.completed_at)} · ${data.analysis.market_session === 'closed' ? 'Market closed · closing data · ' : ''}${age > 1800000 ? 'Older than 30 minutes' : 'Latest report'} · Manual review`;
     if (data.analysis.completed_at !== lastEvidenceTimestamp) {
       renderEvidence(data.analysis.evidence); lastEvidenceTimestamp = data.analysis.completed_at;
     }
   }
-  const s = data.snapshot;
+  const scan = data.analysis?.evidence?.volatility_scan;
+  if (scan?.rows) {
+    volatilityRows = Object.fromEntries(scan.rows.map(row => [row.symbol, row]));
+    $('ibkr-volatility-meta').textContent = `Volatility coverage ${scan.available}/${scan.universe_count} · 20/60/252 completed sessions · annualized historical estimates`;
+  }
+  const s = data.snapshot || (scan?.rows?.length ? {rows:scan.rows, base_currency:'', cash_budget_base:null,
+    equity_base:null, account_masked:'Cash check unavailable', broker_captured_at:null, universe_date:'research universe'} : null);
   if (!s || !Array.isArray(s.rows)) return;
   snapshot = s;
   $('ibkr-cash').textContent = `${number(s.cash_budget_base)} ${s.base_currency}`;
   $('ibkr-equity').textContent = `${number(s.equity_base)} ${s.base_currency}`;
   const affordable = s.rows.filter(fits).length;
-  $('ibkr-count').replaceChildren(document.createTextNode(`${affordable} `), el('small', `/ ${s.rows.length}`));
+  const cashKnown = s.rows.some(row => finite(row.whole_shares_with_cash));
+  $('ibkr-count').replaceChildren(document.createTextNode(`${cashKnown ? affordable : '—'} `), el('small', `/ ${s.rows.length}`));
   $('ibkr-all-count').textContent = s.rows.length;
-  $('ibkr-fit-count').textContent = affordable;
+  $('ibkr-fit-count').textContent = cashKnown ? affordable : '—';
   $('ibkr-time').textContent = `${s.account_masked} · ${when(s.broker_captured_at)}`;
   $('ibkr-universe-date').textContent = `Universe · ${s.universe_date}`;
   $('ibkr-account-label').textContent = s.account_masked;

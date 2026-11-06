@@ -1,13 +1,13 @@
 [Unit]
 Description=OpenCode Big Pickle read-only stock research
 After=network-online.target ibkr-cash-bridge.service
-Requires=ibkr-cash-bridge.service
+Wants=ibkr-cash-bridge.service
 
 [Service]
 Type=oneshot
 WorkingDirectory=/ABSOLUTE/PATH/TO/portfolio-dashboard
 ExecStart=/ABSOLUTE/PATH/TO/python scripts/ibkr_research.py --account-suffix REPLACE_FOUR_DIGITS --opencode /ABSOLUTE/PATH/TO/opencode --state-dir /ABSOLUTE/PATH/TO/research
-TimeoutStartSec=600
+TimeoutStartSec=720
 # If the dashboard is bound to a private IP, add --dashboard-url http://HOST:8050 to ExecStart.
 NoNewPrivileges=true
 PrivateTmp=true

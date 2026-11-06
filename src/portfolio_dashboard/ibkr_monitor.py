@@ -207,6 +207,11 @@ def broker_cash(port: int | None = None, suffix: str | None = None) -> dict[str,
 
 def collect(port: int | None = None, suffix: str | None = None) -> dict[str, Any]:
     cash = broker_cash(port, suffix)
+    return collect_market(cash)
+
+
+def collect_market(cash: dict[str, Any]) -> dict[str, Any]:
+    """Public market scan, also usable by research with explicitly cached/unknown cash."""
     currency = cash["base_currency"]
     symbols = WATCHLIST + ((currency + "USD=X",) if currency != "USD" else ())
     with ThreadPoolExecutor(max_workers=5) as pool:

@@ -2758,3 +2758,4 @@ main > section { backdrop-filter: none; background-color: var(--surface-panel); 
 .ibkr-source-item strong { color: var(--text-secondary); font-family: ui-monospace, monospace; }
 .ibkr-source-item a { color: var(--accent); }
 .ibkr-source-item p { margin-top: var(--space-1); }
+.ibkr-volatility-meta { color: var(--text-muted); font-size: var(--text-2xs); padding: 0 var(--space-5) var(--space-3); line-height: 1.6; }

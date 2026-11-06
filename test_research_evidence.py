@@ -1,12 +1,20 @@
 """Evidence integrity, partial availability and financial history semantics."""
 
 import json
+import math
+import statistics
 import unittest
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from src.portfolio_dashboard.research_evidence import analyst_views, dashboard_news, history_metrics, shortlist
+from src.portfolio_dashboard.research_evidence import (
+    analyst_views,
+    build_evidence,
+    dashboard_news,
+    history_metrics,
+    shortlist,
+)
 
 
 def chart(values, raw=None):
@@ -23,6 +31,51 @@ def chart(values, raw=None):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_volatility_scans_all_100_even_when_only_six_are_affordable(self):
+        rows = [
+            {"symbol": f"D{i}", "reference_usable": True, "change_pct": -i, "whole_shares_with_cash": 1 if i < 6 else 0}
+            for i in range(100)
+        ]
+
+        def history(_symbol):
+            return {
+                "status": "available",
+                "last_bar_date": "2026-11-05",
+                "volatility": {"annualized_20_pct": 30.0, "as_of": "2026-11-05"},
+            }
+
+        with (
+            patch("src.portfolio_dashboard.research_evidence.price_history", side_effect=history) as fetch,
+            patch("src.portfolio_dashboard.research_evidence.dashboard_news", return_value={"items": []}),
+            patch("src.portfolio_dashboard.research_evidence.analyst_views", return_value={"status": "unavailable"}),
+        ):
+            evidence = build_evidence({"rows": rows}, "http://localhost")
+        self.assertEqual(fetch.call_count, 101)  # all stocks plus SPY
+        self.assertEqual(evidence["volatility_scan"]["available"], 100)
+        self.assertEqual(len(evidence["volatility_scan"]["rows"]), 100)
+        self.assertEqual(len(evidence["symbols"]), 6)
+
+    def test_volatility_uses_sample_log_returns_and_prior_only_shock(self):
+        returns = [0.01, -0.01] * 10 + [0.05]
+        values = [100.0]
+        for value in returns:
+            values.append(values[-1] * math.exp(value))
+        vol = history_metrics(chart(values))["volatility"]
+        expected = statistics.stdev(returns[-20:]) * math.sqrt(252) * 100
+        self.assertAlmostEqual(vol["annualized_20_pct"], expected)
+        self.assertAlmostEqual(vol["last_close_sigma"], 0.05 / statistics.stdev(returns[:-1]))
+        self.assertIsNone(vol["annualized_60_pct"])
+
+    def test_partial_regular_session_bar_is_excluded_from_volatility(self):
+        payload = chart([100, 101] * 12 + [50])
+        result = payload["chart"]["result"][0]
+        start = result["timestamp"][-1]
+        result["meta"] = {"currentTradingPeriod": {"regular": {"start": start, "end": start + 20000}}}
+        actual = history_metrics(payload, now_ts=start + 3600)["volatility"]
+        expected = history_metrics(chart([100, 101] * 12))["volatility"]
+        self.assertAlmostEqual(actual["annualized_20_pct"], expected["annualized_20_pct"])
+        self.assertEqual(actual["as_of"], expected["as_of"])
+
     def test_drawdown_respects_peak_before_trough(self):
         result = history_metrics(chart([100] * 16 + [100, 50, 200, 160]))
         window = result["windows"]["20"]

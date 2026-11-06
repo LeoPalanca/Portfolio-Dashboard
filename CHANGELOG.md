@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0 — 2026-11-06
+
+- Run 30-minute research outside US market hours and continue public analysis with explicitly cached/unknown cash if Gateway is unavailable.
+- Calculate 20/60/252-session annualized historical volatility for the full 100-stock watchlist, plus completed-session shocks against prior volatility; show sortable volatility columns.
+- Keep Big Pickle primary and use DeepSeek V4.1 Flash via OpenRouter when unavailable; respect provider quota reset times and identify the actual model in reports.
+- Refresh dashboard headlines each research cycle. If both models fail, publish clearly labelled calculated statistics rather than stale AI commentary.
+
+
 ## 0.10.10 — 2026-11-06
 
 - Fix saved IBKR cash refresh failures caused by ib_async’s unconditional position synchronization during connection startup.
