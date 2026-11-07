@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.1 — 2026-11-07
+
+- Refresh BRK look-through to the June 30, 2026 SEC 13F, filed August 14: 89 manager rows consolidated into 29 securities.
+- Bundle the public Berkshire reference in resources so app updates deliver it without changing private data. Preserve the existing 40/30/30 model allocation.
+
 ## 0.11.1 — 2026-11-06
 
 - Load private proposed take-profit and holding-horizon preferences into research reports, without authorizing any exit orders.

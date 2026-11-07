@@ -545,3 +545,14 @@ host/origin checks and dashboard same-origin CSRF tokens. Broker errors are
 redacted. Protect access to the dashboard itself: users who can open the page
 can obtain its action token. The broker SDK is still isolated and optional; the
 main app needs no new dependency.
+
+### Berkshire 13F reference
+
+BRK look-through uses `resources/berkshire_holdings.csv`, bundled with app updates.
+The current snapshot covers June 30, 2026 (filed August 14), accession
+`0001193125-26-352200`: 89 SEC rows aggregated by CUSIP into 29 securities,
+with reported equity value of $299,253,556,246. The legacy CSV column
+`value_usd_thousands` stores the filing’s dollar values for this snapshot.
+The existing model allocates 40% to disclosed equities, 30% to cash/short-term
+Treasuries and 30% to operating businesses; the latter two are assumptions,
+not figures disclosed by the 13F. The old data-directory reference is no longer used.

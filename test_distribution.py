@@ -309,6 +309,25 @@ class DistributionAggregationTest(unittest.TestCase):
         self.assertIn("MSCI Emerging Markets EUR (Acc)", labels)
         self.assertIn("Other issuer holdings - Vanguard ETF", labels)
 
+    def test_bundled_berkshire_snapshot_reconciles_to_sec_summary(self) -> None:
+        import csv
+
+        with app.BERKSHIRE_HOLDINGS_CSV.open(newline="", encoding="utf-8-sig") as handle:
+            rows = list(csv.DictReader(handle))
+        equities = [row for row in rows if row["cusip"]]
+        self.assertEqual(len(equities), 29)
+        self.assertEqual(len({row["cusip"] for row in equities}), 29)
+        self.assertEqual(sum(int(row["value_usd_thousands"]) for row in equities), 299253556246)
+        self.assertEqual({row["report_date"] for row in rows}, {"2026-06-30"})
+        self.assertEqual({row["filing_date"] for row in rows}, {"2026-08-14"})
+        self.assertLess(abs(sum(Decimal(row["weight_pct"]) for row in equities) - 40), Decimal("0.002"))
+        self.assertEqual([Decimal(row["weight_pct"]) for row in rows if not row["cusip"]], [30, 30])
+        by_cusip = {row["cusip"]: row for row in equities}
+        self.assertEqual(int(by_cusip["037833100"]["shares"]), 227917808)
+        self.assertEqual(int(by_cusip["02079K305"]["shares"]), 78791167)
+        self.assertEqual(int(by_cusip["060505104"]["shares"]), 483394015)
+        self.assertIn("2026-06-30", app.read_berkshire_metadata()["message"])
+
     def test_berkshire_mode_switches_between_stock_and_13f_lookthrough(self) -> None:
         positions = [
             {
