@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0 — 2026-11-10
+
+- Credit cash added during a return interval for half the interval (Modified Dietz), and count a deposit that dwarfs the prior balance as invested at the start. A first real deposit on top of a few euros no longer shows as a −33% loss, which had pulled "since 1 Jan 2024" to −12%.
+- Date live benchmark quotes by their own market close, so a closed market no longer reports a fresh "MSCI +0.00%" day against a moving portfolio.
+- Refetch cached price history when it lacks the previous business day's close, instead of accepting data up to four days old (Monday's MSCI close was missing).
+- Include the crypto wallet in the all-broker history, profit and contributions; the latest history point now matches the headline value.
+- Source Breakdown adds Invested, Sold and Dividends & interest per broker for the selected window, plus a totals row, so every cash flow appears in one table.
+- Move the saved-snapshot and price-date line from the top of the page into a Data & Prices section that collects trades, price dates, benchmark close, history consistency, allocation coverage and statement coverage.
+
 ## 0.12.1 — 2026-11-07
 
 - Refresh BRK look-through to the June 30, 2026 SEC 13F, filed August 14: 89 manager rows consolidated into 29 securities.

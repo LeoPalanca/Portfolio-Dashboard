@@ -2341,6 +2341,7 @@ def summarize_cash_interests(interests: list[dict[str, Any]]) -> dict[str, Any]:
 def summarize_net_contributions(trades: list[Trade]) -> dict[str, Any]:
     by_broker: dict[str, dict[str, Decimal]] = {}
     by_date: dict[str, dict[str, Decimal]] = {}
+    by_broker_date: dict[tuple[str, str], dict[str, Decimal]] = {}
     total_buys = ZERO
     total_sells = ZERO
 
@@ -2350,14 +2351,17 @@ def summarize_net_contributions(trades: list[Trade]) -> dict[str, Any]:
         day = trade.date.isoformat()
         by_broker.setdefault(broker, {"buys": ZERO, "sells": ZERO})
         by_date.setdefault(day, {"buys": ZERO, "sells": ZERO})
+        broker_day = by_broker_date.setdefault((day, broker), {"buys": ZERO, "sells": ZERO})
         if trade.quantity_diff >= ZERO:
             total_buys += amount
             by_broker[broker]["buys"] += amount
             by_date[day]["buys"] += amount
+            broker_day["buys"] += amount
         else:
             total_sells += amount
             by_broker[broker]["sells"] += amount
             by_date[day]["sells"] += amount
+            broker_day["sells"] += amount
 
     total_net = total_buys - total_sells
     broker_rows = []
@@ -2393,6 +2397,11 @@ def summarize_net_contributions(trades: list[Trade]) -> dict[str, Any]:
         "net_eur": money(total_net),
         "by_broker": broker_rows,
         "by_date": date_rows,
+        # Per broker and day, so the cash-flow tables can follow the selected window.
+        "by_broker_date": [
+            {"date": day, "broker": broker, "buys_eur": money(values["buys"]), "sells_eur": money(values["sells"])}
+            for (day, broker), values in sorted(by_broker_date.items())
+        ],
     }
 
 
@@ -3427,6 +3436,43 @@ def crypto_wallet_valuation(wallet_positions: list[dict[str, Any]]) -> dict[str,
         "symbols": sorted({str(position.get("symbol") or "") for position in wallet_positions if position.get("symbol")}),
         "variations": calculate_variations(series),
     }
+
+
+def merge_crypto_wallet_series(valuation: dict[str, Any], crypto: dict[str, Any]) -> dict[str, Any]:
+    """Add the crypto wallet to the all-broker history.
+
+    Open positions (and so the headline value) include the wallet, so the history,
+    profit and contributions must too, or the latest point disagrees with the
+    headline by exactly the wallet's value. Crypto is not equity: equity_* fields
+    stay untouched. Wallet points are carried forward onto the main series dates.
+    """
+    crypto_points = crypto.get("series") or []
+    if not crypto_points:
+        return valuation
+    keys = ("market_value", "net_contributions", "profit", "total_market_value", "total_net_contributions", "total_profit")
+    merged = []
+    index = -1
+    for point in valuation["series"]:
+        while index + 1 < len(crypto_points) and crypto_points[index + 1]["date"] <= point["date"]:
+            index += 1
+        if index < 0:
+            merged.append(point)
+            continue
+        wallet = crypto_points[index]
+        row = dict(point)
+        for key in keys:
+            row[key] = money(Decimal(str(point.get(key) or 0)) + Decimal(str(wallet.get(key) or 0)))
+        row["priced_positions"] = int(point.get("priced_positions") or 0) + int(wallet.get("priced_positions") or 0)
+        row["unpriced_positions"] = int(point.get("unpriced_positions") or 0) + int(wallet.get("unpriced_positions") or 0)
+        for value_key, contribution_key, pct_key in (
+            ("market_value", "net_contributions", "return_pct"),
+            ("total_market_value", "total_net_contributions", "total_return_pct"),
+        ):
+            contributions = Decimal(str(row[contribution_key]))
+            profit = Decimal(str(row[value_key])) - contributions
+            row[pct_key] = float((profit / contributions * Decimal("100")).quantize(Decimal("0.01"))) if contributions > ZERO else 0.0
+        merged.append(row)
+    return {**valuation, "series": merged, "variations": calculate_variations(merged)}
 
 
 def crypto_wallet_contributions(wallet_positions: list[dict[str, Any]]) -> dict[str, Any]:
@@ -5408,6 +5454,13 @@ def apply_history_splits(
     return payload
 
 
+def previous_business_day(day: date) -> date:
+    previous = day - timedelta(days=1)
+    while previous.weekday() >= 5:
+        previous -= timedelta(days=1)
+    return previous
+
+
 def fetch_history(
     symbol: str,
     start: date,
@@ -5428,7 +5481,10 @@ def fetch_history(
         and stale
         and store.has_start_coverage(symbol, start)
         and stale.get("prices")
-        and max(stale["prices"]) >= (end - timedelta(days=4)).isoformat()
+        and (
+            max(stale["prices"]) >= previous_business_day(end).isoformat()
+            or now - int(stale.get("fetched_at") or 0) < 6 * 3600
+        )
     ):
         return apply_history_splits(store, symbol, stale, known_splits)
     try:
@@ -5527,7 +5583,14 @@ def price_point_for_date(
 ) -> tuple[float, date] | None:
     current = price_payload_for_target(current_price, target)
     if current is not None and target == date.today():
-        return current, target
+        # Stamp the live quote with its own market date: on a closed day it is the
+        # last close, and dating it "today" fakes a fresh 0% benchmark move.
+        quote_date = target
+        try:
+            quote_date = min(target, date.fromisoformat(str(current_price.get("price_date"))[:10]))
+        except (AttributeError, TypeError, ValueError):
+            pass
+        return current, quote_date
     return previous_price_point(prices, target)
 
 
@@ -6932,6 +6995,8 @@ def _build_dashboard_payload(
         if broker == "crypto wallet" and wallet_positions
         else calculate_valuation_series(trades, mappings, refresh=False, person=person, broker=broker)
     )
+    if broker == "all" and wallet_positions and valuation.get("series"):
+        valuation = merge_crypto_wallet_series(valuation, crypto_wallet_valuation(wallet_positions))
 
     extra_frictions = read_ledger_frictions(person)
     if broker != "all":

@@ -190,7 +190,6 @@
         </div>
       </div>
     </div>
-    <div id="snapshot-status" class="snapshot-status" role="status">Loading saved portfolio…</div>
     <div class="overview-grid">
       <div class="overview-investments"><h2>Investments</h2><p class="subtle" id="investment-scope"></p><div class="metrics" id="metrics"></div></div>
       <div class="overview-money"><h2>Income &amp; expenses</h2><p class="subtle" id="money-window"></p><div id="money-overview" class="money-overview"></div><p class="subtle" id="money-coverage"></p><button type="button" onclick="openIncomeExpenses()">Manage income, expenses &amp; cash</button></div>
@@ -696,9 +695,12 @@
                     <th>Rows</th>
                     <th>Income</th>
                     <th>Expenses</th>
-                    <th>Investments</th>
                     <th>Credits</th>
-                    <th>Balance</th>
+                    <th title="Bank-statement transfers classified as investments">To investing</th>
+                    <th title="Securities bought (trade cost)">Invested</th>
+                    <th title="Sale proceeds">Sold</th>
+                    <th title="Net dividends and cash-account interest">Dividends &amp; interest</th>
+                    <th title="Bank-statement income minus expenses (credits and transfers excluded)">Bank balance</th>
                   </tr>
                 </thead>
                 <tbody id="expense-sources"></tbody>
@@ -964,7 +966,7 @@
       <div class="section-head" data-collapse="coverage-content" onclick="toggleSection(this)">
         <div class="section-head-left">
           <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-          <h2>Pricing Coverage</h2>
+          <h2>Data &amp; Prices</h2>
         </div>
         <span class="subtle" id="coverage-text"></span>
       </div>
@@ -972,6 +974,8 @@
         <div class="mapping">
           <div class="bar"><span id="coverage-bar" style="width:0%"></span></div>
           <div id="mapping-status"></div>
+          <div id="snapshot-status" class="snapshot-status" role="status">Loading saved portfolio…</div>
+          <div id="data-status" class="data-status-list"></div>
         </div>
       </div>
     </section>

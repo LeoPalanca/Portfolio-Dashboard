@@ -36,8 +36,18 @@ class ReturnMathTest(unittest.TestCase):
             {"market_value": 250, "net_contributions": 200, "priced_positions": 2, "unpriced_positions": 0},
         ]
         result = self.calculate(rows)
-        self.assertAlmostEqual(result[1]["return_pct"], 20)
-        self.assertAlmostEqual(result[2]["return_pct"], 36.363636, places=5)
+        # The 100 added mid-interval counts for half: 20 / (100 + 50).
+        self.assertAlmostEqual(result[1]["return_pct"], 13.333333, places=5)
+        self.assertAlmostEqual(result[2]["return_pct"], 28.787879, places=5)
+
+    def test_a_large_first_deposit_does_not_fake_a_loss_on_a_tiny_balance(self) -> None:
+        # 50 EUR held, 1,150 EUR bought, 20 EUR of spread. Charging the spread to the
+        # 50 EUR alone would report -40%; the deposit is counted from the start.
+        rows = [
+            {"market_value": 50, "net_contributions": 50, "priced_positions": 1, "unpriced_positions": 0},
+            {"market_value": 1180, "net_contributions": 1200, "priced_positions": 2, "unpriced_positions": 0},
+        ]
+        self.assertAlmostEqual(self.calculate(rows)[1]["return_pct"], -1.666667, places=5)
 
     def test_a_quote_coverage_change_is_excluded(self) -> None:
         rows = [
@@ -65,7 +75,7 @@ class ReturnMathTest(unittest.TestCase):
         ]
         result = self.calculate_equity(rows)
         self.assertAlmostEqual(result[1], 15)
-        self.assertAlmostEqual(result[2], 25.454545, places=5)
+        self.assertAlmostEqual(result[2], 22.1875, places=5)
 
     def test_equity_comparison_requires_complete_quote_coverage(self) -> None:
         rows = [

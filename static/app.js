@@ -977,7 +977,7 @@
           // adjustment already accounts for that trade, so retain its return interval.
           const coverageChanged = previousHoldings === currentHoldings && previousPriced !== currentPriced;
           if (!coverageChanged && previousValue > 0 && Number.isFinite(currentValue) && Number.isFinite(cashFlow)) {
-            const intervalFactor = (currentValue - cashFlow) / previousValue;
+            const intervalFactor = flowAdjustedGrowth(previousValue, currentValue, cashFlow);
             if (Number.isFinite(intervalFactor) && intervalFactor >= 0) growth *= intervalFactor;
           }
         }
@@ -1002,13 +1002,25 @@
           const tradeFlow = Number(point.equity_net_contributions) - Number(previous.equity_net_contributions);
           const dividendFlow = Number(point.equity_dividends) - Number(previous.equity_dividends);
           if (previousValue > 0) {
-            const factor = (currentValue - tradeFlow + dividendFlow) / previousValue;
+            const factor = flowAdjustedGrowth(previousValue, currentValue, tradeFlow, dividendFlow);
             if (!Number.isFinite(factor) || factor < 0) return null;
             growth *= factor;
           }
         }
         return (growth - 1) * 100;
       });
+    }
+
+    // Growth of one interval with external flows. Money added during the interval is
+    // credited with half the interval (Modified Dietz), so a purchase's spread is not
+    // charged to the balance that was already there. When the flow dwarfs that balance
+    // (a first real deposit on top of a few euros), treat it as invested at the start.
+    function flowAdjustedGrowth(previousValue, currentValue, flow, income = 0) {
+      if (!(previousValue > 0)) return null;
+      if (flow > previousValue * 5) return (currentValue + income) / (previousValue + flow);
+      const capital = previousValue + flow / 2;
+      if (!(capital > 0)) return (currentValue - flow + income) / previousValue;
+      return 1 + (currentValue - previousValue - flow + income) / capital;
     }
 
     function normalizeReturnSeries(series) {
@@ -2093,6 +2105,35 @@
         merchants
       };
     }
+    // One row per money source: bank-statement flows plus broker trades, dividends and
+    // cash interest, all limited to the selected window, so every euro in or out shows up.
+    function sourceCashFlows(data, bankSources) {
+      const start = periodStartDate(data || {});
+      const inWindow = day => !start || new Date(day) >= start;
+      const keyOf = name => String(name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const rows = new Map();
+      const rowFor = name => {
+        const key = keyOf(name);
+        if (!rows.has(key)) rows.set(key, { source: name, count: 0, income: 0, spend: 0, credits: 0, investments: 0, invested: 0, sold: 0, dividends: 0, net: 0 });
+        return rows.get(key);
+      };
+      for (const bank of bankSources || []) Object.assign(rowFor(bank.source), { ...bank, invested: 0, sold: 0, dividends: 0 });
+      for (const trade of data?.net_contributions?.by_broker_date || []) {
+        if (!inWindow(trade.date)) continue;
+        const row = rowFor(trade.broker);
+        row.invested += Number(trade.buys_eur || 0);
+        row.sold += Number(trade.sells_eur || 0);
+      }
+      for (const payment of data?.dividends?.rows || []) {
+        if (inWindow(payment.date)) rowFor(payment.broker).dividends += Number(payment.amount_eur || 0);
+      }
+      for (const payment of data?.cash_interests?.payments || []) {
+        if (inWindow(payment.date)) rowFor(payment.broker).dividends += Number(payment.net_eur || 0);
+      }
+      return [...rows.values()]
+        .filter(row => row.count || row.invested || row.sold || row.dividends)
+        .sort((a, b) => (Math.abs(b.net) + b.invested + b.sold) - (Math.abs(a.net) + a.invested + a.sold));
+    }
     function periodExpenses(data) {
       const source = (data && data.expenses) || { status: "empty", rows: [], message: "" };
       const start = periodStartDate(data || {});
@@ -2309,19 +2350,31 @@
             <td>${row.share === null ? "-" : percent(row.share)}</td>
           </tr>
         `).join("");
-      document.getElementById("expense-sources").innerHTML = !expenses.sources.length
-        ? `<tr><td colspan="7" class="empty-state">${escapeHtml(message)}</td></tr>`
-        : expenses.sources.map(row => `
-          <tr>
-            <td>${escapeHtml(row.source)}</td>
-            <td>${row.count}</td>
+      const sourceRows = sourceCashFlows(data, expenses.sources);
+      const sourceTotals = sourceRows.reduce((sum, row) => {
+        for (const key of ["count", "income", "spend", "credits", "investments", "invested", "sold", "dividends", "net"]) sum[key] += Number(row[key] || 0);
+        return sum;
+      }, { count: 0, income: 0, spend: 0, credits: 0, investments: 0, invested: 0, sold: 0, dividends: 0, net: 0 });
+      const sourceCells = row => `
+            <td>${row.count || "-"}</td>
             <td class="positive">${money(row.income)}</td>
             <td>${money(row.spend)}</td>
-            <td>${money(row.investments)}</td>
             <td>${money(row.credits)}</td>
-            <td class="${signedClass(-row.net)}">${money(-row.net)}</td>
+            <td>${money(row.investments)}</td>
+            <td>${money(row.invested)}</td>
+            <td>${money(row.sold)}</td>
+            <td class="positive">${money(row.dividends)}</td>
+            <td class="${signedClass(-row.net)}">${money(-row.net)}</td>`;
+      document.getElementById("expense-sources").innerHTML = !sourceRows.length
+        ? `<tr><td colspan="10" class="empty-state">${escapeHtml(message)}</td></tr>`
+        : sourceRows.map(row => `
+          <tr>
+            <td>${escapeHtml(row.source)}</td>${sourceCells(row)}
           </tr>
-        `).join("");
+        `).join("") + `
+          <tr class="total-row">
+            <td><strong>Total</strong></td>${sourceCells(sourceTotals)}
+          </tr>`;
       document.getElementById("income-rows").innerHTML = !expenses.incomeRows.length
         ? `<tr><td colspan="5" class="empty-state">No income transactions in this window.</td></tr>`
         : expenses.incomeRows.slice(0, 30).map(row => `
@@ -2693,6 +2746,7 @@
         document.getElementById("coverage-bar").style.width = open.length ? "100%" : "0%";
         document.getElementById("coverage-text").textContent = `${open.length} snapshot assets`;
         document.getElementById("mapping-status").innerHTML = `<div>Values come from the uploaded monthly CSV snapshot.</div>`;
+        renderDataStatus(data);
         return;
       }
       document.getElementById("coverage-bar").style.width = `${pct}%`;
@@ -2701,6 +2755,28 @@
         <div>${data.mapping_status.filled_isins}/${data.mapping_status.total_rows} mapping rows have ISINs.</div>
         <div>${data.mapping_status.missing_in_mapping.length} assets are missing from the mapping CSV.</div>
       `;
+      renderDataStatus(data);
+    }
+    // Every freshness and source signal in one place, instead of a banner above the page.
+    function renderDataStatus(data) {
+      const target = document.getElementById("data-status");
+      if (!target) return;
+      const open = (data.positions || []).filter(p => p.is_open);
+      const priceDates = open.map(p => p.price_date).filter(Boolean).sort();
+      const series = data.valuation_series || [];
+      const last = series[series.length - 1] || {};
+      const gap = Number(data.totals?.market_value || 0) - Number(last.market_value || 0);
+      const missingExposure = data.distribution?.missing || [];
+      const coverage = data.expenses?.coverage || [];
+      const lines = [
+        ["Trades", data.date_range?.start ? `${data.trade_count} trades, ${data.date_range.start} → ${data.date_range.end}` : "No trades"],
+        ["Position prices", priceDates.length ? `oldest ${priceDates[0]}, newest ${priceDates[priceDates.length - 1]}` : "unavailable"],
+        ["MSCI World benchmark", last.msci_price_date ? `last close ${last.msci_price_date}` : "unavailable"],
+        ["History vs holdings", series.length ? (Math.abs(gap) < 1 ? "latest history point matches holdings" : `latest history point differs from holdings by ${money(gap)}`) : "no history", Math.abs(gap) >= 1],
+        ["Allocation data", missingExposure.length ? `no breakdown for ${missingExposure.map(row => row.asset).join(", ")}` : "all holdings covered", missingExposure.length > 0],
+        ...coverage.map(row => [`Statements · ${row.source}`, `${row.first_date} → ${row.last_date}`]),
+      ];
+      target.innerHTML = lines.map(([label, text, warn]) => `<div class="${warn ? "warning" : ""}"><span class="subtle">${escapeHtml(label)}:</span> ${escapeHtml(text)}</div>`).join("");
     }
     function calculateReturnStats(portfolioReturns, msciReturns, xeonReturns) {
       const rfDaily = 0.03 / 252;
@@ -3826,7 +3902,7 @@
     }
 
     initializeSectionIdentity();
-    const sectionTitles = {"portfolio-value":"Investment performance","cash-flow-evolution":"Investment cash flows","current-holdings":"Current holdings","portfolio-distribution":"Portfolio allocation","cash-account-interest":"Cash interest","net-contributions":"Contributions & withdrawals","taxes-and-costs":"Taxes & costs","portfolio-statistics":"Return statistics","family-rankings":"Family rankings","stock-news":"Stock news","pricing-coverage":"Data & price coverage","suggested-actions-and-to-dos":"Suggested actions"};
+    const sectionTitles = {"portfolio-value":"Investment performance","cash-flow-evolution":"Investment cash flows","current-holdings":"Current holdings","portfolio-distribution":"Portfolio allocation","cash-account-interest":"Cash interest","net-contributions":"Contributions & withdrawals","taxes-and-costs":"Taxes & costs","portfolio-statistics":"Return statistics","family-rankings":"Family rankings","stock-news":"Stock news","pricing-coverage":"Data & prices","suggested-actions-and-to-dos":"Suggested actions"};
     allSections().forEach(section=>{const heading=section.querySelector("h2");if(heading&&sectionTitles[section.dataset.section])heading.textContent=sectionTitles[section.dataset.section];});
     renderSectionsList(sectionPrefs);
     initializeSectionWrapButtons();

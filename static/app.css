@@ -2773,3 +2773,6 @@ main > section { backdrop-filter: none; background-color: var(--surface-panel); 
 #ibkr-order-details dt { color: var(--text-muted); }
 #ibkr-order-details dd { margin: 0 0 var(--space-2); overflow-wrap: anywhere; }
 #ibkr-order-review > label { display: block; font-size: var(--text-sm); line-height: 1.7; margin-bottom: var(--space-4); }
+.total-row td { border-top: 1px solid var(--border); font-weight: 600; }
+.data-status-list { display: grid; gap: var(--space-1); margin-top: var(--space-3); font-size: var(--text-sm); }
+.data-status-list .warning { color: var(--warning, var(--negative)); }
