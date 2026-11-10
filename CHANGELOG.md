@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.1 — 2026-11-10
+
+- Classify a single share with no private exposure row (e.g. a newly bought NVIDIA position) from the sector and country any bundled or proxy fund gives the same company, instead of listing it as Uncategorized.
+- Bundle the official iShares MSCI Global Semiconductors (IE000I8KRLL9) holdings, 240 rows as of 6 Nov 2026.
+- Fetch iShares holdings from the BlackRock document API; the old product-page CSV endpoint now returns HTML.
+- Replace issuer "Unknown" sector and country labels: cash lines become Cash, companies take the classification another fund gives them. Map the NVO listing to Novo Nordisk.
+
 ## 0.14.0 — 2026-11-10
 
 - Bring broker top-ups and withdrawals into income & expenses; card payments and trades already in the cash ledger are not repeated.

@@ -4290,6 +4290,8 @@ def composition_source_label(position: dict[str, Any], is_single_share: bool) ->
 
 
 HOLDING_NAME_OVERRIDES = {
+    # Broker statements name some US listings by ticker (ADR of Novo Nordisk B).
+    "NVO": "Novo Nordisk",
     "ADVANCED MICRO DEVICES": "Advanced Micro Devices",
     "ADVANCED MICRO DEVICES INC": "Advanced Micro Devices",
     "ALIBABA GROUP HOLDING": "Alibaba Group",
@@ -4690,6 +4692,65 @@ def composition_source_row(
     }
 
 
+def holding_classification_index(exposures: dict[str, list[dict[str, Any]]]) -> dict[str, tuple[str, str, str]]:
+    """Sector, geography and name of every company seen in any fund composition,
+    keyed by canonical name and by ticker, to classify single shares that have no
+    private exposure row yet (e.g. a newly bought stock)."""
+    unknown = {"", "unclassified", "unknown", "unknown from issuer data", "other"}
+    index: dict[str, tuple[str, str, str]] = {}
+    for rows in exposures.values():
+        for row in rows:
+            sector, geo = str(row.get("sector") or ""), str(row.get("geo") or "")
+            if sector.casefold() in unknown or geo.casefold() in unknown:
+                continue
+            name = canonical_holding_name(str(row.get("holding_name") or ""))
+            value = (sector, geo, name)
+            index.setdefault(f"name:{name.casefold()}", value)
+            ticker = str(row.get("holding_ticker") or "").strip().upper()
+            if ticker:
+                index.setdefault(f"ticker:{ticker}", value)
+    return index
+
+
+UNKNOWN_CLASSIFICATIONS = {"", "unclassified", "unknown", "unknown from issuer data", "--", "-", "n/a"}
+CASH_ASSET_CLASSES = {"cash", "cash equivalent", "cash collateral and margins", "money market", "currency", "fx"}
+
+
+def fill_unknown_classification(
+    row: dict[str, Any], holding: str, index: dict[str, tuple[str, str, str]]
+) -> tuple[str, str]:
+    """Replace issuer "Unknown" sector/geo labels: cash lines are cash, and a
+    company takes the classification another fund's issuer gives it."""
+    sector, geo = str(row.get("sector") or ""), str(row.get("geo") or "")
+    sector_unknown = sector.strip().casefold() in UNKNOWN_CLASSIFICATIONS
+    geo_unknown = geo.strip().casefold() in UNKNOWN_CLASSIFICATIONS
+    if not sector_unknown and not geo_unknown:
+        return sector, geo
+    if str(row.get("asset_class") or "").strip().casefold() in CASH_ASSET_CLASSES:
+        return ("Cash" if sector_unknown else sector), ("Cash" if geo_unknown else geo)
+    ticker = str(row.get("holding_ticker") or "").strip().upper()
+    match = index.get(f"name:{holding.casefold()}") or (index.get(f"ticker:{ticker}") if ticker else None)
+    if match:
+        sector = match[0] if sector_unknown else sector
+        geo = match[1] if geo_unknown else geo
+    return sector, geo
+
+
+def single_share_rows(position: dict[str, Any], index: dict[str, tuple[str, str, str]]) -> list[dict[str, Any]]:
+    asset = str(position.get("asset") or "").strip()
+    symbol = str(position.get("symbol") or "").strip().upper()
+    match = index.get(f"name:{canonical_holding_name(asset).casefold()}")
+    if not match and symbol:
+        match = index.get(f"ticker:{symbol}") or index.get(f"ticker:{symbol.split('.')[0]}")
+    if not match:
+        return []
+    sector, geo, name = match
+    return [{
+        "holding_name": name, "holding_ticker": symbol, "weight_pct": Decimal("100"),
+        "sector": sector, "geo": geo, "asset_class": "Single share",
+    }]
+
+
 def calculate_distribution(
     positions: list[dict[str, Any]],
     exposures: dict[str, list[dict[str, Any]]],
@@ -4707,6 +4768,7 @@ def calculate_distribution(
                 continue
             documents[isin] = metadata
     position_symbols = {p["asset"]: p["symbol"] for p in positions if p.get("symbol")}
+    holding_classes_index = holding_classification_index(exposures)
     open_positions = [
         position
         for position in positions
@@ -4737,6 +4799,8 @@ def calculate_distribution(
                 "holding_name": asset, "holding_ticker": str(position.get("symbol") or asset),
                 "weight_pct": Decimal("100"), "sector": "Crypto", "geo": "Global", "asset_class": "Crypto",
             }]
+        if not rows and str(position.get("asset_type") or "").upper() == "STOCK":
+            rows = single_share_rows(position, holding_classes_index)
         document = documents.get(isin)
         source_row = None if is_crypto else composition_source_row(position, rows, document)
         if source_row:
@@ -4796,11 +4860,12 @@ def calculate_distribution(
             add_distribution_amount(by_holding, holding, amount)
             if source_label:
                 by_holding_sources.setdefault(holding, set()).add(source_label)
-            norm_sector = normalize_sector(row["sector"])
+            row_sector, row_geo = fill_unknown_classification(row, holding, holding_classes_index)
+            norm_sector = normalize_sector(row_sector)
             add_distribution_amount(by_sector, norm_sector, amount)
             by_sector_holdings.setdefault(norm_sector, {})[holding] = \
                 by_sector_holdings.setdefault(norm_sector, {}).get(holding, ZERO) + amount
-            add_distribution_amount(by_geo, row["geo"], amount)
+            add_distribution_amount(by_geo, row_geo, amount)
             add_distribution_amount(by_asset_class, row["asset_class"], amount)
             
             ticker = row["holding_ticker"]
