@@ -1392,6 +1392,7 @@ EXPENSE_CATEGORIES = {
     "Investments",
     "Credits",
     "Income",
+    "Refunds",
     "Uncategorized",
 }
 TR_EXPENSE_TYPES = {"CARD_TRANSACTION", "CARD_TRANSACTION_INTERNATIONAL", "CARD_ORDERING_FEE"}
@@ -1431,6 +1432,8 @@ def expense_default_category(flow_kind: str) -> str:
         return "Investments"
     if flow_kind == "credit":
         return "Credits"
+    if flow_kind == "refund":
+        return "Refunds"
     if flow_kind == "personal_transfer":
         return "Personal Transfers"
     if flow_kind == "cash_withdrawal":
@@ -2104,7 +2107,7 @@ def read_expense_events(person: str = PRIMARY_PORTFOLIO_ID, refresh: bool = Fals
 
 def expense_row_kind(row: dict[str, Any]) -> str:
     flow_kind = str(row.get("flow_kind") or "")
-    known_kinds = {"income": "income", "credit": "credits", "investment": "investments", "personal_transfer": "transfers", "spend": "spend", "fee": "spend", "cash_withdrawal": "transfers"}
+    known_kinds = {"income": "income", "credit": "credits", "investment": "investments", "personal_transfer": "transfers", "spend": "spend", "fee": "spend", "cash_withdrawal": "transfers", "refund": "refund"}
     if flow_kind in known_kinds:
         return known_kinds[flow_kind]
     category = str(row.get("category") or "")
@@ -2160,6 +2163,11 @@ def summarize_expense_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     for row in rows:
         amount = Decimal(str(row.get("amount_eur") or 0))
         kind = expense_row_kind(row)
+        if kind == "refund":
+            # Refunds are negative spending: they reduce expenses, category
+            # totals and net outflow without appearing as income.
+            kind = "spend"
+            amount = -amount
         if kind == "income":
             income += amount
         elif kind == "credits":
@@ -8423,8 +8431,15 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
         # Apply known source semantics even when an older raw export is no
         # longer available to reparse. Explicit user overrides run afterwards.
         refund_text = f"{metadata.get('source_category', '')} {metadata.get('merchant', '')} {row.get('description', '')}"
-        if flow_kind == "income" and (row.get("source_kind") == "trade_republic" or
-                (row.get("source_kind") == "bbva" and re.search(r"rimbors|storn|refund|cashback", refund_text, re.I))):
+        if flow_kind == "income" and row.get("source_kind") == "trade_republic":
+            # Trade Republic only reports money back from card spending here:
+            # card refunds, reversals and charge backs. Net them against
+            # expenses instead of inflating income.
+            flow_kind = "refund"
+            if category in {"Income", "Uncategorized"}:
+                category = "Refunds"
+        elif flow_kind == "income" and row.get("source_kind") == "bbva" and re.search(
+                r"rimbors|storn|refund|cashback", refund_text, re.I):
             flow_kind = "credit"
             if category in {"Income", "Uncategorized"}:
                 category = "Credits"

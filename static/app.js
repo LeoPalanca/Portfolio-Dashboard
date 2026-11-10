@@ -2023,9 +2023,11 @@
       const incomeRows = [];
 
       (rows || []).forEach(row => {
-        const amount = Number(row.amount_eur || 0);
+        // Card refunds are negative spending, matching the server-side summary.
+        const isRefund = row.flow_kind === "refund";
+        const amount = Number(row.amount_eur || 0) * (isRefund ? -1 : 1);
         if (!Number.isFinite(amount) || amount === 0) return;
-        const kind = expenseKind(row);
+        const kind = isRefund ? "spend" : expenseKind(row);
         if (kind === "income") {
           income += amount;
           incomeRows.push(row);
@@ -2360,13 +2362,12 @@
             <td class="positive">${money(row.income)}</td>
             <td>${money(row.spend)}</td>
             <td>${money(row.credits)}</td>
-            <td>${money(row.investments)}</td>
             <td>${money(row.invested)}</td>
             <td>${money(row.sold)}</td>
             <td class="positive">${money(row.dividends)}</td>
             <td class="${signedClass(-row.net)}">${money(-row.net)}</td>`;
       document.getElementById("expense-sources").innerHTML = !sourceRows.length
-        ? `<tr><td colspan="10" class="empty-state">${escapeHtml(message)}</td></tr>`
+        ? `<tr><td colspan="9" class="empty-state">${escapeHtml(message)}</td></tr>`
         : sourceRows.map(row => `
           <tr>
             <td>${escapeHtml(row.source)}</td>${sourceCells(row)}

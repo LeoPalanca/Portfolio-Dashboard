@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.1 — 2026-11-10
+
+- Upstream the Pi fix that nets Trade Republic card refunds against expenses instead of counting them as income; the browser summary now applies the same rule.
+- Drop the always-zero bank "Investments" column from Source Breakdown; broker Invested/Sold columns replace it.
+
 ## 0.13.0 — 2026-11-10
 
 - Credit cash added during a return interval for half the interval (Modified Dietz), and count a deposit that dwarfs the prior balance as invested at the start. A first real deposit on top of a few euros no longer shows as a −33% loss, which had pulled "since 1 Jan 2024" to −12%.

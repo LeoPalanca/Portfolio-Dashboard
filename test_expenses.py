@@ -442,5 +442,83 @@ class BBVAExpenseExtractionTest(unittest.TestCase):
         self.assertEqual(by_merchant["LIQUIDAZIONE INTERESSI"]["category"], "Income")
 
 
+class TradeRepublicRefundTest(unittest.TestCase):
+    def test_refunds_reduce_expenses_instead_of_adding_income(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            with (
+                patch.object(app, "MOVEMENT_DATABASE", Path(temporary) / "ledger.sqlite3"),
+                patch.object(app, "_movement_store", None),
+                patch.object(app, "ensure_legacy_statements_imported"),
+            ):
+                app.get_movement_store().record_import(
+                    sha256="tr-refund-test",
+                    source_kind="trade_republic",
+                    original_name="trade_republic.csv",
+                    stored_path="",
+                    parser_version="test",
+                    portfolio_id=app.PRIMARY_PORTFOLIO_ID,
+                    movements=[
+                        {
+                            "occurred_on": "2026-08-01",
+                            "event_type": "spend",
+                            "account": "trade_republic",
+                            "amount": "-100",
+                            "currency": "EUR",
+                            "description": "MGP*Vinted",
+                            "metadata": {"merchant": "MGP*Vinted", "category": "Shopping", "amount_eur": "100"},
+                        },
+                        {
+                            "occurred_on": "2026-08-17",
+                            "event_type": "income",
+                            "account": "trade_republic",
+                            "amount": "20",
+                            "currency": "EUR",
+                            "description": "MGP*Vinted",
+                            "metadata": {"merchant": "MGP*Vinted", "category": "Shopping", "amount_eur": "20"},
+                        },
+                    ],
+                )
+
+                events = app.read_ledger_expenses()
+                refund = next(event for event in events if event["flow_kind"] == "refund")
+                self.assertEqual(refund["category"], "Shopping")
+                summary = app.summarize_expense_events(events)["summary"]
+                self.assertEqual(summary["income_eur"], 0.0)
+                self.assertEqual(summary["spend_eur"], 80.0)
+                self.assertEqual(summary["net_outflow_eur"], 80.0)
+
+    def test_refund_row_kind_nets_against_spend(self) -> None:
+        payload = app.summarize_expense_events(
+            [
+                {
+                    "date": date(2026, 8, 1),
+                    "source": "trade_republic",
+                    "merchant": "MGP*Vinted",
+                    "description": "MGP*Vinted",
+                    "flow_kind": "spend",
+                    "category": "Shopping",
+                    "amount_eur": Decimal("100"),
+                    "currency": "EUR",
+                    "native_amount": Decimal("-100"),
+                },
+                {
+                    "date": date(2026, 8, 17),
+                    "source": "trade_republic",
+                    "merchant": "MGP*Vinted",
+                    "description": "MGP*Vinted",
+                    "flow_kind": "refund",
+                    "category": "Shopping",
+                    "amount_eur": Decimal("20"),
+                    "currency": "EUR",
+                    "native_amount": Decimal("20"),
+                },
+            ]
+        )
+
+        self.assertEqual(payload["summary"]["income_eur"], 0.0)
+        self.assertEqual(payload["summary"]["spend_eur"], 80.0)
+        self.assertEqual(payload["by_category"][0]["amount_eur"], 80.0)
+
+
 if __name__ == "__main__":
     unittest.main()
