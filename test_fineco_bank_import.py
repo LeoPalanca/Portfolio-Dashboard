@@ -151,9 +151,10 @@ class FinecoBankImportTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["source"], "fineco")
-        self.assertEqual(response.get_json()["movements"], 2)
-        self.assertEqual({row["event_type"] for row in rows}, {"fee", "spend"})
-        self.assertTrue(all(row["account"] == "fineco" for row in rows))
+        # Card spend and fee, plus the instant transfer as an account cash flow.
+        self.assertEqual(response.get_json()["movements"], 3)
+        self.assertEqual({row["event_type"] for row in rows}, {"fee", "spend", "cash_flow"})
+        self.assertTrue(all(row["account"].casefold() == "fineco" for row in rows))
         self.assertEqual(archived_mode, 0o600)
 
 

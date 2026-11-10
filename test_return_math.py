@@ -85,5 +85,15 @@ class ReturnMathTest(unittest.TestCase):
         self.assertEqual(self.calculate_equity(rows), [None, None])
 
 
+    def test_merchant_spellings_are_grouped(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        start = source.index("    const MERCHANT_ALIASES")
+        end = source.index("    function summarizeExpenseRows(rows) {", start)
+        names = ["TAMOIL 3293", "1209 MC DONALD S PAOLO S", "PAYPAL *VINTED", "GRUPPO ARGENTA S.P.A.", "SumUp *Bar Centrale"]
+        script = source[start:end] + "\nprocess.stdout.write(JSON.stringify(" + json.dumps(names) + ".map(normalizeMerchant)));"
+        result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
+        self.assertEqual(json.loads(result.stdout), ["Tamoil", "McDonald's", "Vinted", "Gruppo Argenta", "Bar Centrale"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -102,5 +102,13 @@ class AccountTransferTest(unittest.TestCase):
         self.assertFalse(gift.get("internal") or late.get("internal"))
 
 
+class StatementDuplicateTest(unittest.TestCase):
+    def test_a_cash_row_repeating_a_statement_row_is_skipped(self) -> None:
+        statement = {"account": "bbva", "occurred_on": "2026-03-05", "amount": "-650"}
+        cash = {"id": 2, "account": "BBVA", "occurred_on": "2026-03-05", "amount": "-650", "event_type": "cash_flow",
+                "metadata": {"contribution_change": "-650"}}
+        self.assertIsNone(app.account_transfer_event(cash, {app.statement_match_key(statement)}))
+
+
 if __name__ == "__main__":
     unittest.main()

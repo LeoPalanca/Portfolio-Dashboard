@@ -2013,6 +2013,35 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       if (flow === "personal_transfer" || category === "Personal Transfers") return "transfers";
       return "spend";
     }
+    // Card statements spell one shop many ways (processor prefixes, store numbers,
+    // city suffixes, legal forms). Group them under one display name.
+    const MERCHANT_ALIASES = [
+      [/mc ?donald/i, "McDonald's"], [/migross/i, "Migross"], [/\blidl\b/i, "Lidl"], [/tamoil/i, "Tamoil"],
+      [/trainline/i, "Trainline"], [/itunes|apple\.com/i, "Apple"], [/amzn|amazon/i, "Amazon"],
+      [/aspiag|eurospar|interspar|despar/i, "Despar"], [/\bcoop\b|coop-/i, "Coop"], [/conad/i, "Conad"],
+      [/supermercato pam|\bpam local\b|^pam\b/i, "PAM"], [/rsg group/i, "RSG Group (McFit)"], [/openai/i, "OpenAI"],
+      [/anthropic/i, "Anthropic"], [/vinted/i, "Vinted"], [/\bsbb\b/i, "SBB"], [/dazn/i, "DAZN"], [/canva/i, "Canva"], [/hpitaly|\bhp\b/i, "HP"],
+      [/bspdv|^aspit/i, "Autogrill / motorway services"],
+    ];
+    function normalizeMerchant(raw) {
+      let name = String(raw || "").replace(/\s+/g, " ").trim();
+      if (!name) return "Unknown";
+      for (const [pattern, alias] of MERCHANT_ALIASES) if (pattern.test(name)) return alias;
+      name = name
+        .replace(/^addebito diretto disposto a favore di /i, "")
+        .replace(/^(paypal|mgp|sumup|sq|ztl|zettle|google|pp)\s?\*\s?/i, "")
+        .replace(/,\s*[\d.,]+\s*\S*,\s*exchange rate.*$/i, "")
+        .replace(/^\d{2,}\s+/, "")
+        .replace(/[\s-]+\d{2,}$/, "")
+        .replace(/\b(s\.?r\.?l\.?|s\.?p\.?a\.?|s\.?a\.?s\.?|s\.?c\.?s\.?|ltd|limited|gmbh)\b\.?/gi, "")
+        .replace(/[\s,*-]+$/, "")
+        .trim();
+      if (!name) return "Unknown";
+      // Upper-case statement text reads better in title case; keep mixed case as written.
+      return name === name.toUpperCase()
+        ? name.toLowerCase().replace(/(^|[\s'&/.-])(\p{L})/gu, (_match, lead, letter) => lead + letter.toUpperCase())
+        : name;
+    }
     function summarizeExpenseRows(rows) {
       const categoryMap = {};
       const sourceMap = {};
@@ -2067,7 +2096,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         }
 
         if (kind === "spend") {
-          const merchant = row.merchant || "Unknown";
+          const merchant = normalizeMerchant(row.merchant);
           merchantMap[merchant] ||= { merchant, category, amount: 0, count: 0 };
           merchantMap[merchant].amount += amount;
           merchantMap[merchant].count += 1;

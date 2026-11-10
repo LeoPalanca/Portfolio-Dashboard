@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.1 — 2026-11-10
+
+- Skip cash-ledger rows that repeat a statement row on the same account, day and amount; BBVA's ledger lists every payment, which double-counted rent and card spending as transfers out.
+- Import Fineco current-account transfers (bonifici, giroconti) as account cash flows, so deposits count in Net flow after re-importing the Fineco export.
+- Group Top Merchants under normalized names: processor prefixes, store numbers, legal forms and FX suffixes are stripped, and common chains share one name.
+
 ## 0.14.0 — 2026-11-10
 
 - Bring broker top-ups and withdrawals into income & expenses; card payments and trades already in the cash ledger are not repeated.

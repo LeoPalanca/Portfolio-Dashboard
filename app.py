@@ -8152,6 +8152,17 @@ def parse_statement_movements(source: str, path: Path) -> list[dict[str, Any]]:
         fineco_kind = fineco_statement_kind(path)
         if fineco_kind == "bank":
             expenses = read_fineco_bank_expense_events(path)
+            # Deposits, withdrawals and transfers move the account's cash too.
+            cash_flows = [
+                normalize_cash_flow_movement(
+                    {"date": row["date"], "cash_change": Decimal(str(row["amount"])), "contrib_change": Decimal(str(row["amount"])),
+                     "description": str(row.get("description") or row.get("source_category") or "")},
+                    "Fineco",
+                )
+                for row in read_fineco_bank_movements(path)
+                if fineco_bank_flow_kind(str(row.get("source_category") or ""), str(row.get("description") or ""), Decimal(str(row["amount"])))
+                == "personal_transfer"
+            ]
         elif fineco_kind == "securities":
             trades = read_fineco_trades(path)
             dividends = read_fineco_dividends(path)
@@ -8426,11 +8437,11 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
     movements = get_movement_store().movements(owner)
     # Broker cash ledgers repeat every card payment and trade; only their deposits
     # and withdrawals (a contribution change with no matching card row) are new.
-    card_ids = {
-        str((row.get("metadata") or {}).get("transaction_id") or "")
-        for row in movements
-        if row.get("event_type") not in excluded and row.get("event_type") != "cash_flow"
-    } - {""}
+    statement_rows = [row for row in movements if row.get("event_type") not in excluded and row.get("event_type") != "cash_flow"]
+    card_ids = {str((row.get("metadata") or {}).get("transaction_id") or "") for row in statement_rows} - {""}
+    # Accounts without transaction ids (BBVA) repeat statement rows in their cash
+    # ledger too; match those on account, day and signed amount instead.
+    card_ids |= {statement_match_key(row) for row in statement_rows}
     for row in movements:
         if row.get("event_type") in excluded:
             continue
@@ -8487,7 +8498,7 @@ def account_transfer_event(row: dict[str, Any], card_ids: set[str]) -> dict[str,
     amount = movement_decimal(row, "amount")
     if movement_decimal(metadata, "contribution_change") == ZERO or amount == ZERO:
         return None
-    if str(metadata.get("transaction_id") or "") in card_ids:
+    if str(metadata.get("transaction_id") or "") in card_ids or statement_match_key(row) in card_ids:
         return None
     incoming = amount > ZERO
     return {
@@ -8505,6 +8516,12 @@ def account_transfer_event(row: dict[str, Any], card_ids: set[str]) -> dict[str,
         "confidence": 0.9,
         "source_category": None,
     }
+
+
+def statement_match_key(row: dict[str, Any]) -> str:
+    account = re.sub(r"[^a-z0-9]", "", str(row.get("account") or row.get("source_kind") or "").casefold())
+    amount = abs(movement_decimal(row, "amount")).quantize(Decimal("0.01"))
+    return f"{account}|{str(row.get('occurred_on'))[:10]}|{amount}"
 
 
 INTERNAL_TRANSFER_DAYS = 4
