@@ -824,5 +824,44 @@ class DistributionAggregationTest(unittest.TestCase):
             self.assertTrue(last_point["total_net_contributions"] >= 0)
 
 
+class DistributionGapTest(unittest.TestCase):
+    FUND = {"isin:IE0000000001": [
+        {"asset_name": "Fund", "isin": "IE0000000001", "holding_name": "NVIDIA CORP", "holding_ticker": "NVDA",
+         "weight_pct": Decimal("60"), "sector": "Information Technology", "geo": "United States", "asset_class": "Equity"},
+        {"asset_name": "Fund", "isin": "IE0000000001", "holding_name": "Horizon Robotics", "holding_ticker": "",
+         "weight_pct": Decimal("30"), "sector": "Unknown", "geo": "China", "asset_class": "Equity"},
+        {"asset_name": "Fund", "isin": "IE0000000001", "holding_name": "US DOLLAR", "holding_ticker": "",
+         "weight_pct": Decimal("10"), "sector": "Unknown", "geo": "--", "asset_class": "Cash"},
+    ], "isin:IE0000000002": [
+        {"asset_name": "EM", "isin": "IE0000000002", "holding_name": "HORIZON ROBOTICS", "holding_ticker": "9660",
+         "weight_pct": Decimal("100"), "sector": "Information Technology", "geo": "China", "asset_class": "Equity"},
+    ]}
+
+    def test_a_new_stock_takes_its_classification_from_fund_data(self) -> None:
+        positions = [{"asset": "NVIDIA CORP", "isin": "US67066G1040", "symbol": "NVDA", "asset_type": "STOCK",
+                      "is_open": True, "market_value_eur": Decimal("80")}]
+        with patch.object(app, "read_etf_documents", return_value={}):
+            result = app.calculate_distribution(positions, self.FUND)
+        self.assertEqual(result["missing"], [])
+        self.assertEqual(result["sectors"][0]["sector"], "Information Technology")
+        self.assertEqual(result["geographies"][0]["geo"], "United States")
+
+    def test_issuer_unknown_labels_are_filled(self) -> None:
+        positions = [{"asset": "Fund", "isin": "IE0000000001", "is_open": True, "market_value_eur": Decimal("100")}]
+        with patch.object(app, "read_etf_documents", return_value={}):
+            result = app.calculate_distribution(positions, self.FUND)
+        sectors = {row["sector"] for row in result["sectors"]}
+        geos = {row["geo"] for row in result["geographies"]}
+        self.assertNotIn("Unclassified", sectors)
+        self.assertNotIn("Unknown", sectors)
+        self.assertNotIn("--", geos)
+
+    def test_official_semiconductor_snapshot_is_bundled(self) -> None:
+        with patch.object(app, "EXPOSURES_CSV", Path("/missing/exposures.csv")):
+            rows = app.read_exposures()[app.exposure_key("", "IE000I8KRLL9")]
+        self.assertGreater(len(rows), 200)
+        self.assertAlmostEqual(float(sum(row["weight_pct"] for row in rows)), 100, delta=0.5)
+
+
 if __name__ == "__main__":
     unittest.main()

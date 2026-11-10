@@ -53,6 +53,7 @@ PRODUCT_URL_BY_ISIN = {
     "IE00023EZQ82": "https://www.ishares.com/uk/individual/en/products/326051/ishares-digital-entertainment-and-education-ucits-etf?siteEntryPassthrough=true&switchLocale=y",
     "IE00B5BMR087": "https://www.ishares.com/uk/individual/en/products/253743/ishares-core-sp-500-ucits-etf-de-fund?switchLocale=y&siteEntryPassthrough=true",
     "IE00BKM4GZ66": "https://www.ishares.com/uk/individual/en/products/264659/ishares-core-msci-em-imi-ucits-etf?switchLocale=y&siteEntryPassthrough=true",
+    "IE000I8KRLL9": "https://www.ishares.com/uk/individual/en/products/319084/ishares-msci-global-semiconductors-ucits-etf",
     "IE00BK5BQT80": "https://www.vanguard.co.uk/professional/product/etf/equity/9679/ftse-all-world-ucits-etf-usd-accumulating",
     "IE00B5MTXJ97": "https://www.invesco.com/ie/en/financial-products/etfs/invesco-stoxx-europe-600-optimised-insurance-ucits-etf-acc.html",
     "IE00BGV5VN51": "https://etf.dws.com/en-gb/IE00BGV5VN51-artificial-intelligence-big-data-ucits-etf-1c/",
@@ -60,7 +61,24 @@ PRODUCT_URL_BY_ISIN = {
     "IE000YDOORK7": "https://etf.dws.com/en-gb/IE000YDOORK7-msci-fintech-innovation-ucits-etf-1c/",
 }
 
+# iShares moved holdings downloads off the old "1506575576011.ajax" product-page
+# endpoint (it now returns the HTML page). The BlackRock document API serves the
+# same holdings CSV by portfolio id.
+ISHARES_HOLDINGS_URL = (
+    "https://www.blackrock.com/varnish-api/uk-retail01-product-data/product-data/api/v1/get-fund-document"
+    "?appType=PRODUCT_PAGE&appSubType=ISHARES&targetSite=ishares-uk&locale=en_GB"
+    "&component=holdings&userType=individual&portfolioId={portfolio_id}"
+)
+ISHARES_PORTFOLIO_ID_BY_ISIN = {
+    "IE00B4L5Y983": "251882",
+    "IE00023EZQ82": "326051",
+    "IE00B5BMR087": "253743",
+    "IE00BKM4GZ66": "264659",
+    "IE000I8KRLL9": "319084",
+}
+
 DIRECT_HOLDINGS_URL_BY_ISIN = {
+    **{isin: ISHARES_HOLDINGS_URL.format(portfolio_id=pid) for isin, pid in ISHARES_PORTFOLIO_ID_BY_ISIN.items()},
     "IE00BL25JL35": "https://etf.dws.com/api/pdp/en-gb/etf/IE00BL25JL35/holdings",
     "IE00BK5BQT80": "https://www.vanguard.co.uk/professional/product/etf/equity/9679/ftse-all-world-ucits-etf-usd-accumulating",
     "IE00B5MTXJ97": "https://dng-api.invesco.com/cache/v1/accounts/en_IE/shareclasses/IE00B5MTXJ97/holdings/index?idType=isin",
@@ -87,6 +105,7 @@ ISSUER_BY_ISIN = {
     "IE00023EZQ82": "iShares",
     "IE00B5BMR087": "iShares",
     "IE00BKM4GZ66": "iShares",
+    "IE000I8KRLL9": "iShares",
     "IE00B5MTXJ97": "Invesco",
     "IE00BGV5VN51": "Xtrackers",
     "IE00BM67HL84": "Xtrackers",

@@ -3049,5 +3049,2426 @@
         "asset_class": "Cash"
       }
     ]
+  },
+  "IE000I8KRLL9": {
+    "isin": "IE000I8KRLL9",
+    "asset_name": "MSCI Global Semiconductors USD (Acc)",
+    "issuer": "iShares",
+    "status": "ok",
+    "fetched_at": "2026-11-10T09:41:28+00:00",
+    "official_only": true,
+    "product_url": "https://www.ishares.com/uk/individual/en/products/319084/ishares-msci-global-semiconductors-ucits-etf",
+    "holdings_url": "https://www.blackrock.com/varnish-api/uk-retail01-product-data/product-data/api/v1/get-fund-document?appType=PRODUCT_PAGE&appSubType=ISHARES&targetSite=ishares-uk&locale=en_GB&component=holdings&userType=individual&portfolioId=319084",
+    "kid_url": "",
+    "factsheet_url": "",
+    "prospectus_url": "",
+    "parser": "csv",
+    "message": "Fund Holdings as of 06/Nov/2026",
+    "rows": 240,
+    "weight_sum": "100.07",
+    "normalized": false,
+    "data_path": "",
+    "holdings": [
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ADVANCED MICRO DEVICES",
+        "holding_ticker": "AMD",
+        "weight_pct": "9.03",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TAIWAN SEMICONDUCTOR MANUFACTURING",
+        "holding_ticker": "2330",
+        "weight_pct": "8.34",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "NVIDIA",
+        "holding_ticker": "NVDA",
+        "weight_pct": "8.05",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "BROADCOM INC",
+        "holding_ticker": "AVGO",
+        "weight_pct": "7.6",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MICRON TECHNOLOGY",
+        "holding_ticker": "MU",
+        "weight_pct": "6.91",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ASML HOLDING",
+        "holding_ticker": "ASML",
+        "weight_pct": "4.59",
+        "sector": "Information Technology",
+        "geo": "Netherlands",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SK HYNIX",
+        "holding_ticker": "000660",
+        "weight_pct": "4.37",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TEXAS INSTRUMENT",
+        "holding_ticker": "TXN",
+        "weight_pct": "3.93",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "APPLIED MATERIAL INC",
+        "holding_ticker": "AMAT",
+        "weight_pct": "3.78",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "LAM RESEARCH",
+        "holding_ticker": "LRCX",
+        "weight_pct": "3.67",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "INTEL CORPORATION",
+        "holding_ticker": "INTC",
+        "weight_pct": "3.41",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "KLA",
+        "holding_ticker": "KLAC",
+        "weight_pct": "2.81",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ANALOG DEVICES",
+        "holding_ticker": "ADI",
+        "weight_pct": "2.75",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "QUALCOMM",
+        "holding_ticker": "QCOM",
+        "weight_pct": "2.72",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MEDIATEK",
+        "holding_ticker": "2454",
+        "weight_pct": "2.32",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ADVANTEST",
+        "holding_ticker": "6857",
+        "weight_pct": "2.01",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MARVELL TECHNOLOGY",
+        "holding_ticker": "MRVL",
+        "weight_pct": "1.88",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TOKYO ELECTRON",
+        "holding_ticker": "8035",
+        "weight_pct": "1.8",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "INFINEON TECHNOLOGIES AG",
+        "holding_ticker": "IFX",
+        "weight_pct": "1.04",
+        "sector": "Information Technology",
+        "geo": "Germany",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "KIOXIA HOLDINGS",
+        "holding_ticker": "285A",
+        "weight_pct": "0.96",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "NXP SEMICONDUCTORS NV",
+        "holding_ticker": "NXPI",
+        "weight_pct": "0.96",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MONOLITHIC POWER SYSTEMS INC",
+        "holding_ticker": "MPWR",
+        "weight_pct": "0.87",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ASE TECHNOLOGY HOLDING",
+        "holding_ticker": "3711",
+        "weight_pct": "0.83",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ASM INTERNATIONAL NV",
+        "holding_ticker": "ASM",
+        "weight_pct": "0.53",
+        "sector": "Information Technology",
+        "geo": "Netherlands",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TERADYNE",
+        "holding_ticker": "TER",
+        "weight_pct": "0.53",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "UNITED MICRO ELECTRONICS CORP",
+        "holding_ticker": "2303",
+        "weight_pct": "0.49",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MICROCHIP TECHNOLOGY INC",
+        "holding_ticker": "MCHP",
+        "weight_pct": "0.49",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "RENESAS ELECTRONICS CORP",
+        "holding_ticker": "6723",
+        "weight_pct": "0.42",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "STMICROELECTRONICS",
+        "holding_ticker": "STMPA",
+        "weight_pct": "0.41",
+        "sector": "Information Technology",
+        "geo": "France",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ASTERA LABS",
+        "holding_ticker": "ALAB",
+        "weight_pct": "0.41",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ON SEMICONDUCTOR CORP",
+        "holding_ticker": "ON",
+        "weight_pct": "0.39",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "QNITY ELECTRONICS",
+        "holding_ticker": "Q",
+        "weight_pct": "0.38",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "DISCO CORP",
+        "holding_ticker": "6146",
+        "weight_pct": "0.35",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "CREDO TECHNOLOGY GROUP HOLDING LTD",
+        "holding_ticker": "CRDO",
+        "weight_pct": "0.32",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "FIRST SOLAR",
+        "holding_ticker": "FSLR",
+        "weight_pct": "0.32",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ENTEGRIS INC",
+        "holding_ticker": "ENTG",
+        "weight_pct": "0.31",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SKYWORKS SOLUTIONS",
+        "holding_ticker": "SWKS",
+        "weight_pct": "0.3",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "GLOBAL UNICHIP",
+        "holding_ticker": "3443",
+        "weight_pct": "0.26",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TOWER SEMICONDUCTOR",
+        "holding_ticker": "TSEM",
+        "weight_pct": "0.25",
+        "sector": "Information Technology",
+        "geo": "Israel",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "LASERTEC",
+        "holding_ticker": "6920",
+        "weight_pct": "0.24",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MACOM TECHNOLOGY SOLUTIONS",
+        "holding_ticker": "MTSI",
+        "weight_pct": "0.23",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "LATTICE SEMICONDUCTOR",
+        "holding_ticker": "LSCC",
+        "weight_pct": "0.22",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "JENTECH PRECISION INDUSTRIAL LTD",
+        "holding_ticker": "3653",
+        "weight_pct": "0.22",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "NANYA TECHNOLOGY CORP",
+        "holding_ticker": "2408",
+        "weight_pct": "0.21",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "USD CASH",
+        "holding_ticker": "USD",
+        "weight_pct": "0.21",
+        "sector": "Cash and/or Derivatives",
+        "geo": "United States",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MKS",
+        "holding_ticker": "MKSI",
+        "weight_pct": "0.2",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "IONQ",
+        "holding_ticker": "IONQ",
+        "weight_pct": "0.19",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "WINBOND ELECTRONICS",
+        "holding_ticker": "2344",
+        "weight_pct": "0.18",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "BE SEMICONDUCTOR INDUSTRIES NV",
+        "holding_ticker": "BESI",
+        "weight_pct": "0.18",
+        "sector": "Information Technology",
+        "geo": "Netherlands",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ASPEED TECHNOLOGY",
+        "holding_ticker": "5274",
+        "weight_pct": "0.17",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "REALTEK SEMICONDUCTOR",
+        "holding_ticker": "2379",
+        "weight_pct": "0.17",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SITIME",
+        "holding_ticker": "SITM",
+        "weight_pct": "0.15",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "NOVA",
+        "holding_ticker": "NVMI",
+        "weight_pct": "0.15",
+        "sector": "Information Technology",
+        "geo": "Israel",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SEMTECH",
+        "holding_ticker": "SMTC",
+        "weight_pct": "0.15",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MPI CORP",
+        "holding_ticker": "6223",
+        "weight_pct": "0.14",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "BLK ICS USD LIQ AGENCY DIS",
+        "holding_ticker": "ICSUAGD",
+        "weight_pct": "0.14",
+        "sector": "Cash and/or Derivatives",
+        "geo": "Ireland",
+        "asset_class": "Money Market"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "HONPRECISION INC",
+        "holding_ticker": "7769",
+        "weight_pct": "0.13",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "PHISON ELECTRONICS CORP",
+        "holding_ticker": "8299",
+        "weight_pct": "0.13",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ONTO INNOVATION",
+        "holding_ticker": "ONTO",
+        "weight_pct": "0.13",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "NOVATEK MICROELECTRONICS",
+        "holding_ticker": "3034",
+        "weight_pct": "0.13",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "RAMBUS",
+        "holding_ticker": "RMBS",
+        "weight_pct": "0.12",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SCREEN HOLDINGS LTD",
+        "holding_ticker": "7735",
+        "weight_pct": "0.12",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SILICON LABORATORIES",
+        "holding_ticker": "SLAB",
+        "weight_pct": "0.11",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "KOKUSAI ELECTRIC",
+        "holding_ticker": "6525",
+        "weight_pct": "0.11",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "KING YUAN ELECTRONICS",
+        "holding_ticker": "2449",
+        "weight_pct": "0.11",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "KINSUS INTERCONNECT TECHNOLOGY COR",
+        "holding_ticker": "3189",
+        "weight_pct": "0.11",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "HUA HONG GRACE SEMICONDUCTOR LTD",
+        "holding_ticker": "1347",
+        "weight_pct": "0.1",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ALCHIP TECHNOLOGIES",
+        "holding_ticker": "3661",
+        "weight_pct": "0.1",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "FORMFACTOR INC",
+        "holding_ticker": "FORM",
+        "weight_pct": "0.1",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "POWERCHIP SEMICONDUCTOR MANUFACTUR",
+        "holding_ticker": "6770",
+        "weight_pct": "0.09",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "CIRRUS LOGIC",
+        "holding_ticker": "CRUS",
+        "weight_pct": "0.09",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ROHM",
+        "holding_ticker": "6963",
+        "weight_pct": "0.08",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "VANGUARD INTERNATIONAL SEMICONDUCT",
+        "holding_ticker": "5347",
+        "weight_pct": "0.08",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "IMPINJ",
+        "holding_ticker": "PI",
+        "weight_pct": "0.08",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "GLOBALWAFERS LTD",
+        "holding_ticker": "6488",
+        "weight_pct": "0.07",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "HANMI SEMICONDUCTOR",
+        "holding_ticker": "042700",
+        "weight_pct": "0.07",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "CAMBRICON TECHNOLOGIES CORPORATION",
+        "holding_ticker": "688256",
+        "weight_pct": "0.07",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SYNAPTICS",
+        "holding_ticker": "SYNA",
+        "weight_pct": "0.07",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MACRONIX INTERNATIONAL",
+        "holding_ticker": "2337",
+        "weight_pct": "0.07",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MAXLINEAR",
+        "holding_ticker": "MXL",
+        "weight_pct": "0.07",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "HYGON INFORMATION TECHNOLOGY LTD A",
+        "holding_ticker": "688041",
+        "weight_pct": "0.07",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "NAURA TECHNOLOGY GROUP LTD A",
+        "holding_ticker": "002371",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "AMKOR TECHNOLOGY",
+        "holding_ticker": "AMKR",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "UNIVERSAL DISPLAY CORP",
+        "holding_ticker": "OLED",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "WIN SEMICONDUCTORS CORP",
+        "holding_ticker": "3105",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "POWERTECH TECHNOLOGY",
+        "holding_ticker": "6239",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "LAND MARK CORP",
+        "holding_ticker": "3081",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SUMCO",
+        "holding_ticker": "3436",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "AIXTRON",
+        "holding_ticker": "AIXA",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "Germany",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ASMPT LTD",
+        "holding_ticker": "522",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "Hong Kong",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "RIGETTI COMPUTING",
+        "holding_ticker": "RGTI",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ALLEGRO MICROSYSTEMS INC",
+        "holding_ticker": "ALGM",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "DIODES",
+        "holding_ticker": "DIOD",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SILERGY",
+        "holding_ticker": "6415",
+        "weight_pct": "0.06",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "KULICKE AND SOFFA INDUSTRIES INC",
+        "holding_ticker": "KLIC",
+        "weight_pct": "0.05",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "EMEMORY TECHNOLOGY INC",
+        "holding_ticker": "3529",
+        "weight_pct": "0.05",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ENPHASE ENERGY",
+        "holding_ticker": "ENPH",
+        "weight_pct": "0.05",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "NORDIC SEMICONDUCTOR",
+        "holding_ticker": "NOD",
+        "weight_pct": "0.05",
+        "sector": "Information Technology",
+        "geo": "Norway",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TOPCO SCIENTIFIC LTD",
+        "holding_ticker": "5434",
+        "weight_pct": "0.05",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "CAMTEK",
+        "holding_ticker": "CAMT",
+        "weight_pct": "0.05",
+        "sector": "Information Technology",
+        "geo": "Israel",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "AXCELIS TECHNOLOGIES",
+        "holding_ticker": "ACLS",
+        "weight_pct": "0.05",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TOKYO SEIMITSU LTD",
+        "holding_ticker": "7729",
+        "weight_pct": "0.05",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SOITEC SA",
+        "holding_ticker": "SOI",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "France",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "AMBARELLA",
+        "holding_ticker": "AMBA",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TWD CASH",
+        "holding_ticker": "TWD",
+        "weight_pct": "0.04",
+        "sector": "Cash and/or Derivatives",
+        "geo": "Taiwan",
+        "asset_class": "Cash"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ADATA TECHNOLOGY LTD",
+        "holding_ticker": "3260",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "JUSUNG ENGINEERING LTD",
+        "holding_ticker": "036930",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "XINTEC INC",
+        "holding_ticker": "3374",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "WAAREE ENERGIES LTD",
+        "holding_ticker": "WAAREEENER",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "India",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SIGURD MICROELECTRONICS CORP",
+        "holding_ticker": "6257",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "VEECO INSTRUMENTS",
+        "holding_ticker": "VECO",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SINO-AMERICAN SILICON PRODUCTS",
+        "holding_ticker": "5483",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "CHIPBOND TECHNOLOGY CORP",
+        "holding_ticker": "6147",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "WINWAY TECHNOLOGY",
+        "holding_ticker": "6515",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "AXT",
+        "holding_ticker": "AXTI",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ACM RESEARCH CLASS A",
+        "holding_ticker": "ACMR",
+        "weight_pct": "0.04",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "POWER INTEGRATIONS",
+        "holding_ticker": "POWI",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ADVANCED MICRO-FABRICATION EQUIPME",
+        "holding_ticker": "688012",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SOCIONEXT",
+        "holding_ticker": "6526",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "GCL TECHNOLOGY HOLDINGS",
+        "holding_ticker": "3800",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "DB HITEK LTD",
+        "holding_ticker": "000990",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "LEENO INDUSTRIAL INC",
+        "holding_ticker": "058470",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "PENGUIN SOLUTIONS INC",
+        "holding_ticker": "PENG",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "NAVITAS SEMICONDUCTOR",
+        "holding_ticker": "NVTS",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SOLAREDGE TECHNOLOGIES",
+        "holding_ticker": "SEDG",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "FERROTEC CORP",
+        "holding_ticker": "6890",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "COHU",
+        "holding_ticker": "COHU",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "AP MEMORY TECHNOLOGY",
+        "holding_ticker": "6531",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ULTRA CLEAN HOLDINGS INC",
+        "holding_ticker": "UCTT",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "AMS-OSRAM AG",
+        "holding_ticker": "AMS",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "Switzerland",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ARDENTEC CORP",
+        "holding_ticker": "3264",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "EO TECHNICS LTD",
+        "holding_ticker": "039030",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "HPSP LTD",
+        "holding_ticker": "403870",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "VISUAL PHOTONICS EPITAXY",
+        "holding_ticker": "2455",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "AEHR TEST SYSTEMS",
+        "holding_ticker": "AEHR",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "GIGADEVICE SEMICONDUCTOR INC A",
+        "holding_ticker": "603986",
+        "weight_pct": "0.03",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "PHOTRONICS",
+        "holding_ticker": "PLAB",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MONTAGE TECHNOLOGY A",
+        "holding_ticker": "688008",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "VITROX CORPORATION",
+        "holding_ticker": "VITROX",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Malaysia",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MICRONICS JAPAN",
+        "holding_ticker": "6871",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "CASH COLLATERAL USD MLIFT",
+        "holding_ticker": "MLIFT",
+        "weight_pct": "0.02",
+        "sector": "Cash and/or Derivatives",
+        "geo": "United States",
+        "asset_class": "Cash Collateral and Margins"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "RORZE",
+        "holding_ticker": "6323",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ELITE SEMICONDUCTOR MICROELECTRONI",
+        "holding_ticker": "3006",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ULVAC",
+        "holding_ticker": "6728",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "PIOTECH INC A",
+        "holding_ticker": "688072",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ELITE ADVANCED LASER CORP",
+        "holding_ticker": "3450",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SIMMTECH",
+        "holding_ticker": "222800",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "WONIK IPS LTD",
+        "holding_ticker": "240810",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "XINYI SOLAR HOLDINGS LTD",
+        "holding_ticker": "968",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "INARI AMERTRON",
+        "holding_ticker": "INARI",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Malaysia",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MELEXIS NV",
+        "holding_ticker": "MELE",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Belgium",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ELMOS SEMICONDUCTOR",
+        "holding_ticker": "ELG",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Germany",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "FARADAY TECHNOLOGY",
+        "holding_ticker": "3035",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SHIBAURA MECHATRONICS CORP",
+        "holding_ticker": "6590",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ICHOR HOLDINGS",
+        "holding_ticker": "ICHR",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "AEM HOLDINGS LTD",
+        "holding_ticker": "AWX",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Singapore",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "CHIPMOS TECHNOLOGIES INC",
+        "holding_ticker": "8150",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ASMEDIA TECHNOLOGY",
+        "holding_ticker": "5269",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MARKETECH INTERNATIONAL",
+        "holding_ticker": "6196",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "PDF SOLUTIONS",
+        "holding_ticker": "PDFS",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ADVANCED ECHEM MATERIALS LTD",
+        "holding_ticker": "4749",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SILTRONIC N AG",
+        "holding_ticker": "WAF",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Germany",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "LONGI GREEN ENERGY TECHNOLOGY A",
+        "holding_ticker": "601012",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "PHOENIX SILICON INTERNATIONAL CORP",
+        "holding_ticker": "8028",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "PIXART IMAGING",
+        "holding_ticker": "3227",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "OMNIVISION INTEGRATED CIRCUITS GRO",
+        "holding_ticker": "603501",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "KOH YOUNG TECHNOLOGY",
+        "holding_ticker": "098460",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ELAN MICROELECTRONICS",
+        "holding_ticker": "2458",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ISC TECHNOLOGY LTD",
+        "holding_ticker": "095340",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "CHANG WAH TECHNOLOGY LTD",
+        "holding_ticker": "6548",
+        "weight_pct": "0.02",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "PSK INC",
+        "holding_ticker": "319660",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "JCET GROUP LTD A",
+        "holding_ticker": "600584",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "PSK HOLDINGS INC",
+        "holding_ticker": "031980",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ENNOSTAR",
+        "holding_ticker": "3714",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "PAN JIT INTERNATIONAL INC",
+        "holding_ticker": "2481",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SUSS MICROTEC N",
+        "holding_ticker": "SMHN",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Germany",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "HANGZHOU CHANG CHUAN TECHNOLOGY LT",
+        "holding_ticker": "300604",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "RADIANT OPTO-ELECTRONICS",
+        "holding_ticker": "6176",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ROCKCHIP ELECTRONICS LTD A",
+        "holding_ticker": "603893",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SKYVERSE TECHNOLOGY LTD A",
+        "holding_ticker": "688361",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "GUDENG PRECISION INDUSTRIAL",
+        "holding_ticker": "3680",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "GREATEK ELECTRONICS INC",
+        "holding_ticker": "2441",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "INTEGRATED TECHNOLOGY EXPRESS INC",
+        "holding_ticker": "3014",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "WOLFSPEED INC",
+        "holding_ticker": "WOLF",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SANKEN ELECTRIC",
+        "holding_ticker": "6707",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "VISERA TECHNOLOGIES",
+        "holding_ticker": "6789",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "UMS INTEGRATION LTD",
+        "holding_ticker": "558",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Singapore",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "HANA MICRON INC",
+        "holding_ticker": "067310",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MALAYSIAN PACIFIC INDUSTRIES",
+        "holding_ticker": "MPI",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Malaysia",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TONGFU MICROELECTRONICS LTD A",
+        "holding_ticker": "002156",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "AIROHA TECHNOLOGY CORP",
+        "holding_ticker": "6526",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "CEVA",
+        "holding_ticker": "CEVA",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "FORMOSA SUMCO TECHNOLOGY CORP",
+        "holding_ticker": "3532",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ALPHA AND OMEGA SEMICONDUCTOR",
+        "holding_ticker": "AOSL",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TOWA",
+        "holding_ticker": "6315",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TECHWING INC",
+        "holding_ticker": "089030",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "EUGENE TECHNOLOGY LTD",
+        "holding_ticker": "084370",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TIANSHUI HUATIAN TECHNOLOGY LTD A",
+        "holding_ticker": "002185",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "BIWIN STORAGE TECHNOLOGY LTD A",
+        "holding_ticker": "688525",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "HWATSING TECHNOLOGY LTD A",
+        "holding_ticker": "688120",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "YUANJIE SEMICONDUCTOR TECHNOLOGY L",
+        "holding_ticker": "688498",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "FADU",
+        "holding_ticker": "440110",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "DAQO NEW ENERGY ADR REPRESENTING",
+        "holding_ticker": "DQ",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ADVANCED WIRELESS SEMICONDUCTOR",
+        "holding_ticker": "8086",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ACM RESEARCH (SHANGHAI) INC A",
+        "holding_ticker": "688082",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "GRAND PLASTIC TECHNOLOGY CORP",
+        "holding_ticker": "3131",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "PARADE TECHNOLOGIES",
+        "holding_ticker": "4966",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "NUVOTON TECHNOLOGY",
+        "holding_ticker": "4919",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ORIENT SEMICONDUCTOR ELECTRONICS",
+        "holding_ticker": "2329",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SG MICRO CORP A",
+        "holding_ticker": "300661",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "PVA TEPLA AG",
+        "holding_ticker": "TPE",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Germany",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TAESUNG COLTD LTD",
+        "holding_ticker": "323280",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "JAPAN MATERIAL",
+        "holding_ticker": "6055",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "EVERLIGHT ELECTRONICS",
+        "holding_ticker": "2393",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MITSUI HIGH TEC INC",
+        "holding_ticker": "6966",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SUZHOU CENTEC COMMUNICATIONS LTD A",
+        "holding_ticker": "688702",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "ANJI MICROELECTRONICS TECHNOLOGY (",
+        "holding_ticker": "688019",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "NEXCHIP SEMICONDUCTOR CORP A",
+        "holding_ticker": "688249",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TOKAI CARBON KOREA LTD",
+        "holding_ticker": "064760",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SUZHOU MAXWELL TECHNOLOGIES LTD A",
+        "holding_ticker": "300751",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "JINKO SOLAR LTD A",
+        "holding_ticker": "688223",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "UNITED NOVA TECHNOLOGY LTD A",
+        "holding_ticker": "688469",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "HUA HONG GRACE SEMICONDUCTOR LTD A",
+        "holding_ticker": "688347",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SITRONIX TECHNOLOGY CORP",
+        "holding_ticker": "8016",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TONGWEI LTD A",
+        "holding_ticker": "600438",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "INGENIC SEMICONDUCTOR A",
+        "holding_ticker": "300223",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SILICON INTEGRATED SYSTEM",
+        "holding_ticker": "2363",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "VIA TECHNOLOGIES",
+        "holding_ticker": "2388",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "UNIGROUP GUOXIN MICROELECTRONICS L",
+        "holding_ticker": "002049",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "CHINA RESOURCES MICROELECTRONICS L",
+        "holding_ticker": "688396",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "T1 ENERGY",
+        "holding_ticker": "TE",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "SHENZHEN TECHWINSEMI TECHNOLOGY LT",
+        "holding_ticker": "001309",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "HANGZHOU SILAN MICROELECTRONICS LT",
+        "holding_ticker": "600460",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "TRI CHEMICAL LABORATORIES INC",
+        "holding_ticker": "4369",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Japan",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "HENAN SHIJIA PHOTONS TECHNOLOGY LT",
+        "holding_ticker": "688313",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "INDIE SEMICONDUCTOR INC CLASS A",
+        "holding_ticker": "INDI",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "United States",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "NATIONAL SILICON INDUSTRY GROUP LT",
+        "holding_ticker": "688126",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "KOMICO LTD",
+        "holding_ticker": "183300",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Korea (South)",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "JINKO HOLDINGS ADS REP",
+        "holding_ticker": "JKS",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "China",
+        "asset_class": "Equity"
+      },
+      {
+        "asset_name": "MSCI Global Semiconductors USD (Acc)",
+        "isin": "IE000I8KRLL9",
+        "holding_name": "MACHVISION",
+        "holding_ticker": "3563",
+        "weight_pct": "0.01",
+        "sector": "Information Technology",
+        "geo": "Taiwan",
+        "asset_class": "Equity"
+      }
+    ]
   }
 }
