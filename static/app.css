@@ -2776,3 +2776,4 @@ main > section { backdrop-filter: none; background-color: var(--surface-panel); 
 .total-row td { border-top: 1px solid var(--border); font-weight: 600; }
 .data-status-list { display: grid; gap: var(--space-1); margin-top: var(--space-3); font-size: var(--text-sm); }
 .data-status-list .warning { color: var(--warning, var(--negative)); }
+.source-breakdown-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }

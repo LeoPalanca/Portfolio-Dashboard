@@ -185,6 +185,10 @@
     let rankingsData = null;
     let rankingsSort = { key: "common", direction: "desc" };
     let selectedExpenseTrendMode = "monthly";
+// Giroconti (own-account transfers) are hidden in the consolidated view; shown,
+// each account's net flow matches what actually moved on that account.
+let includeGiroconti = false;
+try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } catch (_error) { /* optional */ }
     const APP_CONFIG = JSON.parse(
       document.getElementById("app-config").textContent
     );
@@ -2000,7 +2004,7 @@
     }
     function expenseKind(row) {
       const flow = String(row.flow_kind || "");
-      const known = {income: "income", credit: "credits", investment: "investments", personal_transfer: "transfers", spend: "spend", fee: "spend", cash_withdrawal: "transfers"};
+      const known = {income: "income", credit: "credits", investment: "investments", personal_transfer: "transfers", spend: "spend", fee: "spend", cash_withdrawal: "transfers", top_up: "topups", transfer_out: "transfers"};
       if (known[flow]) return known[flow];
       const category = String(row.category || "");
       if (flow === "income" || category === "Income") return "income";
@@ -2019,6 +2023,7 @@
       let transfers = 0;
       let investments = 0;
       let credits = 0;
+      let topups = 0;
       const creditRows = [];
       const incomeRows = [];
 
@@ -2027,6 +2032,7 @@
         const isRefund = row.flow_kind === "refund";
         const amount = Number(row.amount_eur || 0) * (isRefund ? -1 : 1);
         if (!Number.isFinite(amount) || amount === 0) return;
+        if (row.internal && !includeGiroconti) return;
         const kind = isRefund ? "spend" : expenseKind(row);
         if (kind === "income") {
           income += amount;
@@ -2037,6 +2043,7 @@
           creditRows.push(row);
         }
         else if (kind === "investments") investments += amount;
+        else if (kind === "topups") topups += amount;
         else if (kind === "transfers") transfers += amount;
         else spend += amount;
 
@@ -2048,13 +2055,13 @@
         }
 
         const source = row.source_label || row.source || "Source";
-        sourceMap[source] ||= { source, spend: 0, income: 0, transfers: 0, investments: 0, credits: 0, count: 0 };
+        sourceMap[source] ||= { source, spend: 0, income: 0, transfers: 0, investments: 0, credits: 0, topups: 0, count: 0 };
         sourceMap[source][kind] += amount;
         sourceMap[source].count += 1;
 
         const month = String(row.date || "").slice(0, 7);
         if (month) {
-          monthMap[month] ||= { month, spend: 0, income: 0, transfers: 0, investments: 0, credits: 0, count: 0 };
+          monthMap[month] ||= { month, spend: 0, income: 0, transfers: 0, investments: 0, credits: 0, topups: 0, count: 0 };
           monthMap[month][kind] += amount;
           monthMap[month].count += 1;
         }
@@ -2095,6 +2102,7 @@
         transfers,
         investments,
         credits,
+        topups,
         totalOutflow,
         netOutflow,
         balance: income - spend,
@@ -2116,7 +2124,7 @@
       const rows = new Map();
       const rowFor = name => {
         const key = keyOf(name);
-        if (!rows.has(key)) rows.set(key, { source: name, count: 0, income: 0, spend: 0, credits: 0, investments: 0, invested: 0, sold: 0, dividends: 0, net: 0 });
+        if (!rows.has(key)) rows.set(key, { source: name, count: 0, income: 0, spend: 0, credits: 0, topups: 0, transfers: 0, invested: 0, sold: 0, dividends: 0, net: 0 });
         return rows.get(key);
       };
       for (const bank of bankSources || []) Object.assign(rowFor(bank.source), { ...bank, invested: 0, sold: 0, dividends: 0 });
@@ -2131,6 +2139,12 @@
       }
       for (const payment of data?.cash_interests?.payments || []) {
         if (inWindow(payment.date)) rowFor(payment.broker).dividends += Number(payment.net_eur || 0);
+      }
+      // Net flow: everything in minus everything out on the account, so a broker's
+      // purchases and sales count like its card payments and top-ups.
+      for (const row of rows.values()) {
+        row.net = Number(row.income || 0) + Number(row.credits || 0) + Number(row.topups || 0) + row.sold + row.dividends
+          - Number(row.spend || 0) - Number(row.transfers || 0) - row.invested;
       }
       return [...rows.values()]
         .filter(row => row.count || row.invested || row.sold || row.dividends)
@@ -2354,20 +2368,22 @@
         `).join("");
       const sourceRows = sourceCashFlows(data, expenses.sources);
       const sourceTotals = sourceRows.reduce((sum, row) => {
-        for (const key of ["count", "income", "spend", "credits", "investments", "invested", "sold", "dividends", "net"]) sum[key] += Number(row[key] || 0);
+        for (const key of ["count", "income", "spend", "credits", "topups", "transfers", "invested", "sold", "dividends", "net"]) sum[key] += Number(row[key] || 0);
         return sum;
-      }, { count: 0, income: 0, spend: 0, credits: 0, investments: 0, invested: 0, sold: 0, dividends: 0, net: 0 });
+      }, { count: 0, income: 0, spend: 0, credits: 0, topups: 0, transfers: 0, invested: 0, sold: 0, dividends: 0, net: 0 });
       const sourceCells = row => `
             <td>${row.count || "-"}</td>
             <td class="positive">${money(row.income)}</td>
             <td>${money(row.spend)}</td>
             <td>${money(row.credits)}</td>
+            <td>${money(row.topups)}</td>
+            <td>${money(row.transfers)}</td>
             <td>${money(row.invested)}</td>
             <td>${money(row.sold)}</td>
             <td class="positive">${money(row.dividends)}</td>
-            <td class="${signedClass(-row.net)}">${money(-row.net)}</td>`;
+            <td class="${signedClass(row.net)}">${money(row.net)}</td>`;
       document.getElementById("expense-sources").innerHTML = !sourceRows.length
-        ? `<tr><td colspan="9" class="empty-state">${escapeHtml(message)}</td></tr>`
+        ? `<tr><td colspan="11" class="empty-state">${escapeHtml(message)}</td></tr>`
         : sourceRows.map(row => `
           <tr>
             <td>${escapeHtml(row.source)}</td>${sourceCells(row)}
@@ -3504,6 +3520,16 @@
       refreshPricesInBackground().finally(scheduleAutoRefresh);
     });
     document.getElementById("export-button").addEventListener("click", exportDashboard);
+
+    const girocontiToggle = document.getElementById("giroconti-toggle");
+    if (girocontiToggle) {
+      girocontiToggle.checked = includeGiroconti;
+      girocontiToggle.addEventListener("change", () => {
+        includeGiroconti = girocontiToggle.checked;
+        try { localStorage.setItem("includeGiroconti", includeGiroconti ? "1" : "0"); } catch (_error) { /* optional */ }
+        if (dashboardData) renderExpenses(dashboardData);
+      });
+    }
 
     const toggleMonthly = document.getElementById("expense-toggle-monthly");
     const toggleCumulative = document.getElementById("expense-toggle-cumulative");

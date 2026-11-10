@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.0 — 2026-11-10
+
+- Bring broker top-ups and withdrawals into income & expenses; card payments and trades already in the cash ledger are not repeated.
+- Mark giroconti (an outflow from one own account matched by an equal inflow into another within four days). An "Include giroconti" toggle shows them per account; off, totals show only money entering or leaving your finances.
+- Source Breakdown replaces "Bank balance" with Net flow: income, credits, top-ups, sales and dividends minus expenses, transfers out and purchases, so broker accounts no longer show impossible negative balances from missing deposits.
+
 ## 0.13.1 — 2026-11-10
 
 - Upstream the Pi fix that nets Trade Republic card refunds against expenses instead of counting them as income; the browser summary now applies the same rule.

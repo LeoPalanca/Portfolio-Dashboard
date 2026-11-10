@@ -2107,7 +2107,7 @@ def read_expense_events(person: str = PRIMARY_PORTFOLIO_ID, refresh: bool = Fals
 
 def expense_row_kind(row: dict[str, Any]) -> str:
     flow_kind = str(row.get("flow_kind") or "")
-    known_kinds = {"income": "income", "credit": "credits", "investment": "investments", "personal_transfer": "transfers", "spend": "spend", "fee": "spend", "cash_withdrawal": "transfers", "refund": "refund"}
+    known_kinds = {"income": "income", "credit": "credits", "investment": "investments", "personal_transfer": "transfers", "spend": "spend", "fee": "spend", "cash_withdrawal": "transfers", "refund": "refund", "top_up": "transfers", "transfer_out": "transfers"}
     if flow_kind in known_kinds:
         return known_kinds[flow_kind]
     category = str(row.get("category") or "")
@@ -2144,6 +2144,7 @@ def expense_event_payload(event: dict[str, Any]) -> dict[str, Any]:
         "currency": normalize_currency_code(event.get("currency") or "EUR"),
         "native_amount": decimal_to_float(Decimal(str(event.get("native_amount") or 0))),
         "confidence": round(float(event.get("confidence") or 0), 2),
+        "internal": bool(event.get("internal")),
     }
 
 
@@ -8420,10 +8421,23 @@ def read_ledger_frictions(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[Fric
 def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[str, Any]]:
     owner = configured_portfolio_id(portfolio_id)
     ensure_legacy_statements_imported(owner)
-    excluded = {"trade", "dividend", "cost", "tax", "dividend_tax", "interest", "cash_flow"}
+    excluded = {"trade", "dividend", "cost", "tax", "dividend_tax", "interest"}
     events: list[dict[str, Any]] = []
-    for row in get_movement_store().movements(owner):
+    movements = get_movement_store().movements(owner)
+    # Broker cash ledgers repeat every card payment and trade; only their deposits
+    # and withdrawals (a contribution change with no matching card row) are new.
+    card_ids = {
+        str((row.get("metadata") or {}).get("transaction_id") or "")
+        for row in movements
+        if row.get("event_type") not in excluded and row.get("event_type") != "cash_flow"
+    } - {""}
+    for row in movements:
         if row.get("event_type") in excluded:
+            continue
+        if row.get("event_type") == "cash_flow":
+            event = account_transfer_event(row, card_ids)
+            if event:
+                events.append(event)
             continue
         metadata = row.get("metadata") or {}
         flow_kind = str(row.get("event_type") or "spend")
@@ -8464,7 +8478,60 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
         )
     personal = PersonalLedger(MOVEMENT_DATABASE)
     events = personal.classify(owner, events) + personal.cash_events(owner)
+    mark_internal_transfers(events)
     return sorted(events, key=lambda item: (item["date"], item["source"], item["merchant"]))
+
+
+def account_transfer_event(row: dict[str, Any], card_ids: set[str]) -> dict[str, Any] | None:
+    metadata = row.get("metadata") or {}
+    amount = movement_decimal(row, "amount")
+    if movement_decimal(metadata, "contribution_change") == ZERO or amount == ZERO:
+        return None
+    if str(metadata.get("transaction_id") or "") in card_ids:
+        return None
+    incoming = amount > ZERO
+    return {
+        "movement_id": row["id"],
+        "date": movement_date(row),
+        "source": str(row.get("account") or row.get("source_kind") or ""),
+        "merchant": "Top-up" if incoming else "Withdrawal",
+        "description": str(row.get("description") or ""),
+        "flow_kind": "top_up" if incoming else "transfer_out",
+        "category": "Top-ups" if incoming else "Transfers out",
+        "subcategory": "",
+        "amount_eur": abs(amount),
+        "currency": str(row.get("currency") or "EUR"),
+        "native_amount": amount,
+        "confidence": 0.9,
+        "source_category": None,
+    }
+
+
+INTERNAL_TRANSFER_DAYS = 4
+
+
+def mark_internal_transfers(events: list[dict[str, Any]]) -> None:
+    """Flag giroconti: an outflow from one own account matched by an equal inflow
+    into another within a few days. Both legs stay in the ledger; the dashboard
+    hides them in the consolidated view and shows them per account on request."""
+    def event_day(event: dict[str, Any]) -> date:
+        return date.fromisoformat(str(event["date"])[:10])
+
+    outflows = [e for e in events if e.get("flow_kind") in {"personal_transfer", "transfer_out"}]
+    inflows = [e for e in events if e.get("flow_kind") in {"top_up", "income", "credit"}]
+    used: set[int] = set()
+    for out in sorted(outflows, key=event_day):
+        amount = Decimal(str(out.get("amount_eur") or 0))
+        for candidate in inflows:
+            if id(candidate) in used or candidate.get("source") == out.get("source"):
+                continue
+            if abs(Decimal(str(candidate.get("amount_eur") or 0)) - amount) > Decimal("0.01"):
+                continue
+            if abs((event_day(candidate) - event_day(out)).days) > INTERNAL_TRANSFER_DAYS:
+                continue
+            out["internal"] = candidate["internal"] = True
+            used.add(id(candidate))
+            break
 
 
 def personal_expenses_payload(owner: str) -> dict[str, Any]:

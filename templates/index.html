@@ -687,7 +687,10 @@
               <svg class="expense-chart" id="expense-trend" role="img" aria-label="Income and expenses over time"></svg>
             </div>
             <div class="table-wrap">
-              <h3>Source Breakdown</h3>
+              <div class="source-breakdown-head">
+                <h3>Source Breakdown</h3>
+                <label class="subtle" title="Transfers between your own accounts. Off: hidden, so totals show money entering and leaving your finances. On: counted on both accounts, so each account's net flow matches its statement."><input type="checkbox" id="giroconti-toggle"> Include giroconti</label>
+              </div>
               <table>
                 <thead>
                   <tr>
@@ -696,10 +699,12 @@
                     <th>Income</th>
                     <th>Expenses</th>
                     <th>Credits</th>
+                    <th title="Deposits into the account">Top-ups</th>
+                    <th title="Withdrawals, transfers to others and cash withdrawals">Transfers out</th>
                     <th title="Securities bought (trade cost)">Invested</th>
                     <th title="Sale proceeds">Sold</th>
                     <th title="Net dividends and cash-account interest">Dividends &amp; interest</th>
-                    <th title="Bank-statement income minus expenses (credits and transfers excluded)">Bank balance</th>
+                    <th title="Statement money in (income, credits, top-ups) minus money out (expenses, transfers out)">Net flow</th>
                   </tr>
                 </thead>
                 <tbody id="expense-sources"></tbody>

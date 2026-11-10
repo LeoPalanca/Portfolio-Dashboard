@@ -78,5 +78,29 @@ class BrokerCashFlowTest(unittest.TestCase):
         ])
 
 
+class AccountTransferTest(unittest.TestCase):
+    def cash_row(self, amount: str, contribution: str, transaction_id: str) -> dict[str, object]:
+        return {"id": 1, "occurred_on": "2026-03-02", "account": "trade_republic", "event_type": "cash_flow",
+                "description": "Deposit", "currency": "EUR", "amount": amount,
+                "metadata": {"contribution_change": contribution, "transaction_id": transaction_id}}
+
+    def test_a_deposit_becomes_a_top_up(self) -> None:
+        event = app.account_transfer_event(self.cash_row("500", "500", "t1"), set())
+        self.assertEqual((event["flow_kind"], event["amount_eur"]), ("top_up", Decimal("500")))
+
+    def test_card_payments_and_trades_are_not_repeated(self) -> None:
+        self.assertIsNone(app.account_transfer_event(self.cash_row("-20", "-20", "card-1"), {"card-1"}))
+        self.assertIsNone(app.account_transfer_event(self.cash_row("-300", "0", "trade-1"), set()))
+
+    def test_matching_legs_between_own_accounts_are_a_giroconto(self) -> None:
+        out = {"date": date(2026, 3, 1), "source": "intesa", "flow_kind": "personal_transfer", "amount_eur": Decimal("500")}
+        top_up = {"date": date(2026, 3, 2), "source": "trade_republic", "flow_kind": "top_up", "amount_eur": Decimal("500")}
+        gift = {"date": date(2026, 3, 1), "source": "intesa", "flow_kind": "personal_transfer", "amount_eur": Decimal("80")}
+        late = {"date": date(2026, 3, 20), "source": "bbva", "flow_kind": "top_up", "amount_eur": Decimal("80")}
+        app.mark_internal_transfers([out, top_up, gift, late])
+        self.assertTrue(out.get("internal") and top_up.get("internal"))
+        self.assertFalse(gift.get("internal") or late.get("internal"))
+
+
 if __name__ == "__main__":
     unittest.main()
