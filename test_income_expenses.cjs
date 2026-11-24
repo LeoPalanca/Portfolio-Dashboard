@@ -19,6 +19,7 @@ const context = {
   percent: n => `${n}%`,
   signedClass: n => n < 0 ? 'negative' : 'positive',
   escapeHtml: s => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;'),
+  jsArg: s => JSON.stringify(String(s ?? '')).replaceAll('&', '&amp;').replaceAll('"', '&quot;'),
   smartTickFormat: n => String(n),
   selectedExpenseTrendMode: 'monthly',
 };
