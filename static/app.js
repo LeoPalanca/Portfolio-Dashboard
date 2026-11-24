@@ -535,11 +535,15 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       `;
 
       const variationHtml = ["1d", "1w", "1m"].map(period => {
-        const val = v[period] || { pct: 0.0, amount: 0.0 };
+        const raw = v[period] || { pct: 0.0, amount: 0.0 };
+        const useTotal = selectedReturnMode === "total" && Number.isFinite(Number(raw.total_pct ?? NaN));
+        const val = useTotal
+          ? { ...raw, pct: Number(raw.total_pct), amount: Number(raw.total_amount ?? raw.amount), vs_msci_pct: raw.total_vs_msci_pct }
+          : raw;
         const displayVal = variationMode === "pct" 
           ? `${val.pct >= 0 ? "+" : ""}${pct.format(val.pct)}%` 
           : `${val.amount >= 0 ? "+" : ""}${moneyWhole(val.amount)}`;
-        const colorClass = signedClass(val.amount);
+        const colorClass = signedClass(variationMode === "pct" ? val.pct : val.amount);
         const hasMsci = val.msci_pct !== null && val.msci_pct !== undefined && Number.isFinite(Number(val.msci_pct));
         const hasVsMsci = val.vs_msci_pct !== null && val.vs_msci_pct !== undefined && Number.isFinite(Number(val.vs_msci_pct));
         const msciVal = hasMsci ? Number(val.msci_pct) : null;
@@ -650,15 +654,10 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         </div>
       `;
     }
-    function filterByPeriod(series) {
-      if (!series || !series.length) return series || [];
-      if (selectedPeriod === "all") return series || [];
-      if (selectedPeriod === "custom") {
-        const start = new Date(`${customPeriodStart()}T00:00:00`);
-        return series.filter(p => new Date(p.date) >= start);
-      }
-      
-      const end = new Date(series[series.length - 1].date);
+    function periodWindowStart(endValue) {
+      if (selectedPeriod === "all") return null;
+      if (selectedPeriod === "custom") return new Date(`${customPeriodStart()}T00:00:00`);
+      const end = new Date(endValue);
       const start = new Date(end);
       if (selectedPeriod === "ytd") {
         start.setMonth(0);
@@ -667,8 +666,23 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       if (selectedPeriod === "1w") start.setDate(end.getDate() - 7);
       if (selectedPeriod === "1m") start.setMonth(end.getMonth() - 1);
       if (selectedPeriod === "1y") start.setFullYear(start.getFullYear() - 1);
-      
-      return series.filter(p => new Date(p.date) >= start);
+      return start;
+    }
+    function filterByPeriod(series) {
+      if (!series || !series.length) return series || [];
+      const start = periodWindowStart(series[series.length - 1].date);
+      if (!start) return series;
+      const first = series.findIndex(p => new Date(p.date) >= start);
+      if (first < 0) return [];
+      // A window's return is measured from the value at its start. History is priced
+      // on month ends, trade days and the last 35 days, so most window starts fall
+      // between points: use the nearer neighbour (31 Dec for YTD) as the base.
+      if (first > 0) {
+        const before = start - new Date(series[first - 1].date);
+        const after = new Date(series[first].date) - start;
+        if (before <= after) return series.slice(first - 1);
+      }
+      return series.slice(first);
     }
     function selectedWindowLabel() {
       if (selectedPeriod === "1w") return "Last 1 week";
@@ -708,7 +722,6 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         totals.market_value = totals.total_market_value || totals.market_value;
       }
       const values = filterByPeriod(data.valuation_series || []);
-      const cash = filterByPeriod(data.series || []);
       if (values.length >= 2) {
         const first = values[0];
         const last = values[values.length - 1];
@@ -719,11 +732,15 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         totals.return_pct = Number(timeWeighted[timeWeighted.length - 1]?.return_pct || 0);
         totals.historical_profit = periodProfit;
       }
-      if (cash.length >= 2) {
-        const first = cash[0];
-        const last = cash[cash.length - 1];
-        totals.realized_pl = Number(last.realized_pl || 0) - Number(first.realized_pl || 0);
-        totals.net_contributions = Number(last.net_contributions || 0) - Number(first.net_contributions || 0);
+      // Cumulative trade metrics change only on trade days: subtract the last value
+      // before the window (zero when the first trade is inside it).
+      const cashSeries = data.series || [];
+      const windowStart = periodStartDate(data);
+      if (windowStart && cashSeries.length) {
+        const last = cashSeries[cashSeries.length - 1];
+        const base = [...cashSeries].reverse().find(p => new Date(p.date) < windowStart);
+        totals.realized_pl = Number(last.realized_pl || 0) - Number(base?.realized_pl || 0);
+        totals.net_contributions = Number(last.net_contributions || 0) - Number(base?.net_contributions || 0);
       }
       return totals;
     }
