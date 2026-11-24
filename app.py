@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -168,7 +169,7 @@ HISTORY_CACHE = SETTINGS.cache_path("history.json")
 HISTORY_CACHE_DIR = SETTINGS.cache_dir / "history"
 NEWS_CACHE = SETTINGS.cache_path("news.json")
 DASHBOARD_CACHE_DIR = SETTINGS.cache_dir / "dashboard-payloads"
-DASHBOARD_CACHE_FORMAT_VERSION = 2
+DASHBOARD_CACHE_FORMAT_VERSION = 3
 IMPORT_PARSER_VERSION = "ledger-4"
 _DASHBOARD_CACHE_LOCK = threading.Lock()
 _DASHBOARD_BUILD_LOCKS: dict[Path, threading.Lock] = {}
@@ -1048,7 +1049,23 @@ def read_portfolio_dividends(person: str = PRIMARY_PORTFOLIO_ID) -> list[Dividen
     return read_ledger_dividends(person)
 
 
+def trade_republic_dividend_net(gross: Decimal, withheld: Decimal) -> tuple[Decimal, Decimal]:
+    """Net dividend and signed tax from Trade Republic's reported gross amount and withholding.
+
+    Trade Republic exports the gross dividend in ``amount`` and the withholding in
+    ``tax`` (the account receives ``amount + tax``). A reversal has a negative amount
+    and reverses its tax as well.
+    """
+    tax = withheld.copy_abs() if gross >= ZERO else -withheld.copy_abs()
+    return gross - tax, tax
+
+
 def read_trade_republic_dividends(path: Path) -> list[Dividend]:
+    """Dividends as Trade Republic reports them: gross ``amount_eur`` and absolute ``tax_eur``.
+
+    The ledger stores these reported values; ``read_ledger_dividends`` converts them to
+    net with ``trade_republic_dividend_net`` so earlier imports stay valid.
+    """
     dividends: list[Dividend] = []
     with path.open(newline="", encoding="utf-8-sig") as handle:
         for row in csv.DictReader(handle):
@@ -3281,8 +3298,7 @@ def crypto_wallet_valuation(wallet_positions: list[dict[str, Any]]) -> dict[str,
         }
 
     start = events[0]["date"]
-    recent_dates = {today - timedelta(days=i) for i in range(35) if today - timedelta(days=i) >= start}
-    dates = sorted(month_end_dates(start, today) | {event["date"] for event in events} | recent_dates)
+    dates = sorted(valuation_date_grid(start, today, {event["date"] for event in events}))
     histories = {
         asset: fetch_crypto_eur_history(asset, start, today, refresh=False)
         for asset in {"BTC", "ETH", "TON", "USDC"}
@@ -3597,6 +3613,58 @@ def read_crypto_events() -> list[dict[str, Any]]:
     return sorted(events, key=lambda item: item["date"])
 
 
+def flow_adjusted_growth(previous_value: float, current_value: float, flow: float) -> float | None:
+    """Growth of one interval with an external flow; twin of flowAdjustedGrowth in static/app.js.
+
+    Money added during the interval counts for half of it (Modified Dietz). When the
+    flow dwarfs the balance already there, it is treated as invested at the start.
+    """
+    if not previous_value > 0:
+        return None
+    if flow > previous_value * 5:
+        return current_value / (previous_value + flow)
+    capital = previous_value + flow / 2
+    if not capital > 0:
+        return (current_value - flow) / previous_value
+    return 1 + (current_value - previous_value - flow) / capital
+
+
+def time_weighted_return_pct(
+    points: list[dict[str, Any]], value_key: str, contribution_key: str, profit_key: str | None = None
+) -> float | None:
+    """Chain flow-adjusted growth across points, as the browser's value chart does.
+
+    Contributions missing from a point are derived as value minus profit when a
+    profit key is given.
+    """
+
+    def contributions(entry: dict[str, Any]) -> float:
+        if entry.get(contribution_key) is None and profit_key is not None:
+            return float(entry[value_key]) - float(entry[profit_key])
+        return float(entry[contribution_key])
+
+    growth = 1.0
+    for previous, current in pairwise(points):
+        try:
+            previous_value = float(previous[value_key])
+            current_value = float(current[value_key])
+            flow = contributions(current) - contributions(previous)
+        except (KeyError, TypeError, ValueError):
+            return None
+        previous_priced = int(previous.get("priced_positions") or 0)
+        current_priced = int(current.get("priced_positions") or 0)
+        previous_holdings = previous_priced + int(previous.get("unpriced_positions") or 0)
+        current_holdings = current_priced + int(current.get("unpriced_positions") or 0)
+        # A change in quote coverage (not in holdings) is not a return.
+        if previous_holdings == current_holdings and previous_priced != current_priced:
+            continue
+        factor = flow_adjusted_growth(previous_value, current_value, flow)
+        if factor is None or not math.isfinite(factor) or factor < 0:
+            continue
+        growth *= factor
+    return (growth - 1) * 100
+
+
 def calculate_variations(series: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     if not series:
         return {
@@ -3625,15 +3693,28 @@ def calculate_variations(series: list[dict[str, Any]]) -> dict[str, dict[str, An
     }.items():
         past = find_entry_for_date(target_date)
         if past and past["date"] != latest["date"]:
+            # Percentages are time-weighted so money added or withdrawn in the
+            # window is not reported as performance; amounts are profit changes.
+            window = [entry for entry in series if past["date"] <= entry["date"] <= latest["date"]]
             amount = latest["profit"] - past["profit"]
-            past_val = past["market_value"]
-            pct_val = (amount / past_val * 100) if past_val > 0 else 0.0
+            pct_val = time_weighted_return_pct(window, "market_value", "net_contributions", "profit") or 0.0
+            total_pct = time_weighted_return_pct(window, "total_market_value", "total_net_contributions", "total_profit")
+            total_amount = (
+                latest["total_profit"] - past["total_profit"]
+                if latest.get("total_profit") is not None and past.get("total_profit") is not None
+                else None
+            )
             msci_pct = benchmark_delta(latest, past, "msci")
             variations[key] = {
                 "amount": round(amount, 2),
                 "pct": round(pct_val, 2),
+                "total_amount": round(total_amount, 2) if total_amount is not None else None,
+                "total_pct": round(total_pct, 2) if total_pct is not None else None,
                 "msci_pct": round(msci_pct, 2) if msci_pct is not None else None,
                 "vs_msci_pct": round(float(pct_val) - msci_pct, 2) if msci_pct is not None else None,
+                "total_vs_msci_pct": (
+                    round(total_pct - msci_pct, 2) if msci_pct is not None and total_pct is not None else None
+                ),
                 "past_date": past["date"],
             }
         else:
@@ -5800,6 +5881,29 @@ def month_end_dates(start: date, end: date) -> set[date]:
     return dates
 
 
+def one_year_before(day: date) -> date:
+    try:
+        return day.replace(year=day.year - 1)
+    except ValueError:  # 29 February
+        return day.replace(year=day.year - 1, day=28)
+
+
+def valuation_date_grid(start: date, end: date, flow_dates: set[date]) -> set[date]:
+    """Dates at which a value history is priced.
+
+    Month ends give the long-run shape, the last 35 days daily detail, and the
+    one-year anniversary anchors the 1Y window. Each flow date is priced together
+    with the day before it, so a purchase or sale is the only flow in a one-day
+    interval: the time-weighted return then credits it for half a day instead of
+    half of a month-long interval.
+    """
+    dates = month_end_dates(start, end) | set(flow_dates)
+    dates |= {end - timedelta(days=offset) for offset in range(35)}
+    dates |= {flow_date - timedelta(days=1) for flow_date in flow_dates}
+    dates.add(one_year_before(end))
+    return {day for day in dates if day >= start and (day <= end or day in flow_dates)}
+
+
 def fx_to_eur(currency: str, refresh: bool = False) -> dict[str, Any]:
     currency = fx_base_currency(currency)
     if currency == "EUR":
@@ -6064,9 +6168,7 @@ def calculate_valuation_series(
         )
     }
     equity_asset_names = {trade.asset for trade in trades if (trade.isin or trade.asset) in equity_keys}
-    recent_dates = {end - timedelta(days=i) for i in range(35) if end - timedelta(days=i) >= start}
-    valuation_dates = month_end_dates(start, end) | {trade.date for trade in trades} | recent_dates
-    sorted_dates = sorted(valuation_dates)
+    sorted_dates = sorted(valuation_date_grid(start, end, {trade.date for trade in trades}))
 
     histories: dict[str, dict[str, Any]] = {}
     currencies: set[str] = set()
@@ -8475,17 +8577,23 @@ def read_ledger_trades(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> tuple[list[T
 def read_ledger_dividends(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[Dividend]:
     owner = configured_portfolio_id(portfolio_id)
     ensure_legacy_statements_imported(owner)
-    return [
-        Dividend(
-            broker=str(row.get("account") or SOURCE_LABELS.get(str(row.get("source_kind")), "")),
-            asset=str(row.get("asset") or "Unknown"),
-            isin=str(row.get("isin") or ""),
-            date=movement_date(row),
-            amount_eur=movement_decimal(row, "amount"),
-            tax_eur=movement_decimal(row, "tax"),
+    dividends = []
+    for row in get_movement_store().movements(owner, ("dividend",)):
+        amount = movement_decimal(row, "amount")
+        tax = movement_decimal(row, "tax")
+        if row.get("source_kind") == "trade_republic":
+            amount, tax = trade_republic_dividend_net(amount, tax)
+        dividends.append(
+            Dividend(
+                broker=str(row.get("account") or SOURCE_LABELS.get(str(row.get("source_kind")), "")),
+                asset=str(row.get("asset") or "Unknown"),
+                isin=str(row.get("isin") or ""),
+                date=movement_date(row),
+                amount_eur=amount,
+                tax_eur=tax,
+            )
         )
-        for row in get_movement_store().movements(owner, ("dividend",))
-    ]
+    return dividends
 
 
 def read_ledger_frictions(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[FrictionEvent]:

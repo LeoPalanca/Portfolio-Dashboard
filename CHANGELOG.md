@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.4 — 2026-11-24
+
+- Window net contributions and realized P/L now include the first trade inside the window, and show only that window's trades (not the all-time totals) when it holds one trade or none.
+- Window returns start from the valuation point nearest the window start: YTD is measured from the 31 December close instead of the first point in the year, which could skip most of January. The 1Y anniversary is now a valuation date.
+- Purchases and sales no longer distort the time-weighted return: each trade day is valued together with the day before it, so its cash flow sits in a one-day interval instead of being spread over a month.
+- The 1D/1W/1M cards use the same time-weighted return, so money added in the period is no longer reported as performance (a 9,000 purchase on top of 1,000 showed +10% for a +1% week), and they follow the Price/Total Return mode.
+- Trade Republic dividends are shown net of withholding: the export's `amount` is gross, so dividends were overstated by the tax and the gross column double-counted it. Existing imports are corrected when read; nothing is re-imported.
+- Saved dashboard snapshots are rebuilt once after updating.
+
 ## 0.14.3 — 2026-11-24
 
 - Escape statement-derived names, ISINs, symbols, brokers, dates and descriptions everywhere the dashboard builds HTML. Asset logos no longer run inline JavaScript, and inline click handlers receive JSON-quoted arguments, so an imported row can no longer run script in the page.

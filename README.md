@@ -285,9 +285,15 @@ consumption.
   relevant tax residence, instrument, and account treatment, then verify locally.
 - Market prices, FX conversion, news, mappings, and proxy compositions are best-effort
   data and may be stale or unavailable.
-- Selected-window returns are linked across available valuation dates and adjust
-  external flows at those dates. They approximate, rather than exactly reproduce,
-  daily time-weighted returns when intra-period trade timing is unavailable.
+- Selected-window returns are linked across valuation dates (month ends, the last 35
+  days, the 1Y anniversary, and every trade day together with the day before it), with
+  each interval's external flows adjusted Modified-Dietz style. A window starts from the
+  valuation point nearest its start date (31 December for YTD). Window contributions
+  and realized P/L subtract the cumulative value before the window. The 1D/1W/1M cards
+  use the same time-weighted method and follow the Price/Total Return mode. Cash
+  deposits between valuation dates are assumed to arrive mid-interval.
+- Trade Republic reports dividends gross with the withholding in a separate column;
+  the ledger keeps them as reported and the dashboard shows the net amount.
 - Snapshot portfolios cannot provide transaction-level accuracy for periods before
   the supplied history and adjustments.
 
