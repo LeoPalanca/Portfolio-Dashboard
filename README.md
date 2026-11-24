@@ -119,6 +119,13 @@ expected headers or sheets, retains an audit copy under `source_dir`, and writes
 normalized movements to `data_dir/movements.sqlite3`. The same pipeline is available
 through `python run.py --import ...` and `scripts/import_statements.py`.
 
+Amounts may use European or English notation (`1.234,56`, `1,234.56`), currency
+codes or symbols, grouping spaces, parentheses or a Unicode minus for negatives. An
+import is refused, and nothing is stored or archived, when a value cannot be read as
+a number or a foreign-currency row has no EUR exchange rate (retry once market data
+is reachable). Rows skipped for other reasons, such as an unreadable date or an
+unrecognised Interactive Brokers line, are listed as warnings in the import result.
+
 ### Personal trade template
 
 CSV and XLSX templates use this schema:

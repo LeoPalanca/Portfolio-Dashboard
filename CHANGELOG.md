@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.5 — 2026-11-24
+
+- Read amounts in either notation: `1,234.56` was parsed as 1.23456, and `€1,234.56`, `(2.00)`, non-breaking-space grouping, `1.234.567` and the Unicode minus became 0. Empty cells and placeholders such as `-` or `n/a` still count as zero.
+- Refuse an import, storing and archiving nothing, when a value cannot be read as a number instead of saving it as 0.
+- Refuse an import when a foreign-currency row has no EUR exchange rate. Revolut and other expense rows used to be dropped while the import reported success, and re-uploading the file then said "duplicate"; trade commissions, taxes and eToro closed-position fees were stored in USD as if they were EUR.
+- BBVA amounts with thousands separators (`2.500,00 EUR`) no longer abort the import or get skipped.
+- Interactive Brokers confirmations are parsed for any account, with thousands separators in quantities and amounts.
+- The import result lists rows skipped for an unreadable date, an unrecognised Interactive Brokers trade line or an unsupported symbol, and the import dialog shows them.
+
 ## 0.14.4 — 2026-11-24
 
 - Window net contributions and realized P/L now include the first trade inside the window, and show only that window's trades (not the all-time totals) when it holds one trade or none.

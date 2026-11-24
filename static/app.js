@@ -362,10 +362,12 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         const response = await fetch("/api/imports", { method: "POST", body: form });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "The statement could not be imported.");
-        importStatus.className = "import-status success";
-        importStatus.textContent = result.duplicate
+        const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+        importStatus.className = warnings.length ? "import-status warning" : "import-status success";
+        importStatus.textContent = (result.duplicate
           ? `Already imported as ${result.source_label}. No duplicate rows were added.`
-          : `${result.source_label}: ${result.movements} new movement${result.movements === 1 ? "" : "s"} stored${result.duplicates ? `, ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} skipped` : ""}.`;
+          : `${result.source_label}: ${result.movements} new movement${result.movements === 1 ? "" : "s"} stored${result.duplicates ? `, ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} skipped` : ""}.`)
+          + (warnings.length ? ` Review: ${warnings.join(" · ")}` : "");
         importForm.reset();
         updateSelectedImportFile();
         void loadImportHistory();
