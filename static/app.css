@@ -438,6 +438,7 @@ h1 {
 .import-status { min-height: 18px; color: var(--text-muted); font-size: var(--text-sm); line-height: 1.45; }
 .import-status.error { color: var(--negative); }
 .import-status.success { color: var(--positive); }
+.import-status.warning { color: var(--warning); }
 
 /* ─── Buttons ─── */
 button {

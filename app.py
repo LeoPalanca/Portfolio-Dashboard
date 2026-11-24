@@ -35,6 +35,12 @@ from werkzeug.utils import secure_filename
 
 from src.portfolio_dashboard import APP_VERSION, display_version
 from src.portfolio_dashboard.updates import github_release_status
+from src.portfolio_dashboard.domain.issues import (
+    MISSING_FX_RATE,
+    SKIPPED_ROW,
+    collect_import_issues,
+    report_import_issue,
+)
 from src.portfolio_dashboard.ibkr_monitor import create_ibkr_blueprint
 from src.portfolio_dashboard.web_security import install_web_security, restrict_pdf_resource_access
 from src.portfolio_dashboard.cache import HistoryStore
@@ -930,11 +936,16 @@ def read_interactive_brokers_trades(path: Path) -> list[Trade]:
     trades: list[Trade] = []
     section_currency = "EUR"
     stock_section = False
+    number = r"(-?[\d,]+(?:\.\d+)?)"
     pattern = re.compile(
-        r"^U16961051\s+(\S+)\s+(\d{4}-\d{2}-\d{2}),\s+\d{2}:\d{2}:\d{2}\s+"
-        r"(\d{4}-\d{2}-\d{2})\s+-\s+(BUY|SELL)\s+(-?\d+(?:\.\d+)?)\s+"
-        r"(\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)"
+        r"^U\d{5,}\s+(\S+)\s+(\d{4}-\d{2}-\d{2}),\s+\d{2}:\d{2}:\d{2}\s+"
+        rf"(\d{{4}}-\d{{2}}-\d{{2}})\s+-\s+(BUY|SELL)\s+{number}\s+"
+        rf"{number}\s+{number}\s+{number}\s+{number}"
     )
+    account_line = re.compile(r"^U\d{5,}\s")
+
+    def ib_decimal(value: str) -> Decimal:
+        return parse_decimal(value.replace(",", ""))  # IB always groups thousands with commas
 
     for raw_line in text.splitlines():
         line = raw_line.rstrip()
@@ -953,13 +964,16 @@ def read_interactive_brokers_trades(path: Path) -> list[Trade]:
 
         match = pattern.match(line)
         if not match:
+            if account_line.match(line):
+                report_import_issue(SKIPPED_ROW, f"Interactive Brokers trade line not recognised ({stripped[:60]!r})")
             continue
         symbol, trade_date, _, side, quantity, price, proceeds, commission, tax = match.groups()
         if "." in symbol:
+            report_import_issue(SKIPPED_ROW, f"Interactive Brokers symbol {symbol} is not supported")
             continue
         instrument = instruments.get(symbol, {})
-        qty = parse_decimal(quantity)
-        cash_effect = parse_decimal(proceeds) + parse_decimal(commission) + parse_decimal(tax)
+        qty = ib_decimal(quantity)
+        cash_effect = ib_decimal(proceeds) + ib_decimal(commission) + ib_decimal(tax)
         is_buy = side == "BUY"
         trades.append(
             Trade(
@@ -970,12 +984,12 @@ def read_interactive_brokers_trades(path: Path) -> list[Trade]:
                 currency_hint=section_currency,
                 cash_currency=section_currency,
                 date=datetime.strptime(trade_date, "%Y-%m-%d").date(),
-                price=parse_decimal(price),
+                price=ib_decimal(price),
                 quantity=abs(qty),
                 quantity_diff=abs(qty) if is_buy else -abs(qty),
                 total_spend=cash_effect,
-                fees=abs(parse_decimal(commission)),
-                tax=abs(parse_decimal(tax)),
+                fees=abs(ib_decimal(commission)),
+                tax=abs(ib_decimal(tax)),
                 grand_total=cash_effect,
                 grand_total_present=True,
                 source="interactive_brokers",
@@ -1758,6 +1772,7 @@ def read_revolut_expense_events(
             histories,
         )
         if amount_eur is None:
+            report_import_issue(MISSING_FX_RATE, f"{raw_event['currency']} on {raw_event['date']}")
             continue
         events.append(
             make_expense_event(
@@ -1945,6 +1960,7 @@ def read_intesa_expense_events(
             histories,
         )
         if amount_eur is None:
+            report_import_issue(MISSING_FX_RATE, f"{raw_event['currency']} on {raw_event['date']}")
             continue
         events.append(
             make_expense_event(
@@ -2000,15 +2016,10 @@ def read_bbva_expense_events(
                 imp = row[6]
 
                 if causale and causale != "Causale" and imp:
-                    try:
-                        op_date = datetime.strptime(str(op_date_str).strip(), "%d/%m/%Y").date()
-                    except Exception:
+                    op_date = bbva_date(op_date_str)
+                    if op_date is None:
                         continue
-                    try:
-                        clean_imp = str(imp).replace(" EUR", "").replace(",", ".").strip()
-                        amount = Decimal(clean_imp)
-                    except Exception:
-                        continue
+                    amount = bbva_amount(imp)
 
                     if amount == ZERO:
                         continue
@@ -2079,6 +2090,7 @@ def read_bbva_expense_events(
             histories,
         )
         if amount_eur is None:
+            report_import_issue(MISSING_FX_RATE, f"{raw_event['currency']} on {raw_event['date']}")
             continue
         events.append(
             make_expense_event(
@@ -2438,7 +2450,9 @@ def trade_friction_events(trades: list[Trade]) -> list[FrictionEvent]:
     events: list[FrictionEvent] = []
     for trade in trades:
         if trade.fees:
-            amount, _ = convert_cash_to_eur(trade.fees, trade.cash_currency, trade.date)
+            amount, failed = convert_cash_to_eur(trade.fees, trade.cash_currency, trade.date)
+            if failed:
+                report_import_issue(MISSING_FX_RATE, f"{trade.cash_currency} on {trade.date}")
             if amount:
                 events.append(
                     FrictionEvent(
@@ -2450,7 +2464,9 @@ def trade_friction_events(trades: list[Trade]) -> list[FrictionEvent]:
                     )
                 )
         if trade.tax:
-            amount, _ = convert_cash_to_eur(trade.tax, trade.cash_currency, trade.date)
+            amount, failed = convert_cash_to_eur(trade.tax, trade.cash_currency, trade.date)
+            if failed:
+                report_import_issue(MISSING_FX_RATE, f"{trade.cash_currency} on {trade.date}")
             if amount:
                 events.append(
                     FrictionEvent(
@@ -2586,7 +2602,9 @@ def read_etoro_friction_events(path: Path) -> list[FrictionEvent]:
             for label, amount_usd in (("Spread fee", spread_usd), ("Overnight fee/dividend", overnight_usd)):
                 if not amount_usd:
                     continue
-                amount_eur, _ = convert_cash_to_eur(amount_usd, "USD", closed_at)
+                amount_eur, failed = convert_cash_to_eur(amount_usd, "USD", closed_at)
+                if failed:
+                    report_import_issue(MISSING_FX_RATE, f"USD on {closed_at}")
                 events.append(
                     FrictionEvent(
                         broker="eToro",
@@ -8205,6 +8223,21 @@ def read_trade_republic_interests_from_path(path: Path) -> list[dict[str, Any]]:
     return interests
 
 
+def bbva_amount(raw: Any) -> Decimal:
+    """BBVA writes amounts as Italian text such as ``-2.500,00 EUR``; numeric cells pass through."""
+    if isinstance(raw, (int, float, Decimal)) and not isinstance(raw, bool):
+        return Decimal(str(raw))
+    return parse_decimal(str(raw))
+
+
+def bbva_date(raw: Any) -> date | None:
+    try:
+        return datetime.strptime(str(raw).strip(), "%d/%m/%Y").date()
+    except ValueError:
+        report_import_issue(SKIPPED_ROW, f"BBVA row with unreadable date {str(raw).strip()[:20]!r}")
+        return None
+
+
 def read_bbva_interests_from_path(path: Path) -> list[dict[str, Any]]:
     interests: list[dict[str, Any]] = []
     temp_xlsx = Path(tempfile.gettempdir()) / f"bbva-interest-{os.getpid()}-{threading.get_ident()}.xlsx"
@@ -8218,11 +8251,10 @@ def read_bbva_interests_from_path(path: Path) -> list[dict[str, Any]]:
                 op_date_raw, description, amount_raw = row[2], row[3], row[6]
                 if not description or "INTERESSI" not in str(description).upper() or not amount_raw:
                     continue
-                try:
-                    event_date = datetime.strptime(str(op_date_raw).strip(), "%d/%m/%Y").date()
-                    net = Decimal(str(amount_raw).replace(" EUR", "").replace(",", ".").strip())
-                except (ValueError, TypeError):
+                event_date = bbva_date(op_date_raw)
+                if event_date is None:
                     continue
+                net = bbva_amount(amount_raw)
                 gross = net / BBVA_INTEREST_NET_RATE if net > ZERO else ZERO
                 interests.append(
                     {
@@ -8287,11 +8319,10 @@ def read_bbva_cash_flows(path: Path) -> list[dict[str, Any]]:
                 op_date_raw, description, amount_raw = row[2], row[3], row[6]
                 if not description or description == "Causale" or not amount_raw:
                     continue
-                try:
-                    event_date = datetime.strptime(str(op_date_raw).strip(), "%d/%m/%Y").date()
-                    amount = Decimal(str(amount_raw).replace(" EUR", "").replace(",", ".").strip())
-                except (ValueError, TypeError):
+                event_date = bbva_date(op_date_raw)
+                if event_date is None:
                     continue
+                amount = bbva_amount(amount_raw)
                 if amount == ZERO:
                     continue
                 events.append(
@@ -8402,7 +8433,11 @@ def import_statement_path(
         }
 
     safe_original_name = secure_filename(original_name or path.name) or f"statement{path.suffix.casefold()}"
-    movements = parse_statement_movements(source, path)
+    with collect_import_issues() as issues:
+        movements = parse_statement_movements(source, path)
+    if issues.blocking:
+        raise ValueError(issues.blocking_message())
+    warnings = issues.warnings()
     if not movements:
         raise ValueError(f"No supported movements were found in this {SOURCE_LABELS[source]} statement")
     if existing is not None:
@@ -8416,6 +8451,7 @@ def import_statement_path(
             "movements": inserted,
             "duplicates": duplicates,
             "stored_path": existing.stored_path,
+            "warnings": warnings,
         }
 
     archive_root = ROOT_DIR if owner == PRIMARY_PORTFOLIO_ID else ROOT_DIR / "portfolios" / owner
@@ -8451,6 +8487,7 @@ def import_statement_path(
         "movements": record.movement_count,
         "duplicates": record.duplicate_count,
         "stored_path": record.stored_path,
+        "warnings": warnings,
     }
 
 
