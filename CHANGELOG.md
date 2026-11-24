@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.3 — 2026-11-24
+
+- Escape statement-derived names, ISINs, symbols, brokers, dates and descriptions everywhere the dashboard builds HTML. Asset logos no longer run inline JavaScript, and inline click handlers receive JSON-quoted arguments, so an imported row can no longer run script in the page.
+- Reject cross-site writes: POST, PUT, PATCH and DELETE requests whose `Origin` is another site (or `Sec-Fetch-Site: cross-site`) get 403, so a web page open on the same network cannot upload a statement or change data. Requests without browser headers, such as local scripts, still work.
+- Reject requests whose `Host` is not an IP address, `localhost`, or this machine's name (`name`, `name.local`, `name.<tailnet>.ts.net`), blocking DNS-rebinding reads. Add other names with `PORTFOLIO_TRUSTED_HOSTS` (comma-separated; a leading dot matches a domain and its subdomains).
+- Send a Content-Security-Policy (`connect-src 'self'`, logo images only from assets.parqet.com, no framing) plus `nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: same-origin`.
+- Keep exported text inert: XLSX cells starting with `=` are written as text instead of formulas, and PDF exports never fetch remote images named in statement text.
+- CI now syntax-checks every script in `static/` and runs the income & expenses frontend test.
+
 ## 0.14.2 — 2026-11-10
 
 - Classify a single share with no private exposure row (e.g. a newly bought NVIDIA position) from the sector and country any bundled or proxy fund gives the same company, instead of listing it as Uncategorized.

@@ -35,6 +35,7 @@ from werkzeug.utils import secure_filename
 from src.portfolio_dashboard import APP_VERSION, display_version
 from src.portfolio_dashboard.updates import github_release_status
 from src.portfolio_dashboard.ibkr_monitor import create_ibkr_blueprint
+from src.portfolio_dashboard.web_security import install_web_security, restrict_pdf_resource_access
 from src.portfolio_dashboard.cache import HistoryStore
 from src.portfolio_dashboard.config import get_settings
 from src.portfolio_dashboard.domain import (
@@ -192,6 +193,8 @@ app = Flask(__name__)
 app.register_blueprint(create_ibkr_blueprint(SETTINGS.data_dir))
 app.config["MAX_CONTENT_LENGTH"] = SETTINGS.import_max_bytes
 app.jinja_env.keep_trailing_newline = True
+install_web_security(app)
+restrict_pdf_resource_access()
 
 
 @app.after_request
@@ -7474,6 +7477,12 @@ def add_xlsx_sheet(workbook: Workbook, title: str, rows: list[list[Any]]) -> Non
     ws = workbook.create_sheet(export_sheet_name(title))
     for row in rows:
         ws.append(row)
+    for worksheet_row in ws.iter_rows():
+        for cell in worksheet_row:
+            # openpyxl turns any string starting with "=" into a live formula;
+            # exported statement text must stay plain text.
+            if cell.data_type == "f":
+                cell.data_type = "s"
     for column_cells in ws.columns:
         width = min(42, max(10, max(len(str(cell.value or "")) for cell in column_cells) + 2))
         ws.column_dimensions[column_cells[0].column_letter].width = width

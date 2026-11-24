@@ -272,6 +272,11 @@ consumption.
 
 - The server is a local Flask development server with no login, authorization, TLS,
   or multi-user isolation. Never bind it to a public or untrusted interface.
+  As a defence for private networks it only answers requests addressed to an IP
+  address, `localhost`, or the machine's own name (`name`, `name.local`,
+  `name.<tailnet>.ts.net`); list any other host name in `PORTFOLIO_TRUSTED_HOSTS`
+  (comma-separated, a leading dot also matches subdomains). Browser writes from other
+  sites are refused, and responses carry a Content-Security-Policy.
 - Reporting is EUR-first. Eurostat supplies euro-area inflation, and some labels and
   benchmark choices reflect that reporting context.
 - When a supported Fineco or BBVA export provides a net amount without explicit tax,

@@ -483,6 +483,33 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         "'": "&#39;"
       }[char]));
     }
+    // Safe argument for an inline handler such as onclick="fn(${jsArg(value)})".
+    // HTML entities are decoded before the handler runs, so escapeHtml alone cannot
+    // protect a JavaScript string literal; JSON quoting plus HTML escaping can.
+    function jsArg(value) {
+      return escapeHtml(JSON.stringify(String(value ?? "")));
+    }
+    // Statement-derived ISINs and symbols never reach inline JavaScript: a failed
+    // ISIN logo falls back to the symbol logo through the capture listener below.
+    function assetLogoHtml(isin, symbol, attributes = 'class="sym-logo"') {
+      const isinUrl = isin ? `https://assets.parqet.com/logos/isin/${encodeURIComponent(isin)}?format=png` : "";
+      const symbolUrl = symbol ? `https://assets.parqet.com/logos/symbol/${encodeURIComponent(symbol)}?format=png` : "";
+      const source = isinUrl || symbolUrl;
+      if (!source) return "";
+      const fallback = isinUrl && symbolUrl ? ` data-logo-fallback="${escapeHtml(symbolUrl)}"` : "";
+      return `<img src="${escapeHtml(source)}" alt="" data-asset-logo${fallback} ${attributes}>`;
+    }
+    document.addEventListener("error", event => {
+      const image = event.target;
+      if (!(image instanceof HTMLImageElement) || !image.hasAttribute("data-asset-logo")) return;
+      const fallback = image.dataset.logoFallback;
+      if (fallback) {
+        image.removeAttribute("data-logo-fallback");
+        image.src = fallback;
+      } else {
+        image.style.display = "none";
+      }
+    }, true);
     function percent(value) {
       if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
       return `${pct.format(Number(value))}%`;
@@ -1399,34 +1426,34 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       updateHoldingsControls(open, closed, openDisplayed.length, focused.targetCount);
       const sortedDisplayed = sortedPositions(displayed);
       document.getElementById("positions").innerHTML = sortedDisplayed.length ? sortedDisplayed.map(p => {
-        const logoUrl = p.isin ? `https://assets.parqet.com/logos/isin/${p.isin}?format=png` : (p.symbol ? `https://assets.parqet.com/logos/symbol/${p.symbol}?format=png` : '');
-        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${p.symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${p.symbol}?format=png'; } else { this.style.display='none'; }" style="width: 20px; height: 20px; border-radius: 50%; vertical-align: middle; margin-right: 8px; background: var(--tint-hover); flex-shrink: 0;">` : '';
-        
-        let assetNameHtml = `<span>${p.asset}</span>`;
-        if (p.asset.toLowerCase().includes("europension taxbenefit")) {
+        const logoImg = assetLogoHtml(p.isin, p.symbol, 'style="width: 20px; height: 20px; border-radius: 50%; vertical-align: middle; margin-right: 8px; background: var(--tint-hover); flex-shrink: 0;"');
+        const assetName = escapeHtml(p.asset);
+
+        let assetNameHtml = `<span>${assetName}</span>`;
+        if (String(p.asset || "").toLowerCase().includes("europension taxbenefit")) {
           assetNameHtml = `
-            <span>${p.asset}</span>
+            <span>${assetName}</span>
             <span class="info-icon" onclick="showAssetInfoPopup('europension', event)" class="info-dot" title="Click for details">i</span>
           `;
-        } else if (p.asset.toLowerCase().includes("mystyle")) {
+        } else if (String(p.asset || "").toLowerCase().includes("mystyle")) {
           assetNameHtml = `
-            <span>${p.asset}</span>
+            <span>${assetName}</span>
             <span class="info-icon" onclick="showAssetInfoPopup('mystyle', event)" class="info-dot" title="Click for details">i</span>
           `;
         }
-        
+
         return `
           <tr>
             <td class="cell-flex">${logoImg}${assetNameHtml}${badgeHtml(p.asset_type)}</td>
             <td>${num.format(p.quantity)}</td>
-            <td>${p.isin || ""}</td>
-            <td>${p.symbol || ""}</td>
-            <td>${p.price ? `${num.format(p.price)} ${p.price_currency}` : "-"}</td>
+            <td>${escapeHtml(p.isin || "")}</td>
+            <td>${escapeHtml(p.symbol || "")}</td>
+            <td>${p.price ? `${num.format(p.price)} ${escapeHtml(p.price_currency)}` : "-"}</td>
             <td>${money(p.market_value_eur)}</td>
             <td>${money(p.cost_basis_eur)}</td>
             <td class="${signedClass(p.display_pl_eur)}">${money(p.display_pl_eur)}</td>
             <td class="${signedClass(p.display_pl_pct)}">${percent(p.display_pl_pct)}</td>
-            <td><span class="status ${p.pricing_status}">${p.pricing_status}</span></td>
+            <td><span class="status ${escapeHtml(p.pricing_status)}">${escapeHtml(p.pricing_status)}</span></td>
           </tr>
         `;
       }).join("") : `<tr><td colspan="10" class="empty-state">No holdings available for this selection.</td></tr>`;
@@ -1461,8 +1488,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
                     <tbody>
                       ${row.holdings.map(h => {
                         const hTicker = h.holding_ticker;
-                        const logoUrl = hTicker ? `https://assets.parqet.com/logos/symbol/${hTicker}?format=png` : '';
-                        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="this.style.display='none';" style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;">` : '';
+                        const logoImg = assetLogoHtml("", hTicker, 'style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 6px; background: var(--tint-hover); flex-shrink: 0;"');
                         return `
                           <tr style="border-bottom: 1px solid var(--tint-faint); line-height: 24px;">
                             <td style="text-align: left; padding: 2px 0; font-size: 0.82em; display: flex; align-items: center; color: var(--text-muted);">${logoImg}<span>${escapeHtml(h.holding)}</span></td>
@@ -1495,8 +1521,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
 
       return rows.map(row => {
         const ticker = row.holding_ticker;
-        const logoUrl = (key === "holding" && ticker) ? `https://assets.parqet.com/logos/symbol/${ticker}?format=png` : '';
-        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="this.style.display='none';" class="sym-logo">` : '';
+        const logoImg = key === "holding" ? assetLogoHtml("", ticker) : "";
         return `
           <tr>
             <td class="cell-flex">${logoImg}${distributionNameCell(row, key)}</td>
@@ -1515,7 +1540,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
     }
     function sourceStatusLabel(row) {
       const message = row.message ? ` - ${row.message}` : "";
-      return `${row.status || ""}${message}`;
+      return escapeHtml(`${row.status || ""}${message}`);
     }
     function sourceKey(row) {
       return `${row.asset || ""}|${row.isin || ""}`;
@@ -1558,16 +1583,15 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         ? sources.map(row => {
             const isSelected = sourceKey(row) === selectedDistributionSource;
             const symbol = window.assetToSymbolMap ? window.assetToSymbolMap[row.asset] : '';
-            const logoUrl = row.isin ? `https://assets.parqet.com/logos/isin/${row.isin}?format=png` : (symbol ? `https://assets.parqet.com/logos/symbol/${symbol}?format=png` : '');
-            const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" class="sym-logo">` : '';
+            const logoImg = assetLogoHtml(row.isin, symbol);
             return `
               <tr class="composition-source-row ${isSelected ? "selected" : ""}" data-source-key="${escapeHtml(sourceKey(row))}">
-                <td class="cell-flex">${logoImg}<div><div style="display:flex; align-items:center; gap:4px;"><span>${row.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}${isSelected ? '<span class="selected-flag">Selected</span>' : ''}</div><div class="subtle">${row.isin || ""}</div></div></td>
+                <td class="cell-flex">${logoImg}<div><div style="display:flex; align-items:center; gap:4px;"><span>${escapeHtml(row.asset)}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}${isSelected ? '<span class="selected-flag">Selected</span>' : ''}</div><div class="subtle">${escapeHtml(row.isin || "")}</div></div></td>
                 <td class="ta-l">${escapeHtml(row.fund_name || row.asset || "")}</td>
-                <td>${row.issuer || ""}</td>
+                <td>${escapeHtml(row.issuer || "")}</td>
                 <td>${sourceStatusLabel(row)}</td>
-                <td>${row.rows || 0}${row.weight_sum ? ` / ${row.weight_sum}%` : ""}</td>
-                <td>${row.fetched_at || ""}</td>
+                <td>${Number(row.rows || 0)}${row.weight_sum ? ` / ${escapeHtml(row.weight_sum)}%` : ""}</td>
+                <td>${escapeHtml(row.fetched_at || "")}</td>
               </tr>
             `;
           }).join("")
@@ -1585,12 +1609,11 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       document.getElementById("distribution-missing").innerHTML = data.missing && data.missing.length
         ? data.missing.map(row => {
             const symbol = window.assetToSymbolMap ? window.assetToSymbolMap[row.asset] : '';
-            const logoUrl = row.isin ? `https://assets.parqet.com/logos/isin/${row.isin}?format=png` : (symbol ? `https://assets.parqet.com/logos/symbol/${symbol}?format=png` : '');
-            const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" class="sym-logo">` : '';
+            const logoImg = assetLogoHtml(row.isin, symbol);
             return `
               <tr>
-                <td class="cell-flex">${logoImg}<span>${row.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}</td>
-                <td>${row.isin || ""}</td>
+                <td class="cell-flex">${logoImg}<span>${escapeHtml(row.asset)}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}</td>
+                <td>${escapeHtml(row.isin || "")}</td>
                 <td>${money(row.market_value_eur)}</td>
                 <td>${sourceStatusLabel(row)}</td>
               </tr>
@@ -1605,8 +1628,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       if (!symbol) return '';
       const upperSymbol = symbol.toUpperCase();
       const isin = window.symbolToIsinMap ? window.symbolToIsinMap[upperSymbol] : '';
-      const logoUrl = isin ? `https://assets.parqet.com/logos/isin/${isin}?format=png` : `https://assets.parqet.com/logos/symbol/${upperSymbol}?format=png`;
-      return `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1) { this.src = 'https://assets.parqet.com/logos/symbol/${upperSymbol}?format=png'; } else { this.style.display='none'; }" style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 5px; background: var(--tint-strong); flex-shrink: 0;">`;
+      return assetLogoHtml(isin, upperSymbol, 'style="width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 5px; background: var(--tint-strong); flex-shrink: 0;"');
     }
 
     function toggleNewsFilter(symbol) {
@@ -1633,14 +1655,14 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       }
       
       document.getElementById("news-summary").innerHTML = data.status === "available"
-        ? `${itemsToRender.length}/${data.count || 0} headlines | ${symbols.length} tickers${window.activeNewsFilter ? ` | filter: <span style="color:var(--accent); font-weight:bold; cursor:pointer; text-decoration:underline;" onclick="toggleNewsFilter('${escapeHtml(window.activeNewsFilter)}')">${escapeHtml(window.activeNewsFilter)} (clear)</span>` : ''}`
+        ? `${itemsToRender.length}/${data.count || 0} headlines | ${symbols.length} tickers${window.activeNewsFilter ? ` | filter: <span style="color:var(--accent); font-weight:bold; cursor:pointer; text-decoration:underline;" onclick="toggleNewsFilter(${jsArg(window.activeNewsFilter)})">${escapeHtml(window.activeNewsFilter)} (clear)</span>` : ''}`
         : `No headlines available | ${symbols.length} tickers`;
         
       document.getElementById("news-symbols").innerHTML = symbols.length
         ? symbols.map(symbol => {
             const upperSymbol = symbol.toUpperCase();
             const activeClass = (window.activeNewsFilter === upperSymbol) ? 'active' : '';
-            return `<span class="source-pill ${activeClass}" class="is-clickable" onclick="toggleNewsFilter('${escapeHtml(symbol)}')">${symbolLogoHtml(symbol)}${escapeHtml(symbol)}</span>`;
+            return `<span class="source-pill ${activeClass}" class="is-clickable" onclick="toggleNewsFilter(${jsArg(symbol)})">${symbolLogoHtml(symbol)}${escapeHtml(symbol)}</span>`;
           }).join("")
         : `<span class="empty-state">No stock tickers detected from current holdings.</span>`;
         
@@ -1651,7 +1673,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
             return `
               <article class="news-card">
                 <div class="news-meta">
-                  <span class="source-pill ${cardActive}" class="is-clickable" onclick="toggleNewsFilter('${escapeHtml(item.symbol || '')}')">${symbolLogoHtml(item.symbol)}${escapeHtml(item.symbol || "")}</span>
+                  <span class="source-pill ${cardActive}" class="is-clickable" onclick="toggleNewsFilter(${jsArg(item.symbol || '')})">${symbolLogoHtml(item.symbol)}${escapeHtml(item.symbol || "")}</span>
                   <span>${escapeHtml(item.source || "")}</span>
                   <span>${escapeHtml(item.published || "")}</span>
                 </div>
@@ -1659,7 +1681,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
               </article>
             `;
           }).join("")
-        : `<div class="empty-state">No stock news available${window.activeNewsFilter ? ` for ticker ${window.activeNewsFilter}` : ''}.</div>`;
+        : `<div class="empty-state">No stock news available${window.activeNewsFilter ? ` for ticker ${escapeHtml(window.activeNewsFilter)}` : ''}.</div>`;
     }
 
     // ─── Watchlist JS Rendering ───
@@ -1694,7 +1716,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
 
       const sign = item.change >= 0 ? "+" : "";
       const changeColor = item.change >= 0 ? "var(--positive)" : "var(--negative)";
-      const priceText = `${item.price.toFixed(2)} ${item.currency}`;
+      const priceText = `${item.price.toFixed(2)} ${escapeHtml(item.currency)}`;
       const changeText = `${sign}${item.change.toFixed(2)} (${sign}${item.change_pct.toFixed(2)}%)`;
 
       return `
@@ -1887,13 +1909,12 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       
       document.getElementById("dividends-aggregate").innerHTML = sortedAgg.map(r => {
         const symbol = window.assetToSymbolMap ? window.assetToSymbolMap[r.asset] : '';
-        const logoUrl = r.isin ? `https://assets.parqet.com/logos/isin/${r.isin}?format=png` : (symbol ? `https://assets.parqet.com/logos/symbol/${symbol}?format=png` : '');
-        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" class="sym-logo">` : '';
+        const logoImg = assetLogoHtml(r.isin, symbol);
         return `
           <tr>
-            <td class="cell-flex">${logoImg}<span>${r.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[r.asset] : '')}</td>
-            <td>${r.isin}</td>
-            <td>${r.count}</td>
+            <td class="cell-flex">${logoImg}<span>${escapeHtml(r.asset)}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[r.asset] : '')}</td>
+            <td>${escapeHtml(r.isin || "")}</td>
+            <td>${Number(r.count || 0)}</td>
             <td>${money(r.amount)}</td>
             <td>${money(r.tax)}</td>
             <td>${money(r.gross)}</td>
@@ -1954,14 +1975,13 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
 
       document.getElementById("dividends").innerHTML = (dividends.rows || []).map(row => {
         const symbol = window.assetToSymbolMap ? window.assetToSymbolMap[row.asset] : '';
-        const logoUrl = row.isin ? `https://assets.parqet.com/logos/isin/${row.isin}?format=png` : (symbol ? `https://assets.parqet.com/logos/symbol/${symbol}?format=png` : '');
-        const logoImg = logoUrl ? `<img src="${logoUrl}" onerror="if(this.src.indexOf('/isin/') !== -1 && '${symbol}') { this.src = 'https://assets.parqet.com/logos/symbol/${symbol}?format=png'; } else { this.style.display='none'; }" class="sym-logo">` : '';
+        const logoImg = assetLogoHtml(row.isin, symbol);
         return `
           <tr>
-            <td>${row.date}</td>
-            <td>${row.broker}</td>
-            <td class="cell-flex">${logoImg}<span>${row.asset}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}</td>
-            <td>${row.isin || ""}</td>
+            <td>${escapeHtml(row.date)}</td>
+            <td>${escapeHtml(row.broker)}</td>
+            <td class="cell-flex">${logoImg}<span>${escapeHtml(row.asset)}</span>${badgeHtml(window.assetToTypeMap ? window.assetToTypeMap[row.asset] : '')}</td>
+            <td>${escapeHtml(row.isin || "")}</td>
             <td>${money(row.amount_eur)}</td>
             <td>${money(row.tax_eur)}</td>
             <td>${money(row.gross_eur)}</td>
@@ -1992,7 +2012,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       pagedTable("cash-interest-payments", info.payments || [], rows => rows.length
         ? rows.map(row => `
             <tr>
-              <td>${row.date}</td>
+              <td>${escapeHtml(row.date)}</td>
               <td class="ta-l fw-500">${escapeHtml(row.broker)}</td>
               <td class="positive fw-600">${money(row.net_eur)}</td>
               <td class="negative">${money(row.tax_eur)}</td>
@@ -2385,7 +2405,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       document.getElementById("expense-categories").innerHTML = !expenses.categories.length
         ? `<tr><td colspan="4" class="empty-state">${escapeHtml(message)}</td></tr>`
         : expenses.categories.slice(0, 12).map(row => `
-          <tr style="cursor: pointer;" onclick="toggleCategorySubcategories(this, '${escapeHtml(row.category)}')">
+          <tr style="cursor: pointer;" onclick="toggleCategorySubcategories(this, ${jsArg(row.category)})">
             <td class="cell-flex">
               <svg class="category-chevron" style="width: 10px; height: 10px; margin-right: 6px; transition: transform 0.2s; fill: var(--text-secondary); flex-shrink: 0;" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/></svg>
               <span>${escapeHtml(row.category)}</span>
@@ -2529,7 +2549,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
                   ${subcategories.map(sub => {
                     const pctShare = totalAmount > 0 ? (sub.amount / totalAmount * 100).toFixed(1) : "0.0";
                     return `
-                      <tr style="border-bottom: 1px solid var(--tint-subtle); color: var(--text-primary); cursor: pointer;" onclick="showSubcategoryDetails('${escapeHtml(categoryName)}', '${escapeHtml(sub.subcategory)}')">
+                      <tr style="border-bottom: 1px solid var(--tint-subtle); color: var(--text-primary); cursor: pointer;" onclick="showSubcategoryDetails(${jsArg(categoryName)}, ${jsArg(sub.subcategory)})">
                         <td style="text-align: left; padding: 6px 8px; font-weight: 500; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--tint-strong);">${escapeHtml(sub.subcategory)}</td>
                         <td style="text-align: right; padding: 6px 8px;">${sub.count}</td>
                         <td style="text-align: right; padding: 6px 8px; font-weight: 600; color: var(--positive);">${money(sub.amount)}</td>
@@ -2656,7 +2676,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       document.getElementById("contributions-summary").textContent = `${money(contributions.net_eur)} net | ${money(contributions.total_buys_eur)} buys | ${money(contributions.total_sells_eur)} sells`;
       document.getElementById("contributions-broker").innerHTML = contributions.by_broker.map(row => `
         <tr>
-          <td>${row.broker}</td>
+          <td>${escapeHtml(row.broker)}</td>
           <td>${money(row.buys_eur)}</td>
           <td>${money(row.sells_eur)}</td>
           <td class="${signedClass(row.net_eur)}">${money(row.net_eur)}</td>
@@ -2665,7 +2685,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       `).join("");
       document.getElementById("contributions-date").innerHTML = contributions.by_date.slice(0, 20).map(row => `
         <tr>
-          <td>${row.date}</td>
+          <td>${escapeHtml(row.date)}</td>
           <td>${money(row.buys_eur)}</td>
           <td>${money(row.sells_eur)}</td>
           <td class="${signedClass(row.net_eur)}">${money(row.net_eur)}</td>
@@ -2736,17 +2756,17 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       document.getElementById("frictions-summary").textContent = unavailable
         ? "Not available"
         : `${selectedWindowLabel()} | ${money(frictions.total_drag_eur)} total drag`;
-      document.getElementById("friction-metrics").innerHTML = unavailable ? `<div class="empty-state">${message}</div>` : `
+      document.getElementById("friction-metrics").innerHTML = unavailable ? `<div class="empty-state">${escapeHtml(message)}</div>` : `
         <div class="friction-item"><span>Taxes paid</span><strong>${money(frictions.total_taxes_eur)}</strong></div>
         <div class="friction-item"><span>Costs paid</span><strong>${money(frictions.total_costs_eur)}</strong></div>
         <div class="friction-item"><span>Total drag</span><strong>${money(frictions.total_drag_eur)}</strong></div>
         <div class="friction-item"><span>Net liquidation</span><strong>${money(frictions.net_liquidation_eur)}</strong></div>
       `;
       document.getElementById("frictions-broker").innerHTML = unavailable || !frictions.by_broker.length
-        ? `<tr><td colspan="5" class="empty-state">${message}</td></tr>`
+        ? `<tr><td colspan="5" class="empty-state">${escapeHtml(message)}</td></tr>`
         : frictions.by_broker.map(row => `
           <tr>
-            <td>${row.broker}</td>
+            <td>${escapeHtml(row.broker)}</td>
             <td>${money(row.costs_eur)}</td>
             <td>${money(row.taxes_eur)}</td>
             <td>${money(row.dividend_tax_eur)}</td>
@@ -2754,13 +2774,13 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
           </tr>
         `).join("");
       document.getElementById("frictions-events").innerHTML = unavailable || !frictions.rows.length
-        ? `<tr><td colspan="5" class="empty-state">${message}</td></tr>`
+        ? `<tr><td colspan="5" class="empty-state">${escapeHtml(message)}</td></tr>`
         : frictions.rows.slice(0, 30).map(row => `
           <tr>
-            <td>${row.date}</td>
-            <td>${row.broker}</td>
-            <td>${row.type_label}</td>
-            <td>${row.description}</td>
+            <td>${escapeHtml(row.date)}</td>
+            <td>${escapeHtml(row.broker)}</td>
+            <td>${escapeHtml(row.type_label)}</td>
+            <td>${escapeHtml(row.description)}</td>
             <td class="${signedClass(row.amount_eur)}">${money(row.amount_eur)}</td>
           </tr>
         `).join("");
@@ -2773,8 +2793,8 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
           lossesWrap.style.display = "block";
           document.getElementById("tax-losses-tbody").innerHTML = losses.map(row => `
             <tr>
-              <td>${row.year}</td>
-              <td>${row.broker}</td>
+              <td>${escapeHtml(row.year)}</td>
+              <td>${escapeHtml(row.broker)}</td>
               <td class="red">${money(row.amount_eur)}</td>
               <td>31/12/${row.expires_year}</td>
             </tr>
@@ -3167,7 +3187,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         return `
           <tr style="${rowStyle}">
             <td style="text-align: left; display: flex; align-items: center; gap: 8px;">
-              <span class="user-avatar ${user.person}" aria-hidden="true">
+              <span class="user-avatar ${escapeHtml(user.person)}" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
               </span>
               <span style="${nameStyle}">${escapeHtml(user.name)}${user.message ? `<small class="ranking-message">${escapeHtml(user.message)}</small>` : ""}</span>

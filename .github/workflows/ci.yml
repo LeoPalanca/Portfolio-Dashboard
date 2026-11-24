@@ -39,7 +39,10 @@ jobs:
         run: uv run mypy src
 
       - name: Frontend syntax
-        run: node --check static/app.js
+        run: for script in static/*.js; do node --check "$script"; done
+
+      - name: Frontend tests
+        run: node test_income_expenses.cjs
 
       - name: Tests
         run: uv run pytest -q
