@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.18.2 — 2026-11-25
+
+- **Cash flows priced on their own day.** In Total mode, deposits and withdrawals on the Trade Republic, BBVA and Revolut cash accounts, and crypto-wallet transactions, are now valued on the day they happen, as trades already were. Before, a deposit fell inside a month-long interval and counted for half of it, so a large one could distort the year-to-date, 1Y and all-time return (a 3% month with a big deposit late in it showed 1.2%).
+- **Crypto wallet.** Its contributions are now the money that went in and out: buys at the euros paid, sales at the proceeds, transfers at that day's market value; staking and other rewards count as income. Before, a sale lowered contributions by its cost while the value fell by the proceeds, so a realised gain showed as a loss. Coins the snapshot holds but the transactions don't explain are booked once instead of reappearing as a move every day, and one coin held in two wallets is no longer counted from one of them only.
+- **Windows.** A trade on the first day of a window is no longer counted in that window's net contributions and realized P/L, whose starting value already includes it. The 1M cards and the 1M movers now cover a calendar month, like the 1M period (one month before 31 March is 28/29 February).
+- **Labels.** The "pp" on the 1D/1W/1M cards says it compares the whole portfolio, cash and crypto included, with MSCI World; the opening sentence still compares equities only. In Total mode the net contributions card counts the cash accounts' deposits and withdrawals, like the headline chart. The sentence says that the unrealized gain is since purchase, and the fallback when a window is too short is labelled "since start".
+- **Export.** "Return %" is the window's time-weighted return, as on the page, and realized P/L and net contributions follow the window, each with a line saying what it covers. The benchmark sheet uses the same window return.
+
 ## 0.18.1 — 2026-11-25
 
 - **Fineco capital-gain tax estimate.** The estimate grossed up the gain as if it were already net of tax, which came to 35.1% of the gain instead of 26%: Fineco books a sale before tax and debits the tax separately. It is now 26% of the gain. The gain uses Fineco's own average cost (the cross-broker average only for shares transferred in), and earlier losses are offset as in the administered regime: a loss offsets stock, bond and ETC gains until the end of the fourth following year, while ETF and fund gains are taxed in full. The 12.5% rate on government bonds is not modelled.
