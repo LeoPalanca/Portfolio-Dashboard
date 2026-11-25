@@ -370,8 +370,10 @@ class ExpenseSummaryTest(unittest.TestCase):
         self.assertEqual(len(payload["credits"]), 1)
 
     def test_export_period_filter_changes_expense_rows(self) -> None:
+        # 1M is a calendar month, as on the page: 1 January is inside the month to
+        # 1 February, so the older row sits the day before it.
         rows = [
-            {"date": "2026-01-01", "amount_eur": 10.0, "category": "Shopping", "flow_kind": "spend"},
+            {"date": "2025-12-31", "amount_eur": 10.0, "category": "Shopping", "flow_kind": "spend"},
             {"date": "2026-02-01", "amount_eur": 20.0, "category": "Dining", "flow_kind": "spend"},
         ]
 

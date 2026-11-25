@@ -311,12 +311,21 @@ consumption.
 - Market prices, FX conversion, news, mappings, and proxy compositions are best-effort
   data and may be stale or unavailable.
 - Selected-window returns are linked across valuation dates (month ends, the last 35
-  days, the 1Y anniversary, and every trade day together with the day before it), with
-  each interval's external flows adjusted Modified-Dietz style. A window starts from the
-  valuation point nearest its start date (31 December for YTD). Window contributions
-  and realized P/L subtract the cumulative value before the window. The 1D/1W/1M cards
-  use the same time-weighted method and follow the Price/Total Return mode. Cash
-  deposits between valuation dates are assumed to arrive mid-interval.
+  days, the 1Y anniversary, and every day with an external flow together with the day
+  before it: trades, cash-account deposits and withdrawals, and crypto wallet
+  transactions), with each interval's external flows adjusted Modified-Dietz style. A
+  window starts from the valuation point nearest its start date (31 December for YTD);
+  its contributions and realized P/L count the trades after that point's day, whose
+  close already holds that day's trades. In Total Return mode the contributions
+  include the cash accounts. 1M is a calendar month (31 March back to the end of
+  February) everywhere. The 1D/1W/1M cards use the same time-weighted method and
+  follow the Price/Total Return mode; their "Portfolio … pp" gap compares the whole
+  portfolio, cash and crypto included, with MSCI World, while the headline compares
+  equities alone.
+- Crypto wallet contributions are money in and out: buys at the euros paid, sales at
+  the proceeds, transfers at that day's market value; rewards are income. Coins the
+  snapshot holds but the transactions do not explain are booked once, at market value
+  on the last transaction date, so the snapshot does not show as a daily move.
 - Trade Republic reports dividends gross with the withholding in a separate column;
   the ledger keeps them as reported and the dashboard shows the net amount.
 - Realized P/L is shown before tax at every broker; tax withheld on a sale (Trade

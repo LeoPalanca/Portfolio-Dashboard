@@ -764,6 +764,9 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         const msciClass = signedClass(msciVal);
         const vsMsciClass = signedClass(vsMsciVal);
         const activeClass = activeMoversPeriod === period ? "active" : "";
+        // The gap compares the whole portfolio with an all-equity index, unlike the
+        // headline sentence and the performance chart, which compare equities alone.
+        const vsMsciTitle = `Whole portfolio minus MSCI World over the same window, in points. It includes cash, money-market, bond and crypto holdings${useTotal ? " and the bank balances" : ""}, so it is not the equity-only comparison shown in the headline.`;
         return `
           <div class="metric clickable" onclick="toggleVariationMode()" title="Click to toggle % / €">
             <div class="metric-label-row">
@@ -773,15 +776,17 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
             <strong class="${colorClass}">${displayVal}</strong>
             <div class="metric-benchmark">
               <span>MSCI <span class="${msciClass}">${msciText}</span></span>
-              <span class="${vsMsciClass}">${vsMsciText}</span>
+              <span title="${escapeHtml(vsMsciTitle)}">Portfolio <span class="${vsMsciClass}">${vsMsciText}</span></span>
             </div>
           </div>
         `;
       }).join("");
 
+      // With too few points in the window the return is the simple one since the start.
+      const sinceStart = key => key === "return_pct" && totals.return_basis === "since_start";
       const restHtml = metricDefs.slice(1).map(([key, label]) => `
-        <div class="metric">
-          <span>${label}</span>
+        <div class="metric" title="${escapeHtml(METRIC_TITLES[sinceStart(key) ? "return_pct_since_start" : key] || "")}">
+          <span>${sinceStart(key) ? "Return since start" : label}</span>
           <strong class="${signedClass(key.includes("pl") || key.includes("pct") ? totals[key] : 0)}">${key.includes("pct") ? percent(totals[key]) : moneyWhole(totals[key])}</strong>
         </div>
       `).join("");
@@ -792,6 +797,16 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       renderLede(totals);
     }
     const VARIATION_LABELS = { "1d": "Last day", "1w": "Last week", "1m": "Last month" };
+    // Which span each overview figure covers: some follow the selected window, the
+    // holdings figures are about what is open today.
+    const METRIC_TITLES = {
+      return_pct: "Time-weighted return over the selected window: money added or withdrawn is not counted as performance.",
+      return_pct_since_start: "Simple return since the first trade (profit / net contributions): the selected window has fewer than two valuation points.",
+      open_cost_basis: "What the holdings open today cost.",
+      unrealized_pl: "Gain or loss on the holdings open today, since purchase.",
+      realized_pl: "Gains and losses realized by sales in the selected window.",
+      net_contributions: "Purchases minus sale proceeds in the selected window; in Total mode, money paid into the accounts minus money taken out."
+    };
     // The opening line of the report: value, the window's return and how it
     // compares with MSCI World, written as a sentence rather than a grid of cards.
     let ledeTotals = null;
@@ -812,7 +827,12 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       const parts = [];
       if (Number.isFinite(Number(t.return_pct))) {
         const value = Number(t.return_pct);
-        parts.push(`${escapeHtml(opening)}, investments ${value >= 0 ? "gained" : "lost"} <span class="${signedClass(value)}">${pct.format(Math.abs(value))}%</span> time-weighted`);
+        // With fewer than two valuation points in the window the figure is the simple
+        // return since the first trade: say so instead of naming the window.
+        const sinceStart = t.return_basis === "since_start";
+        const lead = sinceStart ? "Since the first trade" : opening;
+        const basis = sinceStart ? "on net contributions" : "time-weighted";
+        parts.push(`${escapeHtml(lead)}, investments ${value >= 0 ? "gained" : "lost"} <span class="${signedClass(value)}">${pct.format(Math.abs(value))}%</span> ${basis}`);
       }
       let sentence = parts.length ? `${parts.join(", ")}.` : "";
       if (ledeEquityGap !== null && ledeEquityGap !== undefined && Number.isFinite(Number(ledeEquityGap))) {
@@ -823,7 +843,8 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       }
       if (Number.isFinite(Number(t.unrealized_pl)) && Number.isFinite(Number(t.open_cost_basis))) {
         const gain = Number(t.unrealized_pl);
-        sentence += ` Holdings that cost ${moneyWhole(t.open_cost_basis)} carry an unrealized ${gain >= 0 ? "gain" : "loss"} of <span class="${signedClass(gain)}">${moneyWhole(Math.abs(gain))}</span>.`;
+        // Unlike the return above, this is not limited to the window.
+        sentence += ` Holdings open today cost ${moneyWhole(t.open_cost_basis)} and carry an unrealized ${gain >= 0 ? "gain" : "loss"} of <span class="${signedClass(gain)}">${moneyWhole(Math.abs(gain))}</span> since purchase.`;
       }
       document.getElementById("lede-figure").textContent = moneyWhole(t.market_value);
       document.getElementById("lede-text").innerHTML = sentence.trim();
@@ -1140,31 +1161,53 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
     }
     function periodMetrics(data) {
       const totals = { ...data.totals };
-      if (selectedReturnMode === "total") {
+      const isTotal = selectedReturnMode === "total";
+      if (isTotal) {
         totals.return_pct = totals.total_return_pct;
         totals.historical_profit = totals.historical_total_profit;
         totals.market_value = totals.total_market_value || totals.market_value;
+        // The Total value holds the cash accounts, so its contributions do too: the
+        // same figure the headline chart draws as its invested line.
+        if (Number.isFinite(Number(totals.total_net_contributions ?? NaN))) {
+          totals.net_contributions = Number(totals.total_net_contributions);
+        }
       }
-      const values = filterByPeriod(data.valuation_series || []);
+      // The server figure is the simple return since the first trade; it stays only
+      // when the window has too few points for a time-weighted return.
+      totals.return_basis = "since_start";
+      const series = data.valuation_series || [];
+      const values = filterByPeriod(series);
       if (values.length >= 2) {
         const first = values[0];
         const last = values[values.length - 1];
-        const p_last = Number(selectedReturnMode === "total" ? last.total_profit : last.profit || 0);
-        const p_first = Number(selectedReturnMode === "total" ? first.total_profit : first.profit || 0);
+        const p_last = Number(isTotal ? last.total_profit : last.profit || 0);
+        const p_first = Number(isTotal ? first.total_profit : first.profit || 0);
         const periodProfit = p_last - p_first;
         const timeWeighted = portfolioTimeWeightedReturns(values);
         totals.return_pct = Number(timeWeighted[timeWeighted.length - 1]?.return_pct || 0);
         totals.historical_profit = periodProfit;
+        totals.return_basis = "time_weighted";
       }
-      // Cumulative trade metrics change only on trade days: subtract the last value
-      // before the window (zero when the first trade is inside it).
-      const cashSeries = data.series || [];
+      // Cumulative flows change only on trade (or deposit) days. The window's value and
+      // return start from the close of its first point, which already holds that day's
+      // trades, so only trades after that day count. A window that opens before the
+      // first point starts from nothing, and every trade counts.
       const windowStart = periodStartDate(data);
-      if (windowStart && cashSeries.length) {
-        const last = cashSeries[cashSeries.length - 1];
-        const base = [...cashSeries].reverse().find(p => new Date(p.date) < windowStart);
-        totals.realized_pl = Number(last.realized_pl || 0) - Number(base?.realized_pl || 0);
-        totals.net_contributions = Number(last.net_contributions || 0) - Number(base?.net_contributions || 0);
+      if (windowStart) {
+        const opensBeforeHistory = values.length > 0 && values[0] === series[0] && windowStart < new Date(series[0].date);
+        const baseDay = values.length && !opensBeforeHistory ? new Date(values[0].date) : null;
+        const isBase = point => (baseDay ? new Date(point.date) <= baseDay : !values.length && new Date(point.date) < windowStart);
+        const cashSeries = data.series || [];
+        if (cashSeries.length) {
+          const last = cashSeries[cashSeries.length - 1];
+          const base = [...cashSeries].reverse().find(isBase);
+          totals.realized_pl = Number(last.realized_pl || 0) - Number(base?.realized_pl || 0);
+          totals.net_contributions = Number(last.net_contributions || 0) - Number(base?.net_contributions || 0);
+        }
+        if (isTotal && values.length && values[values.length - 1].total_net_contributions !== undefined) {
+          const opening = baseDay ? Number(values[0].total_net_contributions || 0) : 0;
+          totals.net_contributions = Number(values[values.length - 1].total_net_contributions || 0) - opening;
+        }
       }
       return totals;
     }
