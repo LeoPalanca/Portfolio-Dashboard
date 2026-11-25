@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.18.1 — 2026-11-25
+
+- **Fineco capital-gain tax estimate.** The estimate grossed up the gain as if it were already net of tax, which came to 35.1% of the gain instead of 26%: Fineco books a sale before tax and debits the tax separately. It is now 26% of the gain. The gain uses Fineco's own average cost (the cross-broker average only for shares transferred in), and earlier losses are offset as in the administered regime: a loss offsets stock, bond and ETC gains until the end of the fourth following year, while ETF and fund gains are taxed in full. The 12.5% rate on government bonds is not modelled.
+- **Realized P/L before tax at every broker.** Trade Republic and Interactive Brokers sales showed realized P/L after the tax withheld from them, while Fineco's was before tax. All are now before tax, with the tax listed under Taxes & costs; cash flows and returns are unchanged.
+- **Taxes & costs.** Taxes are split into withheld by the broker and estimated, and each estimated row says so. Trade Republic tax refunds now lower the total instead of adding to it. "Net liquidation" subtracted fees and taxes already paid, which counted them twice; it is replaced by an after-tax value if everything were sold today: market value minus 26% of each open position's unrealized gain, before selling costs. The note now lists what is not included (stamp duty, IVAFE, tax on interest, self-declared taxes). The Dividends section says that Fineco's gross amount is after foreign withholding.
+- **Pence.** A trade settled in GBX is converted as pence, not pounds.
+
 ## 0.18.0 — 2026-11-25
 
 - **Family rankings are time-weighted.** Each person is ranked on the same time-weighted return their own dashboard shows, so money paid in or taken out no longer moves the ranking. Each window starts from the last value on or before its start date (YTD from the 31 December close). Portfolios rebuilt from a holdings snapshot are tagged "reconstructed": their history assumes today's holdings were bought on the start date, so it has no past sales or cash flows and carries hindsight.

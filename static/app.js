@@ -3196,6 +3196,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       let costs = 0;
       let taxes = 0;
       let dividendTax = 0;
+      let estimatedTaxes = 0;
       rows.forEach(row => {
         const amount = Number(row.amount_eur || 0);
         brokerMap[row.broker] ||= { broker: row.broker, costs_eur: 0, taxes_eur: 0, dividend_tax_eur: 0, total_eur: 0 };
@@ -3210,20 +3211,27 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
           taxes += amount;
           brokerMap[row.broker].taxes_eur += amount;
         }
+        if (row.estimated && row.type !== "cost") estimatedTaxes += amount;
         brokerMap[row.broker].total_eur += amount;
       });
       const totalTaxes = taxes + dividendTax;
       const totalDrag = costs + totalTaxes;
       const totals = periodMetrics(data);
+      // After-tax value if everything were sold today: the value shown in the current
+      // return mode minus the estimated tax on open gains. Same definition as the backend.
+      const exitTax = Number(source.estimated_exit_tax_eur || 0);
       return {
         status: "available",
         message: "",
         total_costs_eur: costs,
         total_taxes_eur: totalTaxes,
+        withheld_taxes_eur: totalTaxes - estimatedTaxes,
+        estimated_taxes_eur: estimatedTaxes,
         trade_taxes_eur: taxes,
         dividend_tax_eur: dividendTax,
         total_drag_eur: totalDrag,
-        net_liquidation_eur: Number(totals.market_value || 0) - totalDrag,
+        estimated_exit_tax_eur: exitTax,
+        net_liquidation_eur: Number(totals.market_value || 0) - exitTax,
         by_broker: Object.values(brokerMap).sort((a, b) => Math.abs(b.total_eur) - Math.abs(a.total_eur)),
         rows
       };
@@ -3236,10 +3244,10 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         ? "Not available"
         : `${selectedWindowLabel()} | ${money(frictions.total_drag_eur)} total drag`;
       document.getElementById("friction-metrics").innerHTML = unavailable ? `<div class="empty-state">${escapeHtml(message)}</div>` : `
-        <div class="friction-item"><span>Taxes paid</span><strong>${money(frictions.total_taxes_eur)}</strong></div>
+        <div class="friction-item"><span>Taxes</span><strong>${money(frictions.total_taxes_eur)}</strong><span>${money(frictions.withheld_taxes_eur)} withheld by the broker · ${money(frictions.estimated_taxes_eur)} estimated</span></div>
         <div class="friction-item"><span>Costs paid</span><strong>${money(frictions.total_costs_eur)}</strong></div>
         <div class="friction-item"><span>Total drag</span><strong>${money(frictions.total_drag_eur)}</strong></div>
-        <div class="friction-item"><span>Net liquidation</span><strong>${money(frictions.net_liquidation_eur)}</strong></div>
+        <div class="friction-item"><span>After-tax value if sold today</span><strong>${money(frictions.net_liquidation_eur)}</strong><span>Estimate before selling costs · ${money(frictions.estimated_exit_tax_eur)} tax on open gains</span></div>
       `;
       document.getElementById("frictions-broker").innerHTML = unavailable || !frictions.by_broker.length
         ? `<tr><td colspan="5" class="empty-state">${escapeHtml(message)}</td></tr>`

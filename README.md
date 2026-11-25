@@ -319,6 +319,15 @@ consumption.
   deposits between valuation dates are assumed to arrive mid-interval.
 - Trade Republic reports dividends gross with the withholding in a separate column;
   the ledger keeps them as reported and the dashboard shows the net amount.
+- Realized P/L is shown before tax at every broker; tax withheld on a sale (Trade
+  Republic, Interactive Brokers) is listed under Taxes & costs instead.
+- Fineco debits capital-gain tax from the current account, so Taxes & costs shows an
+  estimate: 26% of each sale's gain on Fineco's own average cost (cross-broker average
+  for shares transferred in), after earlier losses. Losses offset stock, bond and ETC
+  gains until the end of the fourth following year; ETF and fund gains are taxed in
+  full. The 12.5% government-bond rate, stamp duty, IVAFE and self-declared taxes are
+  not modelled. The after-tax value deducts 26% of each open position's unrealized
+  gain from its market value, before selling costs.
 - Snapshot portfolios cannot provide transaction-level accuracy for periods before
   the supplied history and adjustments.
 
