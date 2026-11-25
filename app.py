@@ -43,6 +43,7 @@ from src.portfolio_dashboard.domain.issues import (
     report_import_issue,
 )
 from src.portfolio_dashboard.ibkr_monitor import create_ibkr_blueprint
+from src.portfolio_dashboard.web_delivery import SlimResponseCache, distribution_details, install_asset_delivery
 from src.portfolio_dashboard.web_security import install_web_security, restrict_pdf_resource_access
 from src.portfolio_dashboard.cache import HistoryStore
 from src.portfolio_dashboard.config import get_settings
@@ -175,6 +176,8 @@ PRICE_CACHE = SETTINGS.cache_path("prices.json")
 HISTORY_CACHE = SETTINGS.cache_path("history.json")
 HISTORY_CACHE_DIR = SETTINGS.cache_dir / "history"
 NEWS_CACHE = SETTINGS.cache_path("news.json")
+# One entry is kept per portfolio/filter combination; stale ones are dropped on save.
+NEWS_CACHE_KEEP_SECONDS = 7 * 24 * 3600
 DASHBOARD_CACHE_DIR = SETTINGS.cache_dir / "dashboard-payloads"
 DASHBOARD_CACHE_FORMAT_VERSION = 3
 IMPORT_PARSER_VERSION = "ledger-5"
@@ -202,7 +205,9 @@ app.register_blueprint(create_ibkr_blueprint(SETTINGS.data_dir))
 app.config["MAX_CONTENT_LENGTH"] = SETTINGS.import_max_bytes
 app.jinja_env.keep_trailing_newline = True
 install_web_security(app)
+install_asset_delivery(app)
 restrict_pdf_resource_access()
+_SLIM_RESPONSES = SlimResponseCache()
 
 
 @app.after_request
@@ -273,9 +278,12 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def save_json(path: Path, payload: Any) -> None:
-    encoded = json.dumps(payload, indent=2, sort_keys=True)
     tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     with _CACHE_WRITE_LOCK:
+        # Shared caches are mutated by request threads; a shallow copy is taken
+        # atomically, so serializing it cannot fail halfway with "dict changed size".
+        snapshot = dict(payload) if isinstance(payload, dict) else list(payload) if isinstance(payload, list) else payload
+        encoded = json.dumps(snapshot, indent=2, sort_keys=True)
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp_path.write_text(encoded, encoding="utf-8")
@@ -371,19 +379,12 @@ def write_dashboard_cache(path: Path, signature: str, payload: dict[str, Any]) -
     save_json(path, {"signature": signature, "payload": payload})
 
 
-def remember_dashboard_payload(path: Path, signature: str, payload: dict[str, Any]) -> bytes:
-    encoded = app.json.dumps(payload, separators=(",", ":")).encode("utf-8")
+def remember_dashboard_payload(path: Path, signature: str, payload: dict[str, Any]) -> None:
+    # Responses are trimmed before encoding (web_delivery), so the full snapshot is
+    # no longer pre-encoded here.
     if len(_DASHBOARD_MEMORY_CACHE) >= 4 and path not in _DASHBOARD_MEMORY_CACHE:
         _DASHBOARD_MEMORY_CACHE.clear()
-    _DASHBOARD_MEMORY_CACHE[path] = (signature, payload, encoded)
-    return encoded
-
-
-def dashboard_response_bytes(path: Path, payload: dict[str, Any]) -> bytes:
-    memory = _DASHBOARD_MEMORY_CACHE.get(path)
-    if memory is not None and memory[1] is payload:
-        return memory[2]
-    return app.json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    _DASHBOARD_MEMORY_CACHE[path] = (signature, payload, b"")
 
 
 def cash_coverage_disclosure(payload: dict[str, Any], person: str) -> dict[str, Any]:
@@ -7599,9 +7600,13 @@ def portfolio_news_payload(
     rows: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     seen: set[str] = set()
-    for symbol in symbols:
+    # Feeds are fetched side by side: one by one, a slow feed made the request wait
+    # up to 12 seconds per symbol.
+    with ThreadPoolExecutor(max_workers=min(6, max(1, len(symbols)))) as pool:
+        futures = [pool.submit(fetch_symbol_news, symbol) for symbol in symbols]
+    for symbol, future in zip(symbols, futures):
         try:
-            for item in fetch_symbol_news(symbol):
+            for item in future.result():
                 dedupe_key = item["link"] or f"{item['symbol']}:{item['title']}"
                 if dedupe_key in seen:
                     continue
@@ -7622,6 +7627,9 @@ def portfolio_news_payload(
     }
     if isinstance(cache, dict):
         cache[cache_key] = {"fetched_at_ts": now, "payload": result}
+        for key, entry in list(cache.items()):
+            if not isinstance(entry, dict) or now - int(entry.get("fetched_at_ts") or 0) > NEWS_CACHE_KEEP_SECONDS:
+                cache.pop(key, None)
         save_json(NEWS_CACHE, cache)
     return result
 
@@ -9477,9 +9485,9 @@ def api_portfolio():
             job = _PRICE_REFRESH_JOBS.get(path, {})
             snapshot = {"status": "fresh" if fresh else "refreshing" if job.get("status") == "running" else "stale",
                         "generated_at": payload.get("generated_at"), "error": job.get("error")}
-        payload = {**payload, "snapshot": snapshot}
+        payload = {**_SLIM_RESPONSES.get(str(path), payload), "snapshot": snapshot}
         payload = cash_coverage_disclosure(payload, configured_portfolio_id(person))
-        encoded = dashboard_response_bytes(path, payload)
+        encoded = app.json.dumps(payload, separators=(",", ":")).encode("utf-8")
         response = app.response_class(mimetype="application/json")
         if "gzip" in request.accept_encodings and request.accept_encodings["gzip"] > 0 and len(encoded) > 4096:
             key = (path, hashlib.sha256(encoded).digest())
@@ -9496,6 +9504,26 @@ def api_portfolio():
         return response
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/api/portfolio/distribution-details")
+def api_portfolio_distribution_details():
+    """Fund and sector holdings for the saved snapshot the page is showing."""
+
+    try:
+        options = dict(
+            person=configured_portfolio_id(request.args.get("person", PRIMARY_PORTFOLIO_ID)),
+            berkshire_mode=normalize_berkshire_mode(request.args.get("berkshire", "stock")),
+            proxy_mode=normalize_proxy_mode(request.args.get("proxy", DEFAULT_PROXY_MODE)),
+            broker=(request.args.get("broker", "all") or "all").strip().lower(),
+            live_only="on" if request.args.get("live_only", "off") == "on" else "off",
+        )
+        payload = read_dashboard_cache(dashboard_cache_path(*options.values()), dashboard_source_signature(), allow_expired=True)
+        if payload is None:
+            return jsonify({"error": "No saved snapshot for this selection yet."}), 404
+        return jsonify(distribution_details(payload))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.get("/api/news")

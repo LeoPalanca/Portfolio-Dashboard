@@ -1558,7 +1558,42 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       }).join("") : `<tr><td colspan="10" class="empty-state">No holdings available for this selection.</td></tr>`;
       updateSortHeaders();
     }
-    window.toggleSector = function(subId, rowEl) {
+    // Fund and sector holdings are fetched when first opened; the portfolio
+    // response leaves them out to stay small on slow links.
+    let distributionDetailsRequest = null;
+    function ensureDistributionDetails(distribution) {
+      if (!distribution || !distribution.details_deferred) return Promise.resolve(distribution);
+      if (!distributionDetailsRequest || distributionDetailsRequest.distribution !== distribution) {
+        const promise = fetch(`/api/portfolio/distribution-details?${currentQueryParams().toString()}`, { cache: "no-store" })
+          .then(response => response.json().then(body => {
+            if (!response.ok) throw new Error(body.error || "Holdings are unavailable.");
+            distribution.source_rows = body.source_rows || [];
+            for (const sector of distribution.sectors || []) sector.holdings = (body.sector_holdings || {})[sector.sector] || [];
+            distribution.details_deferred = false;
+            return distribution;
+          }))
+          .catch(error => {
+            distributionDetailsRequest = null;
+            throw error;
+          });
+        distributionDetailsRequest = { distribution, promise };
+      }
+      return distributionDetailsRequest.promise;
+    }
+    window.toggleSector = async function(subId, rowEl) {
+      const distribution = dashboardData && dashboardData.distribution;
+      if (distribution && distribution.details_deferred) {
+        try {
+          await ensureDistributionDetails(distribution);
+        } catch (error) {
+          console.warn(error);
+          return;
+        }
+        renderDistribution(distribution);
+        const reopened = document.getElementById(subId);
+        if (reopened && reopened.previousElementSibling) window.toggleSector(subId, reopened.previousElementSibling);
+        return;
+      }
       const subRow = document.getElementById(subId);
       if (!subRow) return;
       const chevron = rowEl.querySelector(".chevron");
@@ -1576,10 +1611,10 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       if (key === "sector") {
         return rows.map((row, index) => {
           const subId = `sector-sub-${index}`;
-          const hasHoldings = row.holdings && row.holdings.length;
+          const hasHoldings = (row.holdings && row.holdings.length) || row.holdings_count;
           
           let holdingsHtml = "";
-          if (hasHoldings) {
+          if (hasHoldings && row.holdings) {
             holdingsHtml = `
               <tr id="${subId}" style="display: none; background: var(--tint-faint);">
                 <td colspan="3" style="padding: 4px 12px 8px 20px;">
@@ -1674,7 +1709,11 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       const sources = data.composition_sources || [];
       let selectedSource = sources.find(row => sourceKey(row) === selectedDistributionSource);
       if (selectedDistributionSource && !selectedSource) selectedDistributionSource = "";
-      const underlyingRows = selectedSource ? selectedUnderlyingRows(data, selectedSource) : data.underlying;
+      if (selectedSource && data.details_deferred) {
+        // A fund stays selected across reloads: fetch its holdings, then draw it.
+        void ensureDistributionDetails(data).then(() => renderDistribution(data)).catch(error => console.warn(error));
+      }
+      const underlyingRows = selectedSource && !data.details_deferred ? selectedUnderlyingRows(data, selectedSource) : data.underlying;
       const sourceCoverage = data.composition_source_coverage || {resolved: 0, total: 0};
       document.getElementById("distribution-summary").textContent =
         `${data.covered_assets || 0}/${data.open_assets || 0} open assets mapped | ${sourceCoverage.resolved}/${sourceCoverage.total} composition sources | ${money(data.total_value_eur)} total${selectedSource ? ` | selected: ${selectedSource.asset}` : ""}`;
@@ -1697,8 +1736,15 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         : `<tr><td colspan="6" class="empty-state">No ETF composition source metadata available.</td></tr>`;
       pagedTable("distribution-underlying", underlyingRows || [], rows => distributionRows(rows, "holding"));
       document.querySelectorAll(".composition-source-row").forEach(rowEl => {
-        rowEl.addEventListener("click", () => {
+        rowEl.addEventListener("click", async () => {
           selectedDistributionSource = selectedDistributionSource === rowEl.dataset.sourceKey ? "" : rowEl.dataset.sourceKey;
+          if (selectedDistributionSource) {
+            try {
+              await ensureDistributionDetails(data);
+            } catch (error) {
+              console.warn(error);
+            }
+          }
           renderDistribution(data);
         });
       });
@@ -2490,10 +2536,12 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
 
       window.currentExpenseRows = expenses.rows || [];
 
-      document.getElementById("expenses-summary").textContent = unavailable
+      document.getElementById("expenses-summary").textContent = expenses.loading
+        ? "Loading transactions…"
+        : unavailable
         ? "No rows"
         : `${selectedWindowLabel()} | ${money(expenses.balance)} balance | ${expenses.rows.length} transactions`;
-      document.getElementById("expense-metrics").innerHTML = unavailable ? `<div class="empty-state">${escapeHtml(message)}</div>` : `
+      document.getElementById("expense-metrics").innerHTML = expenses.loading ? `<div class="empty-state">Loading transactions…</div>` : unavailable ? `<div class="empty-state">${escapeHtml(message)}</div>` : `
         <div class="expense-item"><span>Income</span><strong class="positive">${money(expenses.income)}</strong></div>
         <div class="expense-item"><span>Expenses</span><strong class="negative">${money(expenses.spend)}</strong></div>
         <div class="expense-item"><span>Balance</span><strong class="${signedClass(expenses.balance)}">${money(expenses.balance)}</strong></div>
@@ -3360,8 +3408,9 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       if (!target) return;
       const expenses = periodExpenses(data);
       const cash = data.expenses?.cash_ledger || {};
-      target.innerHTML = [["Income",expenses.income,"positive"],["Expenses",expenses.spend,"negative"],["Income minus expenses",expenses.balance,signedClass(expenses.balance)],["Refunds & credits",expenses.credits,""],["Transfers (gross movements)",expenses.transfers,""],["Manual cash · all dates",cash.balance, signedClass(cash.balance)]].map(([label,value,klass])=>`<div class="metric"><span>${escapeHtml(label)}</span><strong class="${klass}">${moneyWhole(value)}</strong></div>`).join("");
-      document.getElementById("money-window").textContent = `${selectedWindowLabel()} · ${expenses.rows.length} classified transactions`;
+      const loading = Boolean(data.expenses?.loading);
+      target.innerHTML = [["Income",expenses.income,"positive"],["Expenses",expenses.spend,"negative"],["Income minus expenses",expenses.balance,signedClass(expenses.balance)],["Refunds & credits",expenses.credits,""],["Transfers (gross movements)",expenses.transfers,""],["Manual cash · all dates",cash.balance, signedClass(cash.balance)]].map(([label,value,klass])=>`<div class="metric"><span>${escapeHtml(label)}</span><strong class="${loading ? "" : klass}">${loading ? "…" : moneyWhole(value)}</strong></div>`).join("");
+      document.getElementById("money-window").textContent = loading ? `${selectedWindowLabel()} · loading transactions…` : `${selectedWindowLabel()} · ${expenses.rows.length} classified transactions`;
       const coverage = data.expenses?.coverage || [];
       document.getElementById("money-coverage").textContent = coverage.length ? coverage.map(row=>`${row.source}: ${row.first_date} → ${row.last_date}`).join(" · ") : "Coverage is limited to imported statements; receipts are not necessarily salary.";
       document.getElementById("investment-scope").textContent = `${selectedWindowLabel()} · ${selectedReturnMode === "total" ? "Securities + reconstructed investment cash, dividends included" : "Securities only, excluding dividends"}. Benchmark chart compares equity total return with MSCI World.`;
@@ -3516,6 +3565,18 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       try {
         const params = currentQueryParams();
         if (refresh) params.set("refresh", "1");
+        // Income and expense rows come from the ledger endpoint, requested alongside
+        // the portfolio instead of after it; the portfolio response no longer repeats them.
+        let ledgerExpenses = null;
+        let renderedData = null;
+        void window.personalLedger.load(selectedPerson, expenses => {
+          if (requestId !== loadRequestId) return;
+          ledgerExpenses = expenses;
+          if (!renderedData) return;
+          renderedData.expenses = expenses;
+          renderMoneyOverview(renderedData);
+          renderSection("expenses-content", () => renderExpenses(renderedData));
+        });
         let portfolioRes, data;
         do {
           portfolioRes = await fetch(`/api/portfolio?${params.toString()}`, { signal: controller.signal });
@@ -3528,16 +3589,12 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         if (controller.signal.aborted) throw new DOMException("Snapshot preparation timed out", "AbortError");
         if (!portfolioRes.ok) throw new Error(data.error || "Dashboard request failed.");
         if (requestId !== loadRequestId) return;
+        data.expenses = ledgerExpenses || { ...(data.expenses || {}), rows: [], loading: true };
         dashboardData = data;
+        renderedData = data;
         renderDashboard(data);
         showSnapshotStatus(data);
         if (data.snapshot?.status === "refreshing") void pollSavedSnapshot(params,requestId);
-        void window.personalLedger.load(selectedPerson, expenses => {
-          if (requestId !== loadRequestId) return;
-          dashboardData.expenses = expenses;
-          renderMoneyOverview(dashboardData);
-          renderSection("expenses-content", () => renderExpenses(dashboardData));
-        });
         renderSection("news-content", () => void loadNews(false, data.news_symbols || []));
         renderSection("watchlist-content", () => void loadWatchlist(false));
         if (HAS_MULTIPLE_PORTFOLIOS) {
