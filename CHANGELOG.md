@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.1 — 2026-11-25
+
+- **Movers count your money.** The 1D/1W/1M movers used to multiply the stock's move by the shares held today, so a position bought during the window showed the whole move, including the part before the purchase. The euro figure now starts from the value held at the start of the window, adds what was bought and takes off what was sold in it, so it is the gain or loss on your money; its percentage is on the money at stake. The left column ranks by the stock's own price move, the right one by the euro result. Splits inside the window are counted in today's shares.
+
 ## 0.17.0 — 2026-11-25
 
 - **Rail in groups.** The section rail is split into Portfolio (performance, holdings, allocation, statistics, family rankings), Cash & income (income & expenses, cash flows, contributions, dividends, cash interest, taxes & costs), Markets (watchlist, news) and Data (data & prices, export). The default section order follows the same groups; a saved order that was still the old default moves to the new one, while a custom order, and any hidden sections, are kept. On tablets and phones a thin divider separates the groups in the strip.

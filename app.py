@@ -22,6 +22,7 @@ import warnings
 import xml.etree.ElementTree as ET
 from bisect import bisect_right
 from collections import Counter
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
@@ -195,7 +196,7 @@ NEWS_CACHE = SETTINGS.cache_path("news.json")
 # One entry is kept per portfolio/filter combination; stale ones are dropped on save.
 NEWS_CACHE_KEEP_SECONDS = 7 * 24 * 3600
 DASHBOARD_CACHE_DIR = SETTINGS.cache_dir / "dashboard-payloads"
-DASHBOARD_CACHE_FORMAT_VERSION = 3
+DASHBOARD_CACHE_FORMAT_VERSION = 4
 IMPORT_PARSER_VERSION = "ledger-5"
 _DASHBOARD_CACHE_LOCK = threading.Lock()
 _DASHBOARD_BUILD_LOCKS: dict[Path, threading.Lock] = {}
@@ -3146,6 +3147,7 @@ def family_dashboard_payload(
         mappings,
         refresh=False,
         split_events=corporate_action_split_events(fake_trades),
+        trades=fake_trades,
     )
     distribution = calculate_distribution(
         priced["positions"],
@@ -6639,8 +6641,9 @@ def compute_position_variations(
     is_crypto_wallet: bool,
     refresh: bool = False,
     known_splits: Any = None,
-) -> dict[str, dict[str, float]]:
-    res = {
+    trades: Sequence[Trade] = (),
+) -> dict[str, dict[str, float | None]]:
+    res: dict[str, dict[str, float | None]] = {
         "1d": {"pct": 0.0, "amount": 0.0},
         "1w": {"pct": 0.0, "amount": 0.0},
         "1m": {"pct": 0.0, "amount": 0.0},
@@ -6672,23 +6675,71 @@ def compute_position_variations(
                 fx_prices = {}
                 invert = False
 
-        if not prices:
-            return res
-
+        unit_now = current_value_eur / quantity
         for period, days in [("1d", 1), ("1w", 7), ("1m", 30)]:
             target_date = today - timedelta(days=days)
-            past_price = get_historical_price_in_eur(prices, fx_prices, target_date, invert, currency)
-            if past_price is not None and past_price > 0:
-                past_val = Decimal(str(past_price)) * quantity
-                amount = current_value_eur - past_val
-                pct_val = (amount / past_val * Decimal("100")) if past_val > 0 else ZERO
-                res[period] = {
-                    "pct": float(pct_val.quantize(Decimal("0.01"))),
-                    "amount": float(amount.quantize(Decimal("0.01"))),
-                }
+            raw_price = get_historical_price_in_eur(prices, fx_prices, target_date, invert, currency) if prices else None
+            past_price = Decimal(str(raw_price)) if raw_price is not None and raw_price > 0 else None
+            traded, paid, received = position_window_flows(trades, target_date, known_splits)
+            held_before = quantity - traded
+            if held_before < Decimal("0.00000001"):
+                held_before = ZERO
+            if held_before > ZERO and past_price is None:
+                continue
+            start_value = held_before * past_price if past_price is not None else ZERO
+            # What the window did to the money in this position: today's value against
+            # the value held at the start plus what was bought and minus what was sold.
+            amount = current_value_eur - start_value - paid + received
+            at_stake = start_value + paid
+            res[period] = {
+                "pct": float((amount / at_stake * Decimal("100")).quantize(Decimal("0.01"))) if at_stake > ZERO else 0.0,
+                "amount": float(amount.quantize(Decimal("0.01"))),
+                "price_pct": (
+                    float(((unit_now / past_price - 1) * Decimal("100")).quantize(Decimal("0.01")))
+                    if past_price is not None
+                    else None
+                ),
+            }
     except Exception:
         pass
     return res
+
+
+def position_window_flows(trades: Sequence[Trade], after: date, splits: Any = None) -> tuple[Decimal, Decimal, Decimal]:
+    """Shares bought net of sales after `after`, the money paid for them and the money received.
+
+    Share counts are given in today's units, matching split-adjusted prices. Quantity-only
+    corporate actions are skipped: they change the count, not the money in the position.
+    """
+
+    traded = paid = received = ZERO
+    for trade in trades:
+        if trade.date <= after or trade.source in CORPORATE_ACTION_SOURCES:
+            continue
+        amount, _ = trade_cash_amount(trade)
+        traded += trade.quantity_diff * split_factor_since(trade.date, splits)
+        if trade.quantity_diff >= ZERO:
+            paid += amount
+        else:
+            received += amount
+    return traded, paid, received
+
+
+def split_factor_since(day: date, splits: Any) -> Decimal:
+    """How many of today's shares one share held on `day` has become."""
+
+    factor = Decimal(1)
+    if not isinstance(splits, dict):
+        return factor
+    for raw_day, ratio in splits.items():
+        try:
+            split_day = date.fromisoformat(str(raw_day)[:10])
+            value = Decimal(str(ratio))
+        except (TypeError, ValueError, ArithmeticError):
+            continue
+        if split_day > day and value > ZERO:
+            factor *= value
+    return factor
 
 
 def enrich_positions(
@@ -6696,8 +6747,12 @@ def enrich_positions(
     mappings: dict[str, dict[str, str]],
     refresh: bool = False,
     split_events: dict[str, dict[str, float]] | None = None,
+    trades: Sequence[Trade] = (),
 ) -> dict[str, Any]:
     exposures = read_exposures()
+    trades_by_asset: dict[str, list[Trade]] = {}
+    for trade in trades:
+        trades_by_asset.setdefault(trade.isin or trade.asset, []).append(trade)
     enriched = []
     market_value = ZERO
     unrealized_pl = ZERO
@@ -6710,6 +6765,7 @@ def enrich_positions(
         cost = Decimal(str(position["cost_basis_eur"]))
         position_isin = position.get("isin", "")
         known_splits = (split_events or {}).get(position_isin or asset)
+        asset_trades = trades_by_asset.get(position_isin or asset, [])
         mapping = mapping_for(asset, position_isin, mappings)
         isin = position_isin or mapping.get("isin", "")
         
@@ -6787,6 +6843,7 @@ def enrich_positions(
                 is_crypto_wallet=True,
                 refresh=refresh,
                 known_splits=known_splits,
+                trades=asset_trades,
             )
             row["variations"] = pos_vars
 
@@ -6820,6 +6877,7 @@ def enrich_positions(
                     is_crypto_wallet=is_crypto,
                     refresh=refresh,
                     known_splits=known_splits,
+                    trades=asset_trades,
                 )
                 row["variations"] = pos_vars
             else:
@@ -6885,6 +6943,7 @@ def enrich_positions(
             is_crypto_wallet=False,
             refresh=refresh,
             known_splits=known_splits,
+            trades=asset_trades,
         )
         row["variations"] = pos_vars
 
@@ -7348,6 +7407,7 @@ def _build_dashboard_payload(
         mappings,
         refresh=False,
         split_events=corporate_action_split_events(trades),
+        trades=trades,
     )
     distribution = calculate_distribution(
         priced["positions"],

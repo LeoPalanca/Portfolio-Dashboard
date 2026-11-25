@@ -243,6 +243,16 @@ class FrontendAssetTest(unittest.TestCase):
         self.assertIn("renderLedeChart(filtered, normalizedReturns, valueDefs[0][0], valueDefs[1][0]);", js)
         self.assertIn('plot.addEventListener("pointermove"', js)
 
+    def test_movers_rank_price_moves_and_your_money_separately(self) -> None:
+        with app.app.test_client() as client:
+            js = client.get("/static/app.js").get_data(as_text=True)
+        self.assertIn("Top 3 by price move", js)
+        self.assertIn("Top 3 by € on your money", js)
+        self.assertIn("Math.abs(b.pricePct) - Math.abs(a.pricePct)", js)
+        self.assertIn("Math.abs(b.amount) - Math.abs(a.amount)", js)
+        # snapshots built before price_pct existed still rank by their price move
+        self.assertIn("variation.price_pct === undefined ? pctMove : variation.price_pct", js)
+
     def test_section_preferences_survive_an_unknown_key(self) -> None:
         """A stored preference from an older build must not drop or duplicate sections."""
         with app.app.test_client() as client:
