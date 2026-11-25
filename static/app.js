@@ -231,6 +231,8 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
     }
 
     let selectedPerson = PRIMARY_PORTFOLIO_ID;
+    // Whose numbers are on screen; differs from selectedPerson while a switch loads.
+    let displayedPerson = null;
     let selectedPeriod = preferredPeriod();
     let selectedBerkshireMode = "stock";
     let selectedProxyMode = APP_CONFIG.defaultProxyMode;
@@ -746,9 +748,17 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         start.setDate(1);
       }
       if (selectedPeriod === "1w") start.setDate(end.getDate() - 7);
-      if (selectedPeriod === "1m") start.setMonth(end.getMonth() - 1);
-      if (selectedPeriod === "1y") start.setFullYear(start.getFullYear() - 1);
+      if (selectedPeriod === "1m") return monthsBefore(end, 1);
+      if (selectedPeriod === "1y") return monthsBefore(end, 12);
       return start;
+    }
+    // Same day n months earlier, clamped to that month's last day: 31 March minus
+    // one month is 28/29 February, not 3 March as Date.setMonth would give.
+    function monthsBefore(date, months) {
+      const target = new Date(date.getFullYear(), date.getMonth() - months, 1, date.getHours(), date.getMinutes());
+      const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+      target.setDate(Math.min(date.getDate(), lastDay));
+      return target;
     }
     function filterByPeriod(series) {
       if (!series || !series.length) return series || [];
@@ -2850,8 +2860,8 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         start.setDate(1);
       }
       if (selectedPeriod === "1w") start.setDate(start.getDate() - 7);
-      if (selectedPeriod === "1m") start.setMonth(start.getMonth() - 1);
-      if (selectedPeriod === "1y") start.setFullYear(start.getFullYear() - 1);
+      if (selectedPeriod === "1m") return monthsBefore(start, 1);
+      if (selectedPeriod === "1y") return monthsBefore(start, 12);
       return start;
     }
     function periodFrictions(data) {
@@ -2992,7 +3002,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       target.innerHTML = lines.map(([label, text, warn]) => `<div class="${warn ? "warning" : ""}"><span class="subtle">${escapeHtml(label)}:</span> ${escapeHtml(text)}</div>`).join("");
     }
     function calculateReturnStats(portfolioReturns, msciReturns, xeonReturns) {
-      const rfDaily = 0.03 / 252;
+      const rfDaily = Number(ANNUAL_RISK_FREE_RATE || 0) / 252;
       const sqrt252 = Math.sqrt(252);
       const mean = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
       const variance = (values, avg) => values.length ? values.reduce((sum, value) => sum + Math.pow(value - avg, 2), 0) / values.length : 0;
@@ -3591,6 +3601,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         if (requestId !== loadRequestId) return;
         data.expenses = ledgerExpenses || { ...(data.expenses || {}), rows: [], loading: true };
         dashboardData = data;
+        displayedPerson = selectedPerson;
         renderedData = data;
         renderDashboard(data);
         showSnapshotStatus(data);
@@ -3606,6 +3617,22 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         error.textContent = err.name === "AbortError"
           ? dashboardData ? "The request timed out. Previously loaded values remain visible; use Refresh prices to retry." : "The first portfolio snapshot is still being prepared. No saved values have been loaded yet; try again shortly."
           : err.message;
+        if (dashboardData && displayedPerson && displayedPerson !== selectedPerson) {
+          // A failed switch must not leave the previous portfolio's numbers under
+          // the newly highlighted name: put the selection back on what is shown.
+          const buttons = [...document.querySelectorAll("#persons button")];
+          const failed = buttons.find(item => item.dataset.person === selectedPerson);
+          const shown = buttons.find(item => item.dataset.person === displayedPerson);
+          selectedPerson = displayedPerson;
+          buttons.forEach(item => item.classList.toggle("active", item === shown));
+          error.textContent = `Could not load ${failed ? selectorButtonLabel(failed) : "that portfolio"}: ${error.textContent} Still showing ${shown ? selectorButtonLabel(shown) : "the previous portfolio"}.`;
+          void window.personalLedger.load(selectedPerson, expenses => {
+            if (requestId !== loadRequestId || !dashboardData) return;
+            dashboardData.expenses = expenses;
+            renderMoneyOverview(dashboardData);
+            renderSection("expenses-content", () => renderExpenses(dashboardData));
+          });
+        }
         error.style.display = "block";
       } finally {
         window.clearTimeout(timeout);

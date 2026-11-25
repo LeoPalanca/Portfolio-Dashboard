@@ -202,25 +202,27 @@ ledger. Its amount and `contribution_change` must match so market value and retu
 use the same capital basis. Account names, dates, and amounts must not be hardcoded
 or committed to the public edition.
 
-The package version follows semantic versioning, for example `0.6.0`. A private
+The package version follows semantic versioning, for example `0.14.9`. A private
 installation can add a display-only marker without forking package metadata:
 
 ```toml
 edition_suffix = "L"
 ```
 
-That installation displays `0.6.0L`; fresh/public installations display `0.6.0`.
+That installation displays `0.14.9L`; fresh/public installations display `0.14.9`.
 Personal paths, adjustments, and feature flags remain in ignored configuration.
 
 ## Market data, network access, and caches
 
 Routine dashboard loads reuse the last computed local snapshot, including across
 service restarts. A statement import, configuration change, or other source-data
-change invalidates the snapshot. `Refresh Prices` performs a synchronous market
-update and replaces it. Depending on the enabled feature, the application may contact:
+change invalidates the snapshot. `Refresh Prices` rebuilds it in the background while
+the saved values stay on screen. Depending on the enabled feature, the application may
+contact:
 
-- Yahoo Finance through `yfinance` for prices, currency metadata, benchmarks, and
-  Yahoo RSS headlines.
+- Yahoo Finance's chart and RSS endpoints for prices, currency metadata, benchmarks,
+  and headlines; `yfinance` (loaded only when needed) for ISIN searches and watchlist
+  quotes.
 - Eurostat for euro-area HICP inflation data.
 - Coinbase public market endpoints for supported crypto conversion history.
 - Parqet's image host directly from the browser for optional security logos; the
@@ -270,6 +272,10 @@ uv run python etf_fetcher.py list-targets
 uv run python etf_fetcher.py update --official-only --dry-run --offline
 uv run python etf_fetcher.py update --official-only
 ```
+
+The updater and the crypto wallet tool (`crypto_wallet_fetcher.py update`) write
+`asset_exposures.csv` and the `crypto_wallet_*.csv` files into `data_dir`, where the
+dashboard reads them.
 
 ## Expense classification
 
@@ -341,10 +347,10 @@ Never commit that directory; its payloads contain real portfolio figures.
 
 ## Project status
 
-Version 0.6 is a beta release. The importer, SQLite ledger, dashboard, onboarding,
-and exports are functional, while the internal application is being modularized from
-the legacy Flask module. Backward compatibility may change before 1.0 and migrations
-will be documented in release notes.
+The dashboard is pre-1.0. The importer, SQLite ledger, dashboard, onboarding, and
+exports are functional, while the internal application is being modularized from the
+legacy Flask module. Backward compatibility may change before 1.0 and migrations will
+be documented in release notes.
 
 Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Security guidance
 is in [SECURITY.md](SECURITY.md), and release notes are in

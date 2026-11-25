@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.14.9 — 2026-11-25
+
+- Risk statistics no longer see a crash when a position has no quote yet or no exchange rate on a day: it keeps its last EUR value (or its cost until its first quote) instead of counting as 0, and amounts in USD or pence are no longer added as euros when the rate is missing. Cash, dividend and interest totals are accumulated day by day instead of re-summed for every day.
+- The Sharpe ratio computed in the browser uses the configured `annual_risk_free_rate`, like the server and the label, instead of a fixed 3%.
+- The 1M and 1Y windows clamp to the end of the month: one month before 31 March starts on the last day of February, not on 3 March.
+- When switching portfolio fails, the selection returns to the portfolio still on screen and the message says so, instead of showing the previous portfolio's numbers under the new name.
+- `crypto_wallet_fetcher.py` reads and writes its CSV files in `data_dir`, and `etf_fetcher.py` writes `asset_exposures.csv` there, where the dashboard reads them; both used the project folder.
+- yfinance (and pandas) are imported only when an ISIN search or a watchlist quote needs them, so the app starts faster and uses less memory.
+- Tests run against temporary source, data and cache directories (`conftest.py`), so a local configuration can never point them at a real ledger.
+- README: background price refresh, current data sources, pre-1.0 status.
+
 ## 0.14.8 — 2026-11-25
 
 - The portfolio response is about 80% smaller (about 75 KB instead of 400 KB compressed for a typical portfolio), which matters most over a relayed or mobile connection. Income and expense rows are no longer sent twice: the page requests them from `/api/expenses` alongside the portfolio and shows "…" until they arrive. Fund and sector holdings are fetched from `/api/portfolio/distribution-details` when first opened. Floats are rounded to the precision shown. Saved snapshots and exports are unchanged.
