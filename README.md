@@ -126,6 +126,16 @@ a number or a foreign-currency row has no EUR exchange rate (retry once market d
 is reachable). Rows skipped for other reasons, such as an unreadable date or an
 unrecognised Interactive Brokers line, are listed as warnings in the import result.
 
+A movement found in several overlapping exports is stored once. When a newer parser
+reads archived files differently, they are read again at startup and each file's
+movements are replaced in place: corrected rows keep their categories and nothing is
+appended twice. The import dialog lists every imported file; deleting one removes its
+movements, re-reads the other files of that platform so rows they also contain stay,
+and keeps the file from being imported again at startup (uploading it again brings it
+back). Revolut cash rows that appear in both the regular and the consolidated
+statement are stored once. A Trade Republic export named after another portfolio's
+holder is only imported into that portfolio.
+
 ### Personal trade template
 
 CSV and XLSX templates use this schema:

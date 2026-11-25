@@ -177,7 +177,7 @@ HISTORY_CACHE_DIR = SETTINGS.cache_dir / "history"
 NEWS_CACHE = SETTINGS.cache_path("news.json")
 DASHBOARD_CACHE_DIR = SETTINGS.cache_dir / "dashboard-payloads"
 DASHBOARD_CACHE_FORMAT_VERSION = 3
-IMPORT_PARSER_VERSION = "ledger-4"
+IMPORT_PARSER_VERSION = "ledger-5"
 _DASHBOARD_CACHE_LOCK = threading.Lock()
 _DASHBOARD_BUILD_LOCKS: dict[Path, threading.Lock] = {}
 _DASHBOARD_REFRESH_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dashboard-refresh")
@@ -419,14 +419,20 @@ def configured_path_label(path: Path) -> str:
     return path.name
 
 
-def latest_trade_republic_export() -> Path | None:
-    files = sorted(set(ROOT_DIR.glob(TRADE_REPUBLIC_PATTERN)) | set((ROOT_DIR / "broker_exports" / "trade_republic").glob("*.csv")))
-    family_markers = {
+def is_family_trade_republic_export(path: Path) -> bool:
+    """Exports named after another portfolio's Trade Republic holder belong to that portfolio."""
+
+    markers = {
         (profile.trade_republic_name or portfolio_id).lower()
         for portfolio_id, profile in SETTINGS.portfolios.items()
         if portfolio_id.lower() != PRIMARY_PORTFOLIO_ID
     }
-    files = [path for path in files if not any(marker in path.name.lower() for marker in family_markers)]
+    return any(marker in path.name.lower() for marker in markers)
+
+
+def latest_trade_republic_export() -> Path | None:
+    files = sorted(set(ROOT_DIR.glob(TRADE_REPUBLIC_PATTERN)) | set((ROOT_DIR / "broker_exports" / "trade_republic").glob("*.csv")))
+    files = [path for path in files if not is_family_trade_republic_export(path)]
     return files[-1] if files else None
 
 
@@ -8502,7 +8508,10 @@ def import_statement_path(
     requested_source: str = "auto",
     portfolio_id: str = PRIMARY_PORTFOLIO_ID,
     archive: bool = True,
+    skip_removed: bool = False,
 ) -> dict[str, Any]:
+    """Import one statement file; ``skip_removed`` leaves files the user deleted alone."""
+
     if not path.is_file():
         raise ValueError("The selected statement file does not exist")
     if path.stat().st_size > SETTINGS.import_max_bytes:
@@ -8523,6 +8532,8 @@ def import_statement_path(
             "duplicates": existing.duplicate_count,
             "stored_path": existing.stored_path,
         }
+    if existing is None and skip_removed and store.is_removed(digest, owner):
+        return {"status": "removed", "duplicate": False, "source": source, "portfolio_id": owner, "movements": 0}
 
     safe_original_name = secure_filename(original_name or path.name) or f"statement{path.suffix.casefold()}"
     with collect_import_issues() as issues:
@@ -8532,8 +8543,16 @@ def import_statement_path(
     warnings = issues.warnings()
     if not movements:
         raise ValueError(f"No supported movements were found in this {SOURCE_LABELS[source]} statement")
+    cross_format_duplicates = 0
+    if source == "revolut":
+        others = [
+            row
+            for row in store.movements(owner, ("cash_flow",))
+            if row.get("source_kind") == "revolut" and (existing is None or row.get("import_id") != existing.id)
+        ]
+        movements, cross_format_duplicates = drop_revolut_cross_format_duplicates(movements, others)
     if existing is not None:
-        inserted, duplicates = store.enrich_import(existing, parser_version=IMPORT_PARSER_VERSION, movements=movements)
+        inserted, matched, removed = store.enrich_import(existing, parser_version=IMPORT_PARSER_VERSION, movements=movements)
         return {
             "status": "upgraded",
             "duplicate": False,
@@ -8541,7 +8560,8 @@ def import_statement_path(
             "source_label": SOURCE_LABELS.get(existing.source_kind, existing.source_kind),
             "portfolio_id": existing.portfolio_id,
             "movements": inserted,
-            "duplicates": duplicates,
+            "duplicates": matched + cross_format_duplicates,
+            "removed": removed,
             "stored_path": existing.stored_path,
             "warnings": warnings,
         }
@@ -8550,9 +8570,12 @@ def import_statement_path(
     destination = import_destination(archive_root, source, digest, safe_original_name) if archive else path
     if archive:
         destination.parent.mkdir(parents=True, exist_ok=True)
-    if archive and destination.exists() and destination.resolve() != path.resolve():
+    elsewhere = archive and destination.exists() and destination.resolve() != path.resolve()
+    # The same file uploaded again after its import was deleted keeps its archived copy.
+    already_archived = elsewhere and hashlib.sha256(destination.read_bytes()).hexdigest() == digest
+    if elsewhere and not already_archived:
         raise ValueError(f"The destination already exists: {configured_path_label(destination)}")
-    copied = archive and destination.resolve() != path.resolve()
+    copied = archive and destination.resolve() != path.resolve() and not already_archived
     if copied:
         shutil.copy2(path, destination)
         destination.chmod(0o600)
@@ -8570,6 +8593,8 @@ def import_statement_path(
         if copied:
             destination.unlink(missing_ok=True)
         raise
+    if not skip_removed:
+        store.forget_removed(digest, owner)
     return {
         "status": "imported",
         "duplicate": False,
@@ -8577,9 +8602,109 @@ def import_statement_path(
         "source_label": SOURCE_LABELS[source],
         "portfolio_id": owner,
         "movements": record.movement_count,
-        "duplicates": record.duplicate_count,
+        "duplicates": record.duplicate_count + cross_format_duplicates,
         "stored_path": record.stored_path,
         "warnings": warnings,
+    }
+
+
+def drop_revolut_cross_format_duplicates(
+    movements: list[dict[str, Any]], existing: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], int]:
+    """Skip cash rows already stored from the other Revolut statement format.
+
+    The regular statement times every row, the consolidated one only dates it (time
+    00:00), so the same top-up read from both would be stored twice and double the
+    cash. A row is matched, one for one, on day, currency and signed amount, and
+    only against a row of the other format: two timed rows are separate movements.
+    """
+
+    def identity(row: dict[str, Any]) -> tuple[tuple[str, str, Decimal], bool]:
+        moment = str(row.get("occurred_on") or "").replace(" ", "T")
+        day, _, clock = moment.partition("T")
+        key = (day, str(row.get("currency") or "EUR").upper(), Decimal(str(row.get("amount") or 0)))
+        return key, clock in {"", "00:00:00"}
+
+    available = Counter(identity(row) for row in existing if row.get("event_type") == "cash_flow")
+    kept: list[dict[str, Any]] = []
+    skipped = 0
+    for movement in movements:
+        if movement.get("event_type") == "cash_flow":
+            key, dated_only = identity({**movement, "occurred_on": movement_text(movement.get("occurred_on"))})
+            partner = (key, not dated_only)
+            if available[partner] > 0:
+                available[partner] -= 1
+                skipped += 1
+                continue
+        kept.append(movement)
+    return kept, skipped
+
+
+def movement_text(value: Any) -> str:
+    return value.isoformat() if isinstance(value, (date, datetime)) else str(value or "")
+
+
+def configured_path(label: str) -> Path | None:
+    """The file behind a label written by :func:`configured_path_label`, if it still exists."""
+
+    prefix, _, rest = str(label or "").partition("/")
+    base = {"sources": ROOT_DIR, "private": SETTINGS.data_dir}.get(prefix)
+    if base is None or not rest:
+        return None
+    path = (base / rest).resolve()
+    if not path.is_relative_to(base.resolve()) or not path.is_file():
+        return None
+    return path
+
+
+def delete_statement_import(import_id: int, portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> dict[str, Any]:
+    """Remove one imported file and its movements, then let the other files restore what they also contain.
+
+    Rows that another file of the same source also contains were stored only once,
+    under whichever file came first, so the remaining files of that source are
+    read again and give those rows back. The deleted file is remembered and not
+    imported again at startup; uploading it again brings it back.
+    """
+
+    owner = configured_portfolio_id(portfolio_id)
+    store = get_movement_store()
+    record = next((item for item in store.imports(owner) if item.id == import_id), None)
+    if record is None:
+        raise ValueError("Import not found")
+    if record.source_kind not in SOURCE_LABELS or record.stored_path.startswith("private-ledger://"):
+        raise ValueError("This entry is managed from the personal ledger, not as an imported file")
+    removed = store.delete_import(record)
+    restored = 0
+    not_rechecked: list[str] = []
+    for sibling in store.imports(owner):
+        if sibling.source_kind != record.source_kind:
+            continue
+        path = configured_path(sibling.stored_path)
+        if path is None:
+            not_rechecked.append(sibling.original_name)
+            continue
+        with collect_import_issues() as issues:
+            movements = parse_statement_movements(sibling.source_kind, path)
+        if issues.blocking or not movements:
+            # Try again at the next start, when market data may be reachable.
+            store.mark_for_reread(sibling)
+            not_rechecked.append(sibling.original_name)
+            continue
+        if sibling.source_kind == "revolut":
+            others = [
+                row
+                for row in store.movements(owner, ("cash_flow",))
+                if row.get("source_kind") == "revolut" and row.get("import_id") != sibling.id
+            ]
+            movements, _skipped = drop_revolut_cross_format_duplicates(movements, others)
+        inserted, _matched, _removed = store.enrich_import(sibling, parser_version=IMPORT_PARSER_VERSION, movements=movements)
+        restored += inserted
+    return {
+        "deleted": record.original_name,
+        "source_label": SOURCE_LABELS[record.source_kind],
+        "removed": removed,
+        "restored": restored,
+        "not_rechecked": not_rechecked,
     }
 
 
@@ -8617,7 +8742,11 @@ def legacy_statement_candidates(portfolio_id: str) -> list[tuple[Path, str]]:
     for source, extensions in SOURCE_EXTENSIONS.items():
         category = "cash_exports" if source in {"revolut", "intesa", "bbva"} else "broker_exports"
         for extension in extensions:
-            candidates.extend((path, source) for path in (archive_root / category / source).glob(f"*{extension}"))
+            candidates.extend(
+                (path, source)
+                for path in (archive_root / category / source).glob(f"*{extension}")
+                if not (owner == PRIMARY_PORTFOLIO_ID and source == "trade_republic" and is_family_trade_republic_export(path))
+            )
 
     unique: dict[Path, tuple[Path, str]] = {}
     for path, source in candidates:
@@ -8646,6 +8775,7 @@ def ensure_legacy_statements_imported(portfolio_id: str = PRIMARY_PORTFOLIO_ID) 
                     requested_source=source,
                     portfolio_id=owner,
                     archive=False,
+                    skip_removed=True,
                 )
             except Exception as exc:  # A broken historical file must not block other sources.
                 errors.append(f"{configured_path_label(path)}: {exc}")
@@ -9003,6 +9133,17 @@ def import_status_payload(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> dict[str,
     has_trade_source = bool(store.movements(owner, ("trade",)))
     return {
         **ledger,
+        "import_list": [
+            {
+                "id": record.id,
+                "source": record.source_kind,
+                "name": record.original_name,
+                "imported_at": record.imported_at,
+                "movements": record.movement_count,
+                "deletable": record.source_kind in SOURCE_LABELS and not record.stored_path.startswith("private-ledger://"),
+            }
+            for record in reversed(store.imports(owner))
+        ],
         "ready": has_trade_source,
         "portfolio_id": owner,
         "migration_errors": _legacy_import_errors.get(owner, []),
@@ -9025,6 +9166,14 @@ def import_status_payload(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> dict[str,
 def api_import_status():
     try:
         return jsonify(import_status_payload(request.args.get("portfolio_id", PRIMARY_PORTFOLIO_ID)))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.delete("/api/imports/<int:import_id>")
+def api_delete_import(import_id: int):
+    try:
+        return jsonify(delete_statement_import(import_id, request.args.get("portfolio_id", PRIMARY_PORTFOLIO_ID)))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 

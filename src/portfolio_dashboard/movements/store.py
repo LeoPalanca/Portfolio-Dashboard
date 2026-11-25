@@ -55,6 +55,20 @@ def _movement_fingerprint(canonical: Mapping[str, str]) -> str:
     ).hexdigest()
 
 
+def _pairing_key(row: Mapping[str, Any]) -> tuple[str | bool, ...]:
+    """What must stay the same for a re-parsed row to replace an earlier reading of it."""
+
+    return (
+        str(row.get("occurred_on") or "")[:10],
+        _event_family(str(row.get("event_type") or "")),
+        str(row.get("account") or ""),
+        str(row.get("asset") or ""),
+        str(row.get("isin") or ""),
+        str(row.get("currency") or ""),
+        str(row.get("amount") or "").lstrip().startswith("-"),
+    )
+
+
 @dataclass(frozen=True)
 class ImportRecord:
     id: int
@@ -231,6 +245,11 @@ class MovementStore:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, movement_id INTEGER NOT NULL,
                 changed_at TEXT NOT NULL, previous_json TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS removed_imports (
+                portfolio_id TEXT NOT NULL, sha256 TEXT NOT NULL, source_kind TEXT NOT NULL,
+                original_name TEXT NOT NULL, removed_at TEXT NOT NULL,
+                PRIMARY KEY (portfolio_id, sha256)
+            );
             """
         )
 
@@ -323,43 +342,13 @@ class MovementStore:
             import_id = cursor.lastrowid
             claimed: set[int] = set()
             for canonical in self._canonical_batch(source_kind, movements):
-                fingerprint = _movement_fingerprint(canonical)
                 matched = self._reconcile_movement(connection, owner, source_kind, canonical, claimed)
                 if matched:
                     claimed.add(matched)
                     duplicates += 1
                     continue
-                result = connection.execute(
-                    """
-                    INSERT OR IGNORE INTO movements(
-                        portfolio_id, fingerprint, import_id, occurred_on, event_type,
-                        source_kind, account, asset, isin, description, currency, amount,
-                        quantity, price, fees, tax, metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        owner,
-                        fingerprint,
-                        import_id,
-                        canonical["occurred_on"],
-                        canonical["event_type"],
-                        source_kind,
-                        canonical["account"],
-                        canonical["asset"],
-                        canonical["isin"],
-                        canonical["description"],
-                        canonical["currency"],
-                        canonical["amount"],
-                        canonical["quantity"],
-                        canonical["price"],
-                        canonical["fees"],
-                        canonical["tax"],
-                        canonical["metadata_json"],
-                    ),
-                )
-                if result.rowcount:
-                    if result.lastrowid is not None:
-                        claimed.add(result.lastrowid)
+                if self._insert(connection, owner, import_id, source_kind, canonical):
+                    claimed.add(connection.execute("SELECT last_insert_rowid()").fetchone()[0])
                     inserted += 1
                 else:
                     duplicates += 1
@@ -386,66 +375,194 @@ class MovementStore:
         *,
         parser_version: str,
         movements: Iterable[Mapping[str, Any]],
-    ) -> tuple[int, int]:
-        """Merge movements produced by a newer parser into an existing file import."""
+    ) -> tuple[int, int, int]:
+        """Replace one file's movements with what a newer parser reads from the same file.
+
+        Rows the parser still produces are matched and corrected in place, keeping their
+        ids and therefore the user's categories. A row of this import the parser now
+        reads differently is updated in place when it pairs unambiguously with a changed
+        row of the same day, kind and asset; rows it no longer produces are removed, with
+        a revision kept. Re-parsing therefore never appends a second copy of a movement.
+        Returns ``(inserted, matched, removed)``.
+        """
 
         self.initialize()
         inserted = 0
-        duplicates = 0
+        matched = 0
+        removed = 0
+        owner = record.portfolio_id
         with closing(self._connect()) as connection, connection:
             claimed: set[int] = set()
+            pending: list[dict[str, str]] = []
+            pending_fingerprints: set[str] = set()
             for canonical in self._canonical_batch(record.source_kind, movements):
+                found = self._reconcile_movement(connection, owner, record.source_kind, canonical, claimed)
                 fingerprint = _movement_fingerprint(canonical)
-                matched = self._reconcile_movement(
-                    connection, record.portfolio_id, record.source_kind, canonical, claimed
-                )
-                if matched:
-                    claimed.add(matched)
-                    duplicates += 1
-                    continue
-                result = connection.execute(
-                    """
-                    INSERT OR IGNORE INTO movements(
-                        portfolio_id, fingerprint, import_id, occurred_on, event_type,
-                        source_kind, account, asset, isin, description, currency, amount,
-                        quantity, price, fees, tax, metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        record.portfolio_id,
-                        fingerprint,
-                        record.id,
-                        canonical["occurred_on"],
-                        canonical["event_type"],
-                        record.source_kind,
-                        canonical["account"],
-                        canonical["asset"],
-                        canonical["isin"],
-                        canonical["description"],
-                        canonical["currency"],
-                        canonical["amount"],
-                        canonical["quantity"],
-                        canonical["price"],
-                        canonical["fees"],
-                        canonical["tax"],
-                        canonical["metadata_json"],
-                    ),
-                )
-                if result.rowcount:
-                    if result.lastrowid is not None:
-                        claimed.add(result.lastrowid)
-                    inserted += 1
+                if found:
+                    claimed.add(found)
+                    matched += 1
+                elif fingerprint in pending_fingerprints:
+                    matched += 1
                 else:
-                    duplicates += 1
+                    pending_fingerprints.add(fingerprint)
+                    pending.append(canonical)
+            leftovers: dict[tuple[str | bool, ...], list[dict[str, Any]]] = {}
+            for row in self._import_rows(connection, record.id):
+                if row["id"] not in claimed:
+                    leftovers.setdefault(_pairing_key(row), []).append(row)
+            for key, group in self._group(pending).items():
+                previous = leftovers.get(key, [])
+                if len(previous) == len(group):
+                    for old, canonical in zip(previous, group):
+                        self._replace_row(connection, owner, old, canonical)
+                    matched += len(group)
+                    leftovers.pop(key, None)
+                    continue
+                for canonical in group:
+                    if self._insert(connection, owner, record.id, record.source_kind, canonical):
+                        inserted += 1
+                    else:
+                        matched += 1
+            for group in leftovers.values():
+                for row in group:
+                    self._remove_row(connection, owner, row, f"reparsed import {record.id}")
+                    removed += 1
             connection.execute(
                 """
                 UPDATE imports
-                SET parser_version = ?, movement_count = movement_count + ?
+                SET parser_version = ?,
+                    movement_count = (SELECT COUNT(*) FROM movements WHERE import_id = imports.id)
                 WHERE id = ? AND portfolio_id = ?
                 """,
-                (parser_version, inserted, record.id, record.portfolio_id),
+                (parser_version, record.id, owner),
             )
-        return inserted, duplicates
+        return inserted, matched, removed
+
+    def imports(self, portfolio_id: str | None = None) -> list[ImportRecord]:
+        """Every import of one portfolio, oldest first, with its live movement count."""
+
+        self.initialize()
+        owner = self._portfolio_id(portfolio_id or self.default_portfolio_id)
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT i.id, i.portfolio_id, i.sha256, i.source_kind, i.original_name, i.stored_path, "
+                "i.parser_version, (SELECT COUNT(*) FROM movements m WHERE m.import_id = i.id), "
+                "i.duplicate_count, i.imported_at FROM imports i WHERE i.portfolio_id = ? ORDER BY i.id",
+                (owner,),
+            ).fetchall()
+        return [ImportRecord(*row) for row in rows]
+
+    def delete_import(self, record: ImportRecord) -> int:
+        """Remove an import and the movements it stored; remember the file so it is not re-imported."""
+
+        self.initialize()
+        owner = record.portfolio_id
+        removed_at = datetime.now(UTC).isoformat(timespec="seconds")
+        with closing(self._connect()) as connection, connection:
+            rows = self._import_rows(connection, record.id)
+            for row in rows:
+                self._remove_row(connection, owner, row, f"deleted import {record.id}")
+            connection.execute("DELETE FROM imports WHERE id = ? AND portfolio_id = ?", (record.id, owner))
+            connection.execute(
+                "INSERT OR REPLACE INTO removed_imports(portfolio_id, sha256, source_kind, original_name, removed_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (owner, record.sha256, record.source_kind, record.original_name, removed_at),
+            )
+        return len(rows)
+
+    def mark_for_reread(self, record: ImportRecord) -> None:
+        """Make the next startup read this file again, e.g. after it could not be read now."""
+
+        self.initialize()
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                "UPDATE imports SET parser_version = 'reread-pending' WHERE id = ? AND portfolio_id = ?",
+                (record.id, record.portfolio_id),
+            )
+
+    def is_removed(self, sha256: str, portfolio_id: str | None = None) -> bool:
+        self.initialize()
+        owner = self._portfolio_id(portfolio_id or self.default_portfolio_id)
+        with closing(self._connect()) as connection:
+            return (
+                connection.execute(
+                    "SELECT 1 FROM removed_imports WHERE portfolio_id = ? AND sha256 = ?", (owner, sha256)
+                ).fetchone()
+                is not None
+            )
+
+    def forget_removed(self, sha256: str, portfolio_id: str | None = None) -> None:
+        """An explicit upload brings a deleted file back."""
+
+        self.initialize()
+        owner = self._portfolio_id(portfolio_id or self.default_portfolio_id)
+        with closing(self._connect()) as connection, connection:
+            connection.execute("DELETE FROM removed_imports WHERE portfolio_id = ? AND sha256 = ?", (owner, sha256))
+
+    @staticmethod
+    def _import_rows(connection: sqlite3.Connection, import_id: int) -> list[dict[str, Any]]:
+        cursor = connection.execute("SELECT * FROM movements WHERE import_id = ? ORDER BY id", (import_id,))
+        columns = [column[0] for column in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor]
+
+    @staticmethod
+    def _group(items: list[dict[str, str]]) -> dict[tuple[str | bool, ...], list[dict[str, str]]]:
+        groups: dict[tuple[str | bool, ...], list[dict[str, str]]] = {}
+        for item in items:
+            groups.setdefault(_pairing_key(item), []).append(item)
+        return groups
+
+    @staticmethod
+    def _insert(connection: sqlite3.Connection, owner: str, import_id: int, source_kind: str, canonical: Mapping[str, str]) -> bool:
+        result = connection.execute(
+            """
+            INSERT OR IGNORE INTO movements(
+                portfolio_id, fingerprint, import_id, occurred_on, event_type,
+                source_kind, account, asset, isin, description, currency, amount,
+                quantity, price, fees, tax, metadata_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                owner,
+                _movement_fingerprint(canonical),
+                import_id,
+                canonical["occurred_on"],
+                canonical["event_type"],
+                source_kind,
+                canonical["account"],
+                canonical["asset"],
+                canonical["isin"],
+                canonical["description"],
+                canonical["currency"],
+                canonical["amount"],
+                canonical["quantity"],
+                canonical["price"],
+                canonical["fees"],
+                canonical["tax"],
+                canonical["metadata_json"],
+            ),
+        )
+        return bool(result.rowcount)
+
+    @staticmethod
+    def _replace_row(connection: sqlite3.Connection, owner: str, previous: Mapping[str, Any], canonical: Mapping[str, str]) -> None:
+        connection.execute(
+            "INSERT INTO movement_revisions(movement_id, changed_at, previous_json) VALUES (?, ?, ?)",
+            (previous["id"], datetime.now(UTC).isoformat(), json.dumps(dict(previous), ensure_ascii=False)),
+        )
+        keys = list(canonical)
+        connection.execute(
+            f"UPDATE movements SET {', '.join(key + '=?' for key in keys)}, fingerprint=? WHERE id=? AND portfolio_id=?",
+            [canonical[key] for key in keys] + [_movement_fingerprint(canonical), previous["id"], owner],
+        )
+
+    @staticmethod
+    def _remove_row(connection: sqlite3.Connection, owner: str, row: Mapping[str, Any], reason: str) -> None:
+        connection.execute(
+            "INSERT INTO movement_revisions(movement_id, changed_at, previous_json) VALUES (?, ?, ?)",
+            (row["id"], datetime.now(UTC).isoformat(), json.dumps({**row, "removed": reason}, ensure_ascii=False)),
+        )
+        connection.execute("DELETE FROM movements WHERE id = ? AND portfolio_id = ?", (row["id"], owner))
 
     @staticmethod
     def _reconcile_movement(connection, owner, source, canonical, claimed) -> int:

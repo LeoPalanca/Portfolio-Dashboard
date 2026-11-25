@@ -23,9 +23,11 @@ class MovementStoreTest(unittest.TestCase):
             first = store.record_import(sha256="a", original_name="one.xlsx", movements=[original], **kwargs)
             second = store.record_import(sha256="b", original_name="two.xlsx", movements=[formatted], **kwargs)
             self.assertEqual((second.movement_count, second.duplicate_count), (0, 1))
-            self.assertEqual(store.enrich_import(first, parser_version="new", movements=[formatted]), (0, 1))
+            self.assertEqual(store.enrich_import(first, parser_version="new", movements=[formatted]), (0, 1, 0))
+            # A corrected reading of the same file replaces its row instead of adding one.
             different_fee = {**formatted, "fees": "3.95"}
-            self.assertEqual(store.enrich_import(first, parser_version="new", movements=[different_fee]), (1, 0))
+            self.assertEqual(store.enrich_import(first, parser_version="new", movements=[different_fee]), (0, 1, 0))
+            self.assertEqual([row["fees"] for row in store.movements()], ["3.95"])
 
     def test_migration_backs_up_repairs_and_is_idempotent(self) -> None:
         def legacy_fingerprint(canonical):
@@ -64,7 +66,7 @@ class MovementStoreTest(unittest.TestCase):
             self.assertEqual(len(MovementStore(database).movements()), 2)
             self.assertEqual(len(list(Path(temporary).glob("*.bak"))), 1)
             self.assertEqual(repaired.enrich_import(repaired.import_by_hash("a"), parser_version="new",
-                                                   movements=[{**original, "quantity": "4.000"}]), (0, 1))
+                                                   movements=[{**original, "quantity": "4.000"}]), (0, 1, 0))
 
     def test_records_imports_and_deduplicates_movements_across_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
