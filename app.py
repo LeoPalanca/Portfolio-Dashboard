@@ -21,6 +21,7 @@ import urllib.request
 import warnings
 import xml.etree.ElementTree as ET
 from bisect import bisect_right
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
@@ -1011,6 +1012,7 @@ def read_etoro_trades(path: Path) -> list[Trade]:
 
     activity = workbook["Attività account"]
     trades: list[Trade] = []
+    opened: dict[str, tuple[str, str]] = {}
     for row in activity.iter_rows(min_row=2, values_only=True):
         if not row or row[1] != "Apri posizione":
             continue
@@ -1021,28 +1023,69 @@ def read_etoro_trades(path: Path) -> list[Trade]:
         units = fineco_decimal(row[4])
         isin = position_isins.get(position_id, "")
         asset = detail.split("/")[0]
-        trades.append(
-            Trade(
-                asset=asset,
-                isin=isin,
-                broker="eToro",
-                action="Acquisto",
-                currency_hint="USD",
-                cash_currency="USD",
-                date=opened_at,
-                price=amount / units if units else ZERO,
-                quantity=units,
-                quantity_diff=units,
-                total_spend=-amount,
-                fees=ZERO,
-                tax=ZERO,
-                grand_total=-amount,
-                grand_total_present=True,
-                source="etoro",
-            )
-        )
+        if position_id:
+            opened[position_id] = (asset, isin)
+        trades.append(etoro_trade(asset, isin, opened_at, units, amount, sale=False))
+
+    if "Posizioni chiuse" in workbook.sheetnames:
+        trades.extend(read_etoro_closed_positions(workbook["Posizioni chiuse"], opened))
 
     return sorted(trades, key=lambda item: (item.date, item.asset, item.action))
+
+
+def etoro_trade(asset: str, isin: str, day: date, units: Decimal, amount: Decimal, sale: bool) -> Trade:
+    """An eToro trade of ``units`` for ``amount`` USD paid (buy) or received (sale)."""
+
+    cash = amount if sale else -amount
+    return Trade(
+        asset=asset,
+        isin=isin,
+        broker="eToro",
+        action="Vendita" if sale else "Acquisto",
+        currency_hint="USD",
+        cash_currency="USD",
+        date=day,
+        price=amount / units if units else ZERO,
+        quantity=units,
+        quantity_diff=-units if sale else units,
+        total_spend=cash,
+        fees=ZERO,
+        tax=ZERO,
+        grand_total=cash,
+        grand_total_present=True,
+        source="etoro",
+    )
+
+
+def read_etoro_closed_positions(sheet: Any, opened: dict[str, tuple[str, str]]) -> list[Trade]:
+    """Sales from the closed-positions sheet: proceeds are the amount invested plus the profit."""
+
+    trades: list[Trade] = []
+    for row in sheet.iter_rows(min_row=2, values_only=True):
+        if not row or not row[0] or not row[6]:
+            continue
+        position_id = str(row[0]).strip()
+        try:
+            closed_at = datetime.strptime(str(row[6]), "%d/%m/%Y %H:%M:%S").date()
+        except ValueError:
+            report_import_issue(SKIPPED_ROW, f"eToro closed position {position_id} with unreadable date {str(row[6])[:20]!r}")
+            continue
+        if str(row[2] or "").strip().casefold() in {"short", "vendi", "sell"}:
+            report_import_issue(SKIPPED_ROW, f"eToro short position {position_id}")
+            continue
+        units = abs(fineco_decimal(row[4]))
+        proceeds = fineco_decimal(row[3]) + fineco_decimal(row[10])
+        if not units:
+            continue
+        isin = str(row[21] or "").strip().upper()
+        match = opened.get(position_id) or next((item for item in opened.values() if isin and item[1] == isin), None)
+        if match is None:
+            # Selling an asset this statement never bought would show the whole
+            # proceeds as profit and leave the real purchase open.
+            report_import_issue(SKIPPED_ROW, f"eToro closed position {position_id} opened outside this statement")
+            continue
+        trades.append(etoro_trade(match[0], match[1], closed_at, units, max(proceeds, ZERO), sale=True))
+    return trades
 
 
 def read_dividends() -> list[Dividend]:
@@ -5104,6 +5147,13 @@ def summarize_trades(trades: list[Trade]) -> dict[str, Any]:
     taxes = ZERO
     approximate_cost_basis = ZERO
     series: list[dict[str, Any]] = []
+    # Days on which a corporate action also hands out new shares: a reverse split
+    # booked as "old shares out, new shares in" must not read as a sale.
+    corporate_inflows = {
+        (trade.isin or trade.asset, trade.date)
+        for trade in trades
+        if trade.source in CORPORATE_ACTION_SOURCES and trade.quantity_diff > ZERO
+    }
 
     for trade in trades:
         asset = trade.isin or trade.asset
@@ -5124,6 +5174,10 @@ def summarize_trades(trades: list[Trade]) -> dict[str, Any]:
             invested += amount
             quantities[asset] += trade.quantity_diff
             cost_basis[asset] += amount
+        elif is_quantity_only_event(trade, quantities[asset], corporate_inflows):
+            # Reverse splits and quantity corrections change the share count only;
+            # the money paid for the position is still invested in it.
+            quantities[asset] += trade.quantity_diff
         else:
             sell_quantity = abs(trade.quantity_diff)
             previous_quantity = quantities[asset]
@@ -5188,6 +5242,15 @@ def summarize_trades(trades: list[Trade]) -> dict[str, Any]:
             "approximate_cost_basis": money(approximate_cost_basis),
         },
     }
+
+
+def is_quantity_only_event(trade: Trade, held: Decimal, corporate_inflows: set[tuple[str, date]]) -> bool:
+    """A corporate action that removes shares without proceeds, unless it empties the position for good."""
+
+    if trade.source not in CORPORATE_ACTION_SOURCES:
+        return False
+    remaining = held + trade.quantity_diff
+    return remaining > ZERO or (trade.isin or trade.asset, trade.date) in corporate_inflows
 
 
 def compress_series(series: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -5553,8 +5616,12 @@ def get_history_store() -> HistoryStore:
 # A split is only reflected in Yahoo's own closes once it reworks its history, which can
 # lag the event by days. Until then the raw series keeps its pre-split level and the drop
 # reads as a crash, so the pre-split closes are back-adjusted here when the observed gap
-# actually matches the announced ratio.
+# actually matches the announced ratio. The gap must also sit closer to the ratio than to
+# no gap at all, so a series that is already adjusted is never shifted again, and small
+# ratios (free shares, stock dividends) are left to the provider: their gap cannot be
+# told apart from an ordinary day's move.
 SPLIT_RATIO_MATCH_TOLERANCE = 0.25
+MIN_DETECTABLE_SPLIT_RATIO = 1.5
 
 
 def split_adjusted_prices(prices: dict[str, float], splits: Any) -> dict[str, float]:
@@ -5585,13 +5652,16 @@ def split_adjusted_prices(prices: dict[str, float], splits: Any) -> dict[str, fl
             continue
         reference = adjusted[after[0]]
         expected_jump = max(ratio, 1.0 / ratio)
+        if expected_jump < MIN_DETECTABLE_SPLIT_RATIO:
+            continue
+        match_window = min(math.log1p(SPLIT_RATIO_MATCH_TOLERANCE), math.log(expected_jump) / 2)
         for day in reversed(before):
             value = adjusted[day]
             if value <= 0 or reference <= 0:
                 reference = value
                 continue
             observed_jump = max(value, reference) / min(value, reference)
-            if abs(observed_jump / expected_jump - 1.0) <= SPLIT_RATIO_MATCH_TOLERANCE:
+            if abs(math.log(observed_jump / expected_jump)) < match_window:
                 candidates = (value * ratio, value / ratio)
                 value = min(candidates, key=lambda candidate: abs(candidate / reference - 1.0))
                 adjusted[day] = value
@@ -5599,19 +5669,37 @@ def split_adjusted_prices(prices: dict[str, float], splits: Any) -> dict[str, fl
     return adjusted
 
 
+def corporate_action_factors(trades: list[Trade]) -> dict[tuple[str, date], Decimal]:
+    """Share-count factor of each day's quantity-only corporate actions, per asset.
+
+    Brokers book a reverse split as two rows on one day (old shares out, new shares
+    in), so the rows of a day are netted before the factor is taken.
+    """
+
+    net: dict[tuple[str, date], Decimal] = {}
+    for trade in trades:
+        if trade.source in CORPORATE_ACTION_SOURCES:
+            key = (trade.isin or trade.asset, trade.date)
+            net[key] = net.get(key, ZERO) + trade.quantity_diff
+    factors: dict[tuple[str, date], Decimal] = {}
+    held: dict[str, Decimal] = {}
+    for trade in sorted(trades, key=lambda item: item.date):
+        asset = trade.isin or trade.asset
+        key = (asset, trade.date)
+        if trade.source in CORPORATE_ACTION_SOURCES and key not in factors:
+            before = held.get(asset, ZERO)
+            after = before + net[key]
+            factors[key] = after / before if before > ZERO and after > ZERO else ZERO
+        held[asset] = held.get(asset, ZERO) + trade.quantity_diff
+    return {key: factor for key, factor in factors.items() if factor > ZERO}
+
+
 def corporate_action_split_events(trades: list[Trade]) -> dict[str, dict[str, float]]:
     """Return split factors recorded by quantity-only broker corporate actions."""
 
-    quantities: dict[str, Decimal] = {}
     events: dict[str, dict[str, float]] = {}
-    for trade in sorted(trades, key=lambda item: item.date):
-        key = trade.isin or trade.asset
-        held = quantities.get(key, ZERO)
-        updated = held + trade.quantity_diff
-        if trade.source in CORPORATE_ACTION_SOURCES and held > ZERO and updated > ZERO:
-            factor = updated / held
-            events.setdefault(key, {})[trade.date.isoformat()] = float(factor)
-        quantities[key] = updated
+    for (asset, day), factor in corporate_action_factors(trades).items():
+        events.setdefault(asset, {})[day.isoformat()] = float(factor)
     return events
 
 
@@ -5923,6 +6011,9 @@ def valuation_date_grid(start: date, end: date, flow_dates: set[date]) -> set[da
 
 
 def fx_to_eur(currency: str, refresh: bool = False) -> dict[str, Any]:
+    """EUR value of one unit of ``currency``; pence quotes (GBp) are a hundredth of a pound."""
+
+    unit = 0.01 if normalize_currency_code(currency) == "GBp" else 1.0
     currency = fx_base_currency(currency)
     if currency == "EUR":
         return {"rate": 1.0, "status": "native"}
@@ -5930,7 +6021,7 @@ def fx_to_eur(currency: str, refresh: bool = False) -> dict[str, Any]:
     price = fetch_price(symbol, refresh=refresh)
     if price.get("status") == "priced":
         rate = float(price["price"])
-        return {"rate": 1 / rate if invert else rate, "status": "priced", "symbol": symbol}
+        return {"rate": (1 / rate if invert else rate) * unit, "status": "priced", "symbol": symbol}
     return {"rate": None, "status": price.get("status", "fx_error"), "symbol": symbol}
 
 
@@ -6127,16 +6218,18 @@ def split_adjusted_trade_history(trades: list[Trade]) -> list[Trade]:
     if not any(trade.source in CORPORATE_ACTION_SOURCES for trade in trades):
         return trades
 
+    factors = corporate_action_factors(trades)
     adjusted: list[Trade] = []
-    quantities: dict[str, Decimal] = {}
+    applied: set[tuple[str, date]] = set()
     for trade in sorted(trades, key=lambda item: item.date):
         key = trade.isin or trade.asset
-        held = quantities.get(key, ZERO)
-        factor = (held + trade.quantity_diff) / held if held > ZERO else ZERO
-        if trade.source not in CORPORATE_ACTION_SOURCES or factor <= ZERO:
-            quantities[key] = held + trade.quantity_diff
+        factor = factors.get((key, trade.date))
+        if trade.source not in CORPORATE_ACTION_SOURCES or factor is None:
             adjusted.append(trade)
             continue
+        if (key, trade.date) in applied:
+            continue
+        applied.add((key, trade.date))
         adjusted = [
             replace(
                 item,
@@ -6148,7 +6241,6 @@ def split_adjusted_trade_history(trades: list[Trade]) -> list[Trade]:
             else item
             for item in adjusted
         ]
-        quantities[key] = held * factor
     return adjusted
 
 
@@ -8659,13 +8751,14 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
     statement_rows = [row for row in movements if row.get("event_type") not in excluded and row.get("event_type") != "cash_flow"]
     card_ids = {str((row.get("metadata") or {}).get("transaction_id") or "") for row in statement_rows} - {""}
     # Accounts without transaction ids (BBVA) repeat statement rows in their cash
-    # ledger too; match those on account, day and signed amount instead.
-    card_ids |= {statement_match_key(row) for row in statement_rows}
+    # ledger too; match those on account, day and signed amount instead, one cash
+    # row per statement row, so a deposit never hides an equal payment.
+    statement_keys = unmatched_statement_keys(statement_rows, movements, card_ids)
     for row in movements:
         if row.get("event_type") in excluded:
             continue
         if row.get("event_type") == "cash_flow":
-            event = account_transfer_event(row, card_ids)
+            event = account_transfer_event(row, card_ids, statement_keys)
             if event:
                 events.append(event)
             continue
@@ -8712,12 +8805,18 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
     return sorted(events, key=lambda item: (item["date"], item["source"], item["merchant"]))
 
 
-def account_transfer_event(row: dict[str, Any], card_ids: set[str]) -> dict[str, Any] | None:
+def account_transfer_event(
+    row: dict[str, Any], card_ids: set[str], statement_keys: Counter[str] | None = None
+) -> dict[str, Any] | None:
     metadata = row.get("metadata") or {}
     amount = movement_decimal(row, "amount")
     if movement_decimal(metadata, "contribution_change") == ZERO or amount == ZERO:
         return None
-    if str(metadata.get("transaction_id") or "") in card_ids or statement_match_key(row) in card_ids:
+    if str(metadata.get("transaction_id") or "") in card_ids:
+        return None
+    key = statement_match_key(row)
+    if statement_keys is not None and statement_keys[key] > 0:
+        statement_keys[key] -= 1
         return None
     incoming = amount > ZERO
     return {
@@ -8737,9 +8836,22 @@ def account_transfer_event(row: dict[str, Any], card_ids: set[str]) -> dict[str,
     }
 
 
+def unmatched_statement_keys(
+    statement_rows: list[dict[str, Any]], movements: list[dict[str, Any]], card_ids: set[str]
+) -> Counter[str]:
+    """Statement-row keys left for cash rows once rows matched by transaction id have used theirs."""
+
+    matched = Counter(
+        statement_match_key(row)
+        for row in movements
+        if row.get("event_type") == "cash_flow" and str((row.get("metadata") or {}).get("transaction_id") or "") in card_ids
+    )
+    return Counter(statement_match_key(row) for row in statement_rows) - matched
+
+
 def statement_match_key(row: dict[str, Any]) -> str:
     account = re.sub(r"[^a-z0-9]", "", str(row.get("account") or row.get("source_kind") or "").casefold())
-    amount = abs(movement_decimal(row, "amount")).quantize(Decimal("0.01"))
+    amount = movement_decimal(row, "amount").quantize(Decimal("0.01"))
     return f"{account}|{str(row.get('occurred_on'))[:10]}|{amount}"
 
 

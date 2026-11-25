@@ -107,7 +107,7 @@ layout compatible.
 | Trade Republic | CSV | Account/activity export |
 | Fineco | XLSX | Securities workbook or current-account `Movimenti` export; investment settlements, dividends, income, and transfers are excluded from expenses |
 | Interactive Brokers | PDF | Trade-confirmation report; requires `pdftotext` |
-| eToro | XLSX | Account-statement workbook |
+| eToro | XLSX | Account-statement workbook; opened positions are purchases and long positions in `Posizioni chiuse` are sales (short positions are skipped and reported) |
 | Revolut | CSV | Account statement or Italian consolidated statement, including native-currency transactions and net savings interest |
 | Intesa | XLSX | Account-operations workbook |
 | BBVA | XLS | Account workbook |
@@ -218,6 +218,8 @@ update and replaces it. Depending on the enabled feature, the application may co
 - Fund issuers and reference sites only when the manual ETF composition updater is
   run.
 - Coinbase, BNB Chain, or TON endpoints only when optional wallet tools are run.
+  A wallet whose fetch fails (for example a rate limit) keeps its last balance,
+  marked `stale` in `crypto_wallet_positions.csv`, until a fetch succeeds.
 
 No analytics or telemetry service is included. External data can be incomplete,
 delayed, rate-limited, or revised. Cached market data is stored under `cache_dir` and

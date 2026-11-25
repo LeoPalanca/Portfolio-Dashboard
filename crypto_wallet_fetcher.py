@@ -491,6 +491,72 @@ def position_row(
     }
 
 
+def read_rows(path: Path) -> list[dict[str, str]]:
+    if not path.exists():
+        return []
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        return [{key: clean(value) for key, value in row.items() if key} for row in csv.DictReader(handle)]
+
+
+def same_wallet(previous: dict[str, str], failed: dict[str, str]) -> bool:
+    if (previous.get("source"), previous.get("wallet_address"), previous.get("asset", "").upper()) != (
+        failed.get("source"),
+        failed.get("wallet_address"),
+        failed.get("asset", "").upper(),
+    ):
+        return False
+    return not failed.get("network") or previous.get("network") == failed.get("network")
+
+
+def keep_last_good_positions(rows: list[dict[str, str]], previous: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Replace each failed fetch with the balance last written for that wallet.
+
+    A rate limit or an outage must not empty a wallet: the earlier balance stays,
+    marked stale with the error, until a fetch succeeds again.
+    """
+
+    output: list[dict[str, str]] = []
+    used: set[int] = set()
+    for row in rows:
+        if row.get("status") != "error":
+            output.append(row)
+            continue
+        matches = [index for index, old in enumerate(previous) if index not in used and same_wallet(old, row)]
+        if not matches:
+            output.append(row)
+            continue
+        for index in matches:
+            used.add(index)
+            old = previous[index]
+            output.append(
+                {
+                    **old,
+                    "status": "stale",
+                    "message": f"Last fetch failed ({row.get('message', '')[:200]}); balance as fetched at {old.get('fetched_at') or 'an earlier run'}.",
+                }
+            )
+    return output
+
+
+def keep_last_good_transactions(
+    rows: list[dict[str, str]],
+    previous: list[dict[str, str]],
+    failed_items: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Keep the earlier transaction audit of accounts whose fetch failed this run."""
+
+    failed = {
+        (item.get("person") or PRIMARY_PORTFOLIO_ID, item.get("source") or "", (item.get("asset") or "").upper())
+        for item in failed_items
+    }
+    kept = [
+        row
+        for row in previous
+        if (row.get("person") or PRIMARY_PORTFOLIO_ID, row.get("source") or "", (row.get("asset") or "").upper()) in failed
+    ]
+    return rows + kept
+
+
 def write_positions(rows: list[dict[str, str]], path: Path = POSITIONS_CSV) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     live_rows = [row for row in rows if parse_decimal(row.get("quantity")) > 0]
@@ -514,7 +580,14 @@ def update(args: argparse.Namespace) -> int:
     key = read_cdp_key(Path(args.cdp_key)) if args.cdp_key else None
     rows: list[dict[str, str]] = []
     transaction_rows: list[dict[str, str]] = []
-    coinbase_accounts = iter_coinbase_accounts(key) if key else []
+    coinbase_accounts: list[dict[str, Any]] = []
+    coinbase_error = ""
+    if key:
+        try:
+            coinbase_accounts = iter_coinbase_accounts(key)
+        except Exception as exc:
+            coinbase_error = str(exc)
+    failed_accounts: list[dict[str, str]] = []
     binance_history = Path(args.binance_history) if args.binance_history else latest_binance_history()
     binance_costs = binance_cost_basis(binance_history)
     for item in config:
@@ -523,16 +596,22 @@ def update(args: argparse.Namespace) -> int:
             if key is None:
                 rows.append(position_row(item, "", Decimal("0"), Decimal("0"), Decimal("0"), fetched_at, "error", "Missing --cdp-key."))
             else:
-                rows.extend(fetch_cdp_evm(item, key, fetched_at))
+                try:
+                    rows.extend(fetch_cdp_evm(item, key, fetched_at))
+                except Exception as exc:
+                    rows.append(position_row(item, "", Decimal("0"), Decimal("0"), Decimal("0"), fetched_at, "error", str(exc)))
         elif source == "coinbase_account":
-            if key is None:
-                rows.append(position_row(item, "coinbase", Decimal("0"), Decimal("0"), Decimal("0"), fetched_at, "error", "Missing --cdp-key."))
+            if key is None or coinbase_error:
+                failed_accounts.append(item)
+                message = coinbase_error or "Missing --cdp-key."
+                rows.append(position_row(item, "coinbase", Decimal("0"), Decimal("0"), Decimal("0"), fetched_at, "error", message))
             else:
                 try:
                     position_rows, audit_rows = fetch_coinbase_account(item, key, fetched_at, coinbase_accounts)
                     rows.extend(position_rows)
                     transaction_rows.extend(audit_rows)
                 except Exception as exc:
+                    failed_accounts.append(item)
                     rows.append(position_row(item, "coinbase", Decimal("0"), Decimal("0"), Decimal("0"), fetched_at, "error", str(exc)))
         elif source == "bsc_rpc":
             try:
@@ -547,6 +626,11 @@ def update(args: argparse.Namespace) -> int:
         else:
             rows.append(position_row(item, "", Decimal("0"), Decimal("0"), Decimal("0"), fetched_at, "error", f"Unsupported source: {source}"))
 
+    rows = keep_last_good_positions(rows, read_rows(Path(args.output)))
+    transaction_rows = keep_last_good_transactions(transaction_rows, read_rows(Path(args.transactions_output)), failed_accounts)
+    stale = sum(1 for row in rows if row.get("status") == "stale")
+    if stale:
+        print(f"Kept {stale} earlier balance row(s) because their fetch failed.")
     if args.dry_run:
         print(json.dumps({"positions": rows, "transactions": transaction_rows}, indent=2))
     else:

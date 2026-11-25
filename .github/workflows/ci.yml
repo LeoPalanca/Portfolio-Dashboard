@@ -42,7 +42,7 @@ jobs:
         run: for script in static/*.js; do node --check "$script"; done
 
       - name: Frontend tests
-        run: node test_income_expenses.cjs
+        run: for test in test_*.cjs; do node "$test"; done
 
       - name: Tests
         run: uv run pytest -q

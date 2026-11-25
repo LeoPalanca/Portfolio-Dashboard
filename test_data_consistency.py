@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from collections import Counter
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -107,7 +108,32 @@ class StatementDuplicateTest(unittest.TestCase):
         statement = {"account": "bbva", "occurred_on": "2026-03-05", "amount": "-650"}
         cash = {"id": 2, "account": "BBVA", "occurred_on": "2026-03-05", "amount": "-650", "event_type": "cash_flow",
                 "metadata": {"contribution_change": "-650"}}
-        self.assertIsNone(app.account_transfer_event(cash, {app.statement_match_key(statement)}))
+        keys = Counter([app.statement_match_key(statement)])
+        self.assertIsNone(app.account_transfer_event(cash, set(), keys))
+
+    def test_a_deposit_does_not_hide_an_equal_payment_on_the_same_day(self) -> None:
+        payment = {"account": "bbva", "occurred_on": "2026-03-05", "amount": "-500"}
+        deposit = {"id": 3, "account": "BBVA", "occurred_on": "2026-03-05", "amount": "500", "event_type": "cash_flow",
+                   "metadata": {"contribution_change": "500"}}
+        event = app.account_transfer_event(deposit, set(), Counter([app.statement_match_key(payment)]))
+        self.assertEqual((event["flow_kind"], event["amount_eur"]), ("top_up", Decimal("500")))
+
+    def test_a_cash_row_matched_by_id_uses_up_its_statement_key(self) -> None:
+        card = {"account": "tr", "occurred_on": "2026-03-05", "amount": "-50", "event_type": "spend", "metadata": {"transaction_id": "c1"}}
+        card_cash = {"id": 5, "account": "tr", "occurred_on": "2026-03-05", "amount": "-50", "event_type": "cash_flow",
+                     "metadata": {"contribution_change": "-50", "transaction_id": "c1"}}
+        withdrawal = {"id": 6, "account": "tr", "occurred_on": "2026-03-05", "amount": "-50", "event_type": "cash_flow",
+                      "metadata": {"contribution_change": "-50", "transaction_id": "w1"}}
+        keys = app.unmatched_statement_keys([card], [card, card_cash, withdrawal], {"c1"})
+        self.assertIsNone(app.account_transfer_event(card_cash, {"c1"}, keys))
+        self.assertEqual(app.account_transfer_event(withdrawal, {"c1"}, keys)["flow_kind"], "transfer_out")
+
+    def test_one_statement_row_hides_only_one_cash_row(self) -> None:
+        keys = Counter([app.statement_match_key({"account": "bbva", "occurred_on": "2026-03-05", "amount": "-200"})])
+        cash = {"id": 4, "account": "BBVA", "occurred_on": "2026-03-05", "amount": "-200", "event_type": "cash_flow",
+                "metadata": {"contribution_change": "-200"}}
+        self.assertIsNone(app.account_transfer_event(cash, set(), keys))
+        self.assertEqual(app.account_transfer_event(cash, set(), keys)["flow_kind"], "transfer_out")
 
 
 if __name__ == "__main__":
