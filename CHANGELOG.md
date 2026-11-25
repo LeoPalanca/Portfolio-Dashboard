@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.0 — 2026-11-25
+
+- **Rail in groups.** The section rail is split into Portfolio (performance, holdings, allocation, statistics, family rankings), Cash & income (income & expenses, cash flows, contributions, dividends, cash interest, taxes & costs), Markets (watchlist, news) and Data (data & prices, export). The default section order follows the same groups; a saved order that was still the old default moves to the new one, while a custom order, and any hidden sections, are kept. On tablets and phones a thin divider separates the groups in the strip.
+- **Filters in one panel.** People and the window are two segmented controls on the first row (names only: initials were not telling people apart); brokers, price/total return and a "View options" button sit on the second. View options opens the Berkshire, fund-composition and assets-shown choices, each with a line saying what it does, and the button counts the choices that differ from the defaults. On phones each row scrolls sideways instead of wrapping.
+- **Headline chart: value and return.** Beside the headline, the value and net contributions (dashed) are drawn over the window, with the time-weighted return below it, green above zero and red below. The readout above shows the current value and return, matching the headline and the opening sentence; moving across the chart shows the value and return on that day. Both follow the price/total return choice.
+
 ## 0.16.0 — 2026-11-25
 
 Halfway between the monthly report and a finance app: the serif and the calm stay, and the page gains a way around, icons and framed sections. Every section and control is still there.

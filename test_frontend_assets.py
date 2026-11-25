@@ -208,6 +208,41 @@ class FrontendAssetTest(unittest.TestCase):
         self.assertIn('id="section-nav-list"', render())
         self.assertIn("buildSectionNav();\n    }", js, "the rail must follow saved order and visibility")
 
+    def test_rail_groups_every_section_and_old_default_orders_follow_the_new_one(self) -> None:
+        with app.app.test_client() as client:
+            js = client.get("/static/app.js").get_data(as_text=True)
+
+        identity = js[js.index("const SECTION_IDENTITY = {") : js.index("const SECTION_GROUPS")]
+        entries = re.findall(r'"([a-z-]+)": \{ tier:[^}]*group: "([a-z]+)" \}', identity)
+        self.assertEqual(len(entries), identity.count("{ tier:"), "a section without a rail group")
+        groups_block = js[js.index("const SECTION_GROUPS = {") : js.index("const SECTION_ACCENTS")]
+        groups = set(re.findall(r"^\s+([a-z]+): \"", groups_block, re.MULTILINE))
+        self.assertEqual({group for _, group in entries} - groups, set())
+        # an order saved while it was still the default is not a user choice
+        self.assertIn("UNCHOSEN_ORDERS.has(JSON.stringify(stored.order))", js)
+        self.assertIn('class="rail-group-label"', js)
+
+    def test_view_options_keep_every_choice_behind_one_labelled_button(self) -> None:
+        html = render()
+        panel = html[html.index('id="view-options"') : html.index('<div class="lede"')]
+        for control in ("berkshire-mode", "proxy-mode", "live-mode"):
+            self.assertIn(f'id="{control}"', panel)
+        self.assertIn('aria-controls="view-options"', html)
+        self.assertIn('aria-expanded="false"', html)
+        # the return mode stays in view: every figure on the page depends on it
+        self.assertNotIn('id="return-mode"', panel)
+        self.assertIn('id="return-mode"', html)
+
+    def test_headline_chart_plots_value_and_the_windows_return(self) -> None:
+        html = render()
+        for element in ("lede-read-value", "lede-read-return", "lede-plot", "lede-cursor"):
+            self.assertIn(f'id="{element}"', html)
+        with app.app.test_client() as client:
+            js = client.get("/static/app.js").get_data(as_text=True)
+        # the return line is the same time-weighted series the performance chart draws
+        self.assertIn("renderLedeChart(filtered, normalizedReturns, valueDefs[0][0], valueDefs[1][0]);", js)
+        self.assertIn('plot.addEventListener("pointermove"', js)
+
     def test_section_preferences_survive_an_unknown_key(self) -> None:
         """A stored preference from an older build must not drop or duplicate sections."""
         with app.app.test_client() as client:
