@@ -128,23 +128,30 @@
     }
     // Each section's icon, short navigation label and identity colour, by its stable key.
     const SECTION_IDENTITY = {
-      "family-rankings": { tier: "core", accent: "violet", icon: "rankings", nav: "Family rankings" },
-      "portfolio-value": { tier: "primary", accent: "blue", icon: "value", nav: "Performance" },
-      "cash-flow-evolution": { tier: "core", accent: "teal", icon: "flow", nav: "Cash flows" },
-      "current-holdings": { tier: "core", accent: "green", icon: "holdings", nav: "Holdings" },
-      "mystyle-fee-drag-calculator": { tier: "risk", accent: "amber", icon: "calculator", nav: "Fee calculator" },
-      "watchlist": { tier: "support", accent: "violet", icon: "watch", nav: "Watchlist" },
-      "stock-news": { tier: "support", accent: "slate", icon: "news", nav: "News" },
-      "portfolio-distribution": { tier: "core", accent: "violet", icon: "distribution", nav: "Allocation" },
-      "dividends": { tier: "support", accent: "green", icon: "income", nav: "Dividends" },
-      "cash-account-interest": { tier: "support", accent: "teal", icon: "cash", nav: "Cash interest" },
-      "expenses": { tier: "core", accent: "red", icon: "wallet", nav: "Income & expenses" },
-      "net-contributions": { tier: "support", accent: "blue", icon: "contribution", nav: "Contributions" },
-      "taxes-and-costs": { tier: "risk", accent: "amber", icon: "risk", nav: "Taxes & costs" },
-      "portfolio-statistics": { tier: "core", accent: "blue", icon: "stats", nav: "Statistics" },
-      "pricing-coverage": { tier: "system", accent: "slate", icon: "coverage", nav: "Data & prices" },
-      "suggested-actions-and-to-dos": { tier: "risk", accent: "amber", icon: "todo", nav: "Actions" },
-      "import-your-statements": { tier: "system", accent: "slate", icon: "export", nav: "Export" }
+      "family-rankings": { tier: "core", accent: "violet", icon: "rankings", nav: "Family rankings", group: "portfolio" },
+      "portfolio-value": { tier: "primary", accent: "blue", icon: "value", nav: "Performance", group: "portfolio" },
+      "cash-flow-evolution": { tier: "core", accent: "teal", icon: "flow", nav: "Cash flows", group: "cash" },
+      "current-holdings": { tier: "core", accent: "green", icon: "holdings", nav: "Holdings", group: "portfolio" },
+      "mystyle-fee-drag-calculator": { tier: "risk", accent: "amber", icon: "calculator", nav: "Fee calculator", group: "cash" },
+      "watchlist": { tier: "support", accent: "violet", icon: "watch", nav: "Watchlist", group: "markets" },
+      "stock-news": { tier: "support", accent: "slate", icon: "news", nav: "News", group: "markets" },
+      "portfolio-distribution": { tier: "core", accent: "violet", icon: "distribution", nav: "Allocation", group: "portfolio" },
+      "dividends": { tier: "support", accent: "green", icon: "income", nav: "Dividends", group: "cash" },
+      "cash-account-interest": { tier: "support", accent: "teal", icon: "cash", nav: "Cash interest", group: "cash" },
+      "expenses": { tier: "core", accent: "red", icon: "wallet", nav: "Income & expenses", group: "cash" },
+      "net-contributions": { tier: "support", accent: "blue", icon: "contribution", nav: "Contributions", group: "cash" },
+      "taxes-and-costs": { tier: "risk", accent: "amber", icon: "risk", nav: "Taxes & costs", group: "cash" },
+      "portfolio-statistics": { tier: "core", accent: "blue", icon: "stats", nav: "Statistics", group: "portfolio" },
+      "pricing-coverage": { tier: "system", accent: "slate", icon: "coverage", nav: "Data & prices", group: "data" },
+      "suggested-actions-and-to-dos": { tier: "risk", accent: "amber", icon: "todo", nav: "Actions", group: "portfolio" },
+      "import-your-statements": { tier: "system", accent: "slate", icon: "export", nav: "Export", group: "data" }
+    };
+    // The rail gathers sections into these groups; the default order keeps each group together.
+    const SECTION_GROUPS = {
+      portfolio: "Portfolio",
+      cash: "Cash & income",
+      markets: "Markets",
+      data: "Data"
     };
     const SECTION_ACCENTS = {
       blue: ["var(--accent)", "color-mix(in srgb, var(--accent) 12%, transparent)"],
@@ -156,7 +163,7 @@
       slate: ["var(--text-secondary)", "var(--tint-strong)"]
     };
     function sectionIdentity(key) {
-      return SECTION_IDENTITY[key] || { tier: "support", accent: "slate", icon: "panel", nav: "" };
+      return SECTION_IDENTITY[key] || { tier: "support", accent: "slate", icon: "panel", nav: "", group: "" };
     }
     function paintSectionAccent(element, key) {
       const [accent, accentSoft] = SECTION_ACCENTS[sectionIdentity(key).accent] || SECTION_ACCENTS.slate;
@@ -182,15 +189,6 @@
         left.insertBefore(icon, heading);
       });
     }
-    // Person buttons carry a generic glyph from the server; an initial tells them apart.
-    function initializePersonAvatars() {
-      document.querySelectorAll("#persons button").forEach(button => {
-        const avatar = button.querySelector(".user-avatar");
-        const name = (button.dataset.label || "").trim();
-        if (avatar && name) avatar.textContent = name.charAt(0).toUpperCase();
-      });
-    }
-    document.addEventListener("DOMContentLoaded", initializePersonAvatars);
 
     /* ─── Section navigation: a rail on wide screens, a scrolling strip on narrow ones ─── */
     let activeNavKey = "overview";
@@ -201,20 +199,30 @@
     function navigableSections() {
       return allSections().filter(section => getComputedStyle(section).display !== "none");
     }
+    function railLinkHtml(key, label, icon) {
+      return `<li><button type="button" class="rail-link" data-nav-target="${escapeHtml(key)}">
+          <span class="nav-icon" aria-hidden="true">${sectionIconSvg(icon)}</span>
+          <span class="nav-label">${escapeHtml(label)}</span>
+        </button></li>`;
+    }
+    // Sections are listed in page order; a group label starts each run of one group.
     function buildSectionNav() {
       const list = document.getElementById("section-nav-list");
       if (!list) return;
-      const items = [{ key: "overview", label: "Overview", icon: "overview" }].concat(
-        navigableSections().map(section => {
-          const key = section.dataset.section;
-          return { key, label: sectionIdentity(key).nav || sectionTitle(section), icon: sectionIdentity(key).icon };
-        })
-      );
-      list.innerHTML = items.map(item => `
-        <li><button type="button" class="rail-link" data-nav-target="${escapeHtml(item.key)}">
-          <span class="nav-icon" aria-hidden="true">${sectionIconSvg(item.icon)}</span>
-          <span class="nav-label">${escapeHtml(item.label)}</span>
-        </button></li>`).join("");
+      const runs = [];
+      navigableSections().forEach(section => {
+        const key = section.dataset.section;
+        const identity = sectionIdentity(key);
+        const group = identity.group || "";
+        if (!runs.length || runs[runs.length - 1].group !== group) runs.push({ group, items: [] });
+        runs[runs.length - 1].items.push(railLinkHtml(key, identity.nav || sectionTitle(section), identity.icon));
+      });
+      list.innerHTML = railLinkHtml("overview", "Overview", "overview") + runs.map((run, index) => {
+        const label = SECTION_GROUPS[run.group];
+        const labelId = `rail-group-${index}`;
+        return `<li class="rail-group">${label ? `<span class="rail-group-label" id="${labelId}">${escapeHtml(label)}</span>` : ""}
+          <ul class="rail-sublist"${label ? ` aria-labelledby="${labelId}"` : ""}>${run.items.join("")}</ul></li>`;
+      }).join("");
       list.querySelectorAll(".rail-link").forEach(button => {
         if (button.dataset.navTarget !== "overview") paintSectionAccent(button, button.dataset.navTarget);
         button.addEventListener("click", () => goToSection(button.dataset.navTarget));
@@ -839,37 +847,132 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         + `<span class="lede-day-label">last day</span>`;
       target.hidden = false;
     }
-    // A quiet line of the market value over the selected window, under the headline.
-    function renderLedeSpark(series, key) {
+    // Beside the headline: value and net contributions above, the window's
+    // time-weighted return below, all for the selected return mode. At rest the readout
+    // repeats the headline's live figures; moving across the plot reads out that day.
+    const LEDE_PLOT = { width: 320, height: 170, valueTop: 6, valueBottom: 106, returnTop: 124, returnBottom: 164 };
+    let ledePlot = null;
+    function renderLedeChart(series, returns, valueKey, investedKey) {
       const figure = document.getElementById("lede-chart");
       const svg = document.getElementById("lede-spark");
       if (!figure || !svg) return;
-      const points = (series || [])
-        .map(point => [new Date(point.date).getTime(), Number(point[key])])
-        .filter(([time, value]) => Number.isFinite(time) && Number.isFinite(value));
-      if (points.length < 2) {
+      const rows = (series || []).map((point, index) => ({
+        time: new Date(point.date).getTime(),
+        value: Number(point[valueKey]),
+        invested: Number(point[investedKey] ?? NaN),
+        ret: Number(returns?.[index]?.return_pct ?? NaN)
+      })).filter(row => Number.isFinite(row.time) && Number.isFinite(row.value));
+      if (rows.length < 2) {
+        ledePlot = null;
         figure.hidden = true;
         svg.innerHTML = "";
         return;
       }
-      const width = 320;
-      const height = 120;
-      const inset = 8;
-      const start = points[0][0];
-      const span = (points[points.length - 1][0] - start) || 1;
-      const values = points.map(([, value]) => value);
-      const low = Math.min(...values);
-      const range = (Math.max(...values) - low) || 1;
+      const { width, height, valueTop, valueBottom, returnTop, returnBottom } = LEDE_PLOT;
+      const start = rows[0].time;
+      const span = (rows[rows.length - 1].time - start) || 1;
+      const amounts = rows.flatMap(row => [row.value, row.invested]).filter(Number.isFinite);
+      const low = Math.min(...amounts);
+      const amountRange = (Math.max(...amounts) - low) || 1;
+      const returnsShown = rows.map(row => row.ret).filter(Number.isFinite);
+      const returnLow = Math.min(0, ...returnsShown);
+      const returnRange = (Math.max(0, ...returnsShown) - returnLow) || 1;
       const x = time => ((time - start) / span) * width;
-      const y = value => inset + (1 - (value - low) / range) * (height - inset * 2);
-      const line = points.map(([time, value], index) => `${index ? "L" : "M"}${x(time).toFixed(1)},${y(value).toFixed(1)}`).join("");
-      const trend = values[values.length - 1] >= values[0] ? "positive" : "negative";
-      svg.innerHTML = `<path class="lede-spark-area ${trend}" d="${line}L${width},${height}L0,${height}Z"/>`
-        + `<path class="lede-spark-line ${trend}" d="${line}"/>`;
+      const yValue = value => valueTop + (1 - (value - low) / amountRange) * (valueBottom - valueTop);
+      const yReturn = value => returnTop + (1 - (value - returnLow) / returnRange) * (returnBottom - returnTop);
+      const path = (key, y) => {
+        let d = "";
+        let pen = "M";
+        rows.forEach(row => {
+          if (!Number.isFinite(row[key])) { pen = "M"; return; }
+          d += `${pen}${x(row.time).toFixed(1)},${y(row[key]).toFixed(1)}`;
+          pen = "L";
+        });
+        return d;
+      };
+      const valueLine = path("value", yValue);
+      const zero = yReturn(0).toFixed(1);
+      let returnShapes = "";
+      if (returnsShown.length > 1) {
+        const returnLine = path("ret", yReturn);
+        const priced = rows.filter(row => Number.isFinite(row.ret));
+        const returnArea = `${returnLine}L${x(priced[priced.length - 1].time).toFixed(1)},${zero}L${x(priced[0].time).toFixed(1)},${zero}Z`;
+        // Above zero reads as a gain and below as a loss, even when the line crosses.
+        returnShapes = `<defs>
+            <clipPath id="lede-clip-gain"><rect x="0" y="0" width="${width}" height="${zero}"/></clipPath>
+            <clipPath id="lede-clip-loss"><rect x="0" y="${zero}" width="${width}" height="${(height - Number(zero)).toFixed(1)}"/></clipPath>
+          </defs>
+          <line class="lede-zero" x1="0" x2="${width}" y1="${zero}" y2="${zero}"/>
+          <path class="lede-area return positive" clip-path="url(#lede-clip-gain)" d="${returnArea}"/>
+          <path class="lede-area return negative" clip-path="url(#lede-clip-loss)" d="${returnArea}"/>
+          <path class="lede-line return positive" clip-path="url(#lede-clip-gain)" d="${returnLine}"/>
+          <path class="lede-line return negative" clip-path="url(#lede-clip-loss)" d="${returnLine}"/>`;
+      }
+      svg.innerHTML = `<path class="lede-area value" d="${valueLine}L${width},${valueBottom}L0,${valueBottom}Z"/>`
+        + `<path class="lede-line invested" d="${path("invested", yValue)}"/>`
+        + `<path class="lede-line value" d="${valueLine}"/>`
+        + returnShapes;
       const day = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
-      document.getElementById("lede-chart-range").textContent =
-        `${day.format(new Date(points[0][0]))} to ${day.format(new Date(points[points.length - 1][0]))}`;
+      ledePlot = {
+        rows, x, yValue, yReturn, day,
+        range: `${day.format(new Date(rows[0].time))} to ${day.format(new Date(rows[rows.length - 1].time))}`
+      };
+      document.getElementById("lede-return-label").textContent =
+        selectedReturnMode === "total" ? "Total return" : "Price return";
+      bindLedeScrub();
+      showLedeReading(rows.length - 1, false);
       figure.hidden = false;
+    }
+    function showLedeReading(index, scrubbing) {
+      if (!ledePlot) return;
+      const row = ledePlot.rows[index];
+      if (!row) return;
+      const latest = index === ledePlot.rows.length - 1;
+      // The last day is today: show the live value the headline shows, not the daily close.
+      const liveValue = Number(ledeTotals?.market_value);
+      const value = latest && Number.isFinite(liveValue) ? liveValue : row.value;
+      const sign = number => (number >= 0 ? "+" : "\u2212");
+      document.getElementById("lede-read-value").textContent = moneyWhole(value);
+      const returnRead = document.getElementById("lede-read-return");
+      returnRead.textContent = Number.isFinite(row.ret) ? `${sign(row.ret)}${pct.format(Math.abs(row.ret))}%` : "\u2014";
+      returnRead.className = Number.isFinite(row.ret) ? signedClass(row.ret) : "";
+      document.getElementById("lede-chart-range").textContent = scrubbing ? ledePlot.day.format(new Date(row.time)) : ledePlot.range;
+      const cursor = document.getElementById("lede-cursor");
+      const valueDot = document.getElementById("lede-dot-value");
+      const returnDot = document.getElementById("lede-dot-return");
+      const left = `${(ledePlot.x(row.time) / LEDE_PLOT.width) * 100}%`;
+      cursor.hidden = !scrubbing;
+      valueDot.hidden = !scrubbing;
+      returnDot.hidden = !scrubbing || !Number.isFinite(row.ret);
+      if (!scrubbing) return;
+      cursor.style.left = left;
+      valueDot.style.left = left;
+      valueDot.style.top = `${(ledePlot.yValue(row.value) / LEDE_PLOT.height) * 100}%`;
+      if (Number.isFinite(row.ret)) {
+        returnDot.style.left = left;
+        returnDot.style.top = `${(ledePlot.yReturn(row.ret) / LEDE_PLOT.height) * 100}%`;
+        returnDot.className = `lede-dot return ${row.ret >= 0 ? "positive" : "negative"}`;
+      }
+    }
+    function bindLedeScrub() {
+      const plot = document.getElementById("lede-plot");
+      if (!plot || plot.dataset.scrub) return;
+      plot.dataset.scrub = "on";
+      plot.addEventListener("pointermove", event => {
+        if (!ledePlot) return;
+        const box = plot.getBoundingClientRect();
+        const share = Math.min(1, Math.max(0, (event.clientX - box.left) / (box.width || 1)));
+        const rows = ledePlot.rows;
+        const target = rows[0].time + share * (rows[rows.length - 1].time - rows[0].time);
+        let nearest = 0;
+        rows.forEach((row, index) => {
+          if (Math.abs(row.time - target) < Math.abs(rows[nearest].time - target)) nearest = index;
+        });
+        showLedeReading(nearest, true);
+      });
+      plot.addEventListener("pointerleave", () => {
+        if (ledePlot) showLedeReading(ledePlot.rows.length - 1, false);
+      });
     }
     function periodLabel(period) {
       if (period === "1d") return "1D";
@@ -1476,10 +1579,10 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         [isTotal ? "total_profit" : "profit", "Profit", "series-profit"]
       ];
       const activeReturnDefs = returnDefs.filter(([key]) => returnVisibility[key]);
-      renderLedeSpark(filtered, valueDefs[0][0]);
-      renderLineChart("value-chart", filtered, valueDefs);
-      
       const normalizedReturns = normalizeReturnSeries(filtered);
+      renderLedeChart(filtered, normalizedReturns, valueDefs[0][0], valueDefs[1][0]);
+      renderLineChart("value-chart", filtered, valueDefs);
+
       renderLineChart("return-chart", normalizedReturns, activeReturnDefs, value => `${value.toFixed(1)}%`);
 
       const equityComparable = normalizedReturns.length >= 2 && filtered.every(point =>
@@ -3926,6 +4029,30 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         load(false, `Applying ${button.textContent.trim()}`);
       });
     });
+    // The less used view choices sit behind one button; its count says how many differ from the defaults.
+    const viewOptionsToggle = document.getElementById("view-options-toggle");
+    const viewOptionsPanel = document.getElementById("view-options");
+    function updateViewOptionsCount() {
+      const count = document.getElementById("view-options-count");
+      if (!count) return;
+      const changed = [
+        selectedBerkshireMode !== "stock",
+        selectedProxyMode !== APP_CONFIG.defaultProxyMode,
+        selectedLiveMode !== "all"
+      ].filter(Boolean).length;
+      count.textContent = changed ? `${changed} changed` : "";
+      count.hidden = !changed;
+    }
+    if (viewOptionsToggle && viewOptionsPanel) {
+      viewOptionsToggle.addEventListener("click", () => {
+        const open = viewOptionsToggle.getAttribute("aria-expanded") !== "true";
+        viewOptionsToggle.setAttribute("aria-expanded", String(open));
+        viewOptionsPanel.hidden = !open;
+      });
+      // Runs after each choice's own handler, which sits on the button itself.
+      viewOptionsPanel.addEventListener("click", updateViewOptionsCount);
+      updateViewOptionsCount();
+    }
     document.querySelectorAll("#return-mode button").forEach(button => {
       button.addEventListener("click", () => {
         if (selectedReturnMode === button.dataset.returnMode) return;
@@ -4243,13 +4370,29 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
     }
 
     const LEGACY_ORDER = allSections().map(el => el.dataset.section);
-    const preferredOrder = ["portfolio-value","current-holdings","expenses","cash-flow-evolution","portfolio-distribution","dividends","cash-account-interest","net-contributions","taxes-and-costs","portfolio-statistics","family-rankings","watchlist","stock-news","pricing-coverage","suggested-actions-and-to-dos","import-your-statements"];
-    const DEFAULT_ORDER = [...LEGACY_ORDER].sort((a,b) => (preferredOrder.indexOf(a)<0?99:preferredOrder.indexOf(a)) - (preferredOrder.indexOf(b)<0?99:preferredOrder.indexOf(b)));
+    // Grouped as the rail shows them: portfolio, cash & income, markets, data.
+    const preferredOrder = [
+      "portfolio-value","current-holdings","portfolio-distribution","portfolio-statistics","family-rankings","suggested-actions-and-to-dos",
+      "expenses","cash-flow-evolution","net-contributions","dividends","cash-account-interest","taxes-and-costs","mystyle-fee-drag-calculator",
+      "watchlist","stock-news",
+      "pricing-coverage","import-your-statements"
+    ];
+    // Defaults of earlier releases. Saving visibility also saves the order, so an order
+    // that still equals an old default was never chosen and follows the new one.
+    const PREVIOUS_PREFERRED_ORDERS = [
+      ["portfolio-value","current-holdings","expenses","cash-flow-evolution","portfolio-distribution","dividends","cash-account-interest","net-contributions","taxes-and-costs","portfolio-statistics","family-rankings","watchlist","stock-news","pricing-coverage","suggested-actions-and-to-dos","import-your-statements"]
+    ];
+    function orderByPreference(preferred) {
+      const rank = key => (preferred.indexOf(key) < 0 ? 99 : preferred.indexOf(key));
+      return [...LEGACY_ORDER].sort((a, b) => rank(a) - rank(b));
+    }
+    const DEFAULT_ORDER = orderByPreference(preferredOrder);
+    const UNCHOSEN_ORDERS = new Set([LEGACY_ORDER, ...PREVIOUS_PREFERRED_ORDERS.map(orderByPreference)].map(order => JSON.stringify(order)));
 
     function readSectionPrefs() {
       let stored = null;
       try { stored = JSON.parse(localStorage.getItem(SECTIONS_KEY) || "null"); } catch (e) { stored = null; }
-      if (JSON.stringify(stored?.order) === JSON.stringify(LEGACY_ORDER)) stored.order = DEFAULT_ORDER;
+      if (stored && UNCHOSEN_ORDERS.has(JSON.stringify(stored.order))) stored.order = DEFAULT_ORDER;
       const known = new Set(DEFAULT_ORDER);
       const order = [];
       const hidden = new Set();

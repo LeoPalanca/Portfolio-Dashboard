@@ -171,25 +171,45 @@
             <span class="time-scale" aria-hidden="true"><span></span></span>
           </button>
         </div>
-        <div class="periods selector-fancy broker-selector is-hidden" id="brokers" aria-label="Broker filter"></div>
       </div>
-      <div class="control-row secondary-controls" aria-label="Secondary dashboard options">
-        <span class="secondary-label">View</span>
-        <div class="periods secondary-selector" id="berkshire-mode" aria-label="Berkshire exposure mode">
-          <button type="button" data-berkshire="stock" class="active">BRK stock</button>
-          <button type="button" data-berkshire="lookthrough">BRK 13F</button>
+      <div class="control-row secondary-controls" aria-label="Broker and view options">
+        <div class="periods selector-fancy broker-selector is-hidden" id="brokers" aria-label="Broker filter"></div>
+        <div class="deck-end">
+          <div class="periods secondary-selector" id="return-mode" aria-label="Return calculation mode">
+            <button type="button" data-return-mode="price" class="active" title="Price changes only">Price return</button>
+            <button type="button" data-return-mode="total" title="Price changes plus dividends">Total return</button>
+          </div>
+          <button type="button" class="deck-more" id="view-options-toggle" aria-expanded="false" aria-controls="view-options">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10"/><path d="M18 7h2"/><circle cx="16" cy="7" r="2"/><path d="M4 17h4"/><path d="M12 17h8"/><circle cx="10" cy="17" r="2"/></svg>
+            <span>View options</span>
+            <span class="deck-more-count" id="view-options-count" hidden></span>
+          </button>
         </div>
-        <div class="periods secondary-selector" id="proxy-mode" aria-label="Proxy composition mode">
-          <button type="button" data-proxy="on">Proxy gaps</button>
-          <button type="button" data-proxy="off">Official only</button>
+      </div>
+      <div class="view-options" id="view-options" hidden>
+        <div class="view-option">
+          <p class="view-option-title">Berkshire Hathaway</p>
+          <p class="view-option-text">Count BRK as one stock, or look through to the companies in its latest 13F filing.</p>
+          <div class="periods secondary-selector" id="berkshire-mode" aria-label="Berkshire exposure mode">
+            <button type="button" data-berkshire="stock" class="active">BRK stock</button>
+            <button type="button" data-berkshire="lookthrough">BRK 13F</button>
+          </div>
         </div>
-        <div class="periods secondary-selector" id="live-mode" aria-label="Live price filter">
-          <button type="button" data-live="all" class="active">All assets</button>
-          <button type="button" data-live="live">Live only</button>
+        <div class="view-option">
+          <p class="view-option-title">Fund compositions</p>
+          <p class="view-option-text">Fill gaps in what a fund holds with modelled compositions, or use issuer data only.</p>
+          <div class="periods secondary-selector" id="proxy-mode" aria-label="Proxy composition mode">
+            <button type="button" data-proxy="on">Proxy gaps</button>
+            <button type="button" data-proxy="off">Official only</button>
+          </div>
         </div>
-        <div class="periods secondary-selector" id="return-mode" aria-label="Return calculation mode">
-          <button type="button" data-return-mode="price" class="active">Price Return</button>
-          <button type="button" data-return-mode="total">Total Return</button>
+        <div class="view-option">
+          <p class="view-option-title">Assets shown</p>
+          <p class="view-option-text">Include every asset, or only those with a market quote or a tracked wallet.</p>
+          <div class="periods secondary-selector" id="live-mode" aria-label="Live price filter">
+            <button type="button" data-live="all" class="active">All assets</button>
+            <button type="button" data-live="live">Live only</button>
+          </div>
         </div>
       </div>
     </div>
@@ -203,8 +223,20 @@
         <p class="lede-text" id="lede-text"></p>
       </div>
       <figure class="lede-chart" id="lede-chart" hidden>
-        <svg id="lede-spark" viewBox="0 0 320 120" preserveAspectRatio="none" aria-hidden="true"></svg>
-        <figcaption class="lede-chart-range" id="lede-chart-range"></figcaption>
+        <div class="lede-readout">
+          <p class="lede-read"><span class="lede-key value" aria-hidden="true"></span><span class="lede-read-label">Value</span><strong id="lede-read-value"></strong></p>
+          <p class="lede-read"><span class="lede-key return" aria-hidden="true"></span><span class="lede-read-label" id="lede-return-label">Return</span><strong id="lede-read-return"></strong></p>
+        </div>
+        <div class="lede-plot" id="lede-plot">
+          <svg id="lede-spark" viewBox="0 0 320 170" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <span class="lede-cursor" id="lede-cursor" hidden></span>
+          <span class="lede-dot value" id="lede-dot-value" hidden></span>
+          <span class="lede-dot return" id="lede-dot-return" hidden></span>
+        </div>
+        <figcaption class="lede-chart-foot">
+          <span class="lede-legend"><span class="lede-key invested" aria-hidden="true"></span>Net contributions</span>
+          <span class="lede-chart-range" id="lede-chart-range"></span>
+        </figcaption>
       </figure>
     </div>
     <div class="overview-grid">
