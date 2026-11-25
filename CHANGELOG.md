@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.16.0 — 2026-11-25
+
+Halfway between the monthly report and a finance app: the serif and the calm stay, and the page gains a way around, icons and framed sections. Every section and control is still there.
+
+- **Section rail.** On wide screens a column on the left lists every visible section with its icon, in your saved order; choosing one opens it if closed and scrolls to it, and the current section is highlighted as you scroll. On tablets and phones the same list is a strip of chips under the masthead.
+- **Headline.** The portfolio value now sits beside a line of its value over the selected window, with the last day's move as a chip (arrow, percentage and euro amount) and the opening sentence below.
+- **Sheets.** Investments, income & expenses and every section sit on their own sheet with an icon in the section's colour, a serif title, the summary and an open/closed marker on the right. Day, week and month changes are tiles inside the investments sheet.
+- **Filters.** People are chips with their initial, brokers are chips with their marks, the window is a segmented control, and the view options are small segmented pairs.
+- **Colour.** A slightly cooler stone page with white sheets in the light theme and graphite in the dark one; gain and loss inks, the colour-blind palette and contrast checks are unchanged.
+- **Small screens.** On tablets the secondary masthead buttons become icons; on phones the masthead keeps to one line and the key figures fall into two columns.
+
 ## 0.15.0 — 2026-11-25
 
 A calmer, editorial look: the dashboard now reads like a private monthly report. Every section and control is still there.
