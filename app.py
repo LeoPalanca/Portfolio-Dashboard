@@ -196,7 +196,7 @@ NEWS_CACHE = SETTINGS.cache_path("news.json")
 # One entry is kept per portfolio/filter combination; stale ones are dropped on save.
 NEWS_CACHE_KEEP_SECONDS = 7 * 24 * 3600
 DASHBOARD_CACHE_DIR = SETTINGS.cache_dir / "dashboard-payloads"
-DASHBOARD_CACHE_FORMAT_VERSION = 5
+DASHBOARD_CACHE_FORMAT_VERSION = 6
 IMPORT_PARSER_VERSION = "ledger-5"
 _DASHBOARD_CACHE_LOCK = threading.Lock()
 _DASHBOARD_BUILD_LOCKS: dict[Path, threading.Lock] = {}
