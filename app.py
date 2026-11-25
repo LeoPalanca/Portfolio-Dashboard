@@ -3591,11 +3591,59 @@ def crypto_wallet_transaction_start_date() -> date:
     return min(dates) if dates else date.today() - timedelta(days=30)
 
 
-def crypto_wallet_valuation(wallet_positions: list[dict[str, Any]]) -> dict[str, Any]:
+# Coinbase transaction types that pay the holder in coin. They are income, so they
+# move the value without adding money; every other transaction is a flow.
+CRYPTO_INCOME_TYPES = frozenset(
+    {"staking_reward", "inflation_reward", "interest", "earn_payout", "incentives_rewards_payout"}
+)
+
+
+def crypto_event_flow(event: dict[str, Any], price: Decimal | None) -> Decimal:
+    """Money that entered (+) or left (-) the wallet with one transaction.
+
+    Buys count at the euros paid and sales at the proceeds, as trades do. A transfer
+    without a euro amount counts at the coins' market value that day, so moving coins
+    in or out is neither a gain nor a loss. Rewards are income, not a flow.
+    """
+    if str(event.get("type") or "").lower() in CRYPTO_INCOME_TYPES:
+        return ZERO
+    quantity = Decimal(str(event.get("quantity") or 0))
+    cash = abs(Decimal(str(event.get("cash_eur") or 0)))
+    if cash > ZERO:
+        return cash if quantity > ZERO else -cash
+    if price is not None:
+        return quantity * price
+    return ZERO
+
+
+def crypto_wallet_flow_dates() -> set[date]:
+    """Days with a wallet transaction: the all-broker history prices each one on its own day."""
+    today = date.today()
+    return {event["date"] for event in read_crypto_events() if event["date"] <= today}
+
+
+def crypto_wallet_valuation(
+    wallet_positions: list[dict[str, Any]], extra_dates: set[date] | None = None
+) -> dict[str, Any]:
+    """Wallet value history rebuilt from its transactions, ending on today's snapshot.
+
+    Net contributions are the money that went in and came out (crypto_event_flow), not
+    the remaining cost basis: a sale at a gain lowers value and contributions by the
+    same proceeds instead of reporting the realised gain as a loss.
+
+    The snapshot can hold coins the transactions do not explain (rewards paid on chain,
+    a wallet whose transfers are not tracked), or miss coins they do. That difference
+    is booked once, as a flow at market value on the last transaction date, and held
+    from then on. Every later point then holds what the snapshot holds, so today's live
+    value is compared like for like and the gap does not come back as a move every
+    day. The last point's value stays the snapshot value. ``extra_dates`` (the
+    all-broker dates this series is merged onto) are priced too, so the merge never
+    carries a stale wallet value forward.
+    """
     if not wallet_positions:
         return {"series": [], "status": "empty", "symbols": [], "variations": {}}
-    events = read_crypto_events()
     today = date.today()
+    events = [event for event in read_crypto_events() if event["date"] <= today]
     if not events:
         market_value = sum((Decimal(str(position.get("market_value_eur") or 0)) for position in wallet_positions), ZERO)
         cost_basis = sum((Decimal(str(position.get("cost_basis_eur") or 0)) for position in wallet_positions), ZERO)
@@ -3627,21 +3675,50 @@ def crypto_wallet_valuation(wallet_positions: list[dict[str, Any]]) -> dict[str,
         }
 
     start = events[0]["date"]
-    dates = sorted(valuation_date_grid(start, today, {event["date"] for event in events}))
+    dates = sorted(
+        valuation_date_grid(start, today, {event["date"] for event in events})
+        | {day for day in (extra_dates or ()) if start <= day <= today}
+    )
+
+    # Today's snapshot per asset (one asset can sit in several wallets) and the unit
+    # price it implies, which values today's point so it equals the snapshot.
+    snapshot_quantities: dict[str, Decimal] = {}
+    snapshot_values: dict[str, Decimal] = {}
+    valued_quantities: dict[str, Decimal] = {}
+    for position in wallet_positions:
+        asset = str(position.get("asset") or "").upper()
+        quantity = Decimal(str(position.get("quantity") or 0))
+        value = Decimal(str(position.get("market_value_eur") or 0))
+        snapshot_quantities[asset] = snapshot_quantities.get(asset, ZERO) + quantity
+        if value > ZERO:
+            snapshot_values[asset] = snapshot_values.get(asset, ZERO) + value
+            valued_quantities[asset] = valued_quantities.get(asset, ZERO) + quantity
+    snapshot_prices = {
+        asset: value / valued_quantities[asset]
+        for asset, value in snapshot_values.items()
+        if valued_quantities.get(asset, ZERO) > ZERO
+    }
+
     histories = {
         asset: fetch_crypto_eur_history(asset, start, today, refresh=False)
-        for asset in {"BTC", "ETH", "TON", "USDC"}
-        if any(event["asset"] == asset for event in events)
+        for asset in {"BTC", "ETH", "TON", "USDC"} & ({event["asset"] for event in events} | set(snapshot_quantities))
     }
-    latest_quantities = {
-        str(position.get("asset") or "").upper(): Decimal(str(position.get("quantity") or 0))
-        for position in wallet_positions
+
+    def unit_price(asset: str, day: date) -> Decimal | None:
+        if day == today and asset in snapshot_prices:
+            return snapshot_prices[asset]
+        price = previous_price((histories.get(asset) or {}).get("prices", {}), day)
+        return Decimal(str(price)) if price is not None else None
+
+    rebuilt: dict[str, Decimal] = {}
+    for event in events:
+        rebuilt[event["asset"]] = rebuilt.get(event["asset"], ZERO) + event["quantity"]
+    gap = {
+        asset: snapshot_quantities.get(asset, ZERO) - max(rebuilt.get(asset, ZERO), ZERO)
+        for asset in set(snapshot_quantities) | set(rebuilt)
     }
-    latest_values = {
-        str(position.get("asset") or "").upper(): Decimal(str(position.get("market_value_eur") or 0))
-        for position in wallet_positions
-    }
-    latest_cost_basis = sum((Decimal(str(position.get("cost_basis_eur") or 0)) for position in wallet_positions), ZERO)
+    gap = {asset: quantity for asset, quantity in gap.items() if quantity != ZERO}
+    gap_date = events[-1]["date"]
 
     # Fetch MSCI World prices for comparison
     msci_prices = {}
@@ -3698,8 +3775,27 @@ def crypto_wallet_valuation(wallet_positions: list[dict[str, Any]]) -> dict[str,
     start_cpi = get_cpi_value(start)
 
     holdings: dict[str, Decimal] = {}
-    cost_basis_by_asset: dict[str, Decimal] = {}
-    invested = ZERO
+    # What a coin is worth on a day without a price: its average cost, or for coins the
+    # transactions do not explain, the snapshot value.
+    book_values: dict[str, Decimal] = {}
+
+    def value_holdings(day: date) -> tuple[Decimal, int, int]:
+        value = ZERO
+        priced = unpriced = 0
+        for asset, quantity in holdings.items():
+            if quantity <= ZERO:
+                continue
+            price = unit_price(asset, day)
+            if price is None:
+                unpriced += 1
+                value += book_values.get(asset, ZERO)
+            else:
+                priced += 1
+                value += quantity * price
+        return value, priced, unpriced
+
+    net_contributions = ZERO
+    gap_booked = False
     event_index = 0
     series = []
     for point_date in dates:
@@ -3708,43 +3804,34 @@ def crypto_wallet_valuation(wallet_positions: list[dict[str, Any]]) -> dict[str,
             asset = event["asset"]
             quantity = event["quantity"]
             cash_eur = event["cash_eur"]
+            net_contributions += crypto_event_flow(event, unit_price(asset, event["date"]))
             holdings[asset] = holdings.get(asset, ZERO) + quantity
             if cash_eur > ZERO and quantity > ZERO:
-                invested += cash_eur
-                cost_basis_by_asset[asset] = cost_basis_by_asset.get(asset, ZERO) + cash_eur
+                book_values[asset] = book_values.get(asset, ZERO) + cash_eur
             elif quantity < ZERO:
                 previous_quantity = holdings.get(asset, ZERO) - quantity
                 if previous_quantity > ZERO:
-                    previous_cost = cost_basis_by_asset.get(asset, ZERO)
+                    previous_cost = book_values.get(asset, ZERO)
                     removed_cost = min(previous_cost, previous_cost * abs(quantity) / previous_quantity)
-                    cost_basis_by_asset[asset] = max(ZERO, previous_cost - removed_cost)
+                    book_values[asset] = max(ZERO, previous_cost - removed_cost)
             event_index += 1
 
-        if point_date == today:
-            for asset, quantity in latest_quantities.items():
-                holdings[asset] = quantity
+        if not gap_booked and point_date >= gap_date:
+            # The flow is exactly the value the difference adds on that day, so booking
+            # it moves value and contributions together and is not a return.
+            value_before, _, _ = value_holdings(point_date)
+            for asset, quantity in gap.items():
+                held = max(holdings.get(asset, ZERO), ZERO)
+                if quantity > ZERO:
+                    book_values[asset] = book_values.get(asset, ZERO) + quantity * snapshot_prices.get(asset, ZERO)
+                elif held > ZERO:
+                    book_values[asset] = book_values.get(asset, ZERO) * (held + quantity) / held
+                holdings[asset] = held + quantity
+            value_after, _, _ = value_holdings(point_date)
+            net_contributions += value_after - value_before
+            gap_booked = True
 
-        market_value = ZERO
-        priced = 0
-        unpriced = 0
-        for asset, quantity in holdings.items():
-            if quantity <= ZERO:
-                continue
-            if point_date == today and asset in latest_values and latest_values[asset] > ZERO:
-                market_value += latest_values[asset]
-                priced += 1
-                continue
-            price = previous_price((histories.get(asset) or {}).get("prices", {}), point_date)
-            if price is None:
-                unpriced += 1
-                market_value += cost_basis_by_asset.get(asset, ZERO)
-                continue
-            market_value += quantity * Decimal(str(price))
-            priced += 1
-
-        net_contributions = sum(cost_basis_by_asset.values(), ZERO)
-        if point_date == today and latest_cost_basis > ZERO:
-            net_contributions = latest_cost_basis
+        market_value, priced, unpriced = value_holdings(point_date)
         profit = market_value - net_contributions
         return_pct = profit / net_contributions * Decimal("100") if net_contributions > ZERO else ZERO
         msci_return = 0.0
@@ -3901,6 +3988,7 @@ def read_crypto_events() -> list[dict[str, Any]]:
                         "asset": asset,
                         "quantity": quantity,
                         "cash_eur": native,
+                        "type": (row.get("type") or "").strip().lower(),
                         "source": "coinbase_account",
                     }
                 )
@@ -3936,6 +4024,7 @@ def read_crypto_events() -> list[dict[str, Any]]:
                     "asset": (target.get("Coin") or "").strip().upper(),
                     "quantity": parse_decimal(target.get("Change")),
                     "cash_eur": eur_spend,
+                    "type": "buy",
                     "source": "binance_convert",
                 }
             )
@@ -4018,7 +4107,8 @@ def calculate_variations(series: list[dict[str, Any]]) -> dict[str, dict[str, An
     for key, target_date in {
         "1d": latest_date - timedelta(days=1),
         "1w": latest_date - timedelta(days=7),
-        "1m": latest_date - timedelta(days=30),
+        # A calendar month, as the 1M period button measures it (monthsBefore in app.js).
+        "1m": months_before(latest_date, 1),
     }.items():
         past = find_entry_for_date(target_date)
         if past and past["date"] != latest["date"]:
@@ -6336,6 +6426,19 @@ def one_year_before(day: date) -> date:
         return day.replace(year=day.year - 1, day=28)
 
 
+def months_before(day: date, months: int) -> date:
+    """The same day ``months`` earlier, clamped to that month's last day.
+
+    Twin of monthsBefore in static/app.js, so a 1M card and the 1M window measure the
+    same span: one month before 31 March is 28/29 February, not 1 or 2 March.
+    """
+    index = day.year * 12 + (day.month - 1) - months
+    year, month = divmod(index, 12)
+    month += 1
+    following = date(year + (month == 12), month % 12 + 1, 1)
+    return date(year, month, min(day.day, (following - timedelta(days=1)).day))
+
+
 def valuation_date_grid(start: date, end: date, flow_dates: set[date]) -> set[date]:
     """Dates at which a value history is priced.
 
@@ -6545,6 +6648,24 @@ def load_cash_histories_from_raw_files(person: str) -> tuple[list[tuple[date, De
     return tr_cash_history, bbva_cash_history, revolut_cash_history
 
 
+def cash_flow_dates(
+    tr_cash_history: Sequence[tuple[date, Decimal, Decimal]],
+    bbva_cash_history: Sequence[tuple[date, Decimal, Decimal]],
+    revolut_cash_history: Sequence[dict[str, Any]],
+) -> set[date]:
+    """Days on which money entered or left the cash accounts (a non-zero contribution change).
+
+    Interest and dividends paid into an account are income, not flows, so they add no date.
+    """
+    dates = {day for day, _, contribution in (*tr_cash_history, *bbva_cash_history) if contribution != ZERO}
+    dates |= {
+        event["date"]
+        for event in revolut_cash_history
+        if event.get("date") and Decimal(str(event.get("contrib_change") or 0)) != ZERO
+    }
+    return dates
+
+
 CORPORATE_ACTION_SOURCES = {"fineco_corporate_action"}
 
 
@@ -6592,7 +6713,14 @@ def calculate_valuation_series(
     refresh: bool = False,
     person: str = PRIMARY_PORTFOLIO_ID,
     broker: str = "all",
+    extra_flow_dates: set[date] | None = None,
 ) -> dict[str, Any]:
+    """Value history of the trades and, for Total mode, the cash accounts.
+
+    ``extra_flow_dates`` are days with an external flow priced elsewhere (crypto wallet
+    events) that this series is merged with: they are priced here too, so the merged
+    point on each such day holds both sides on the same date.
+    """
     if not trades:
         return {"series": [], "status": "empty"}
 
@@ -6620,7 +6748,20 @@ def calculate_valuation_series(
         )
     }
     equity_asset_names = {trade.asset for trade in trades if (trade.isin or trade.asset) in equity_keys}
-    sorted_dates = sorted(valuation_date_grid(start, end, {trade.date for trade in trades}))
+    broker_lower = broker.lower()
+    include_tr_cash = broker_lower in {"all", "trade republic"}
+    include_bbva_cash = broker_lower in {"all", "bbva"}
+    include_revolut_cash = broker_lower == "all"
+    # Deposits and withdrawals on the cash accounts are external flows of the Total
+    # series just as trades are of the price series: each is priced on its own day,
+    # not left inside a month-long interval where it would count for half of it.
+    other_flow_dates = set(extra_flow_dates or ()) | cash_flow_dates(
+        tr_cash_history if include_tr_cash else [],
+        bbva_cash_history if include_bbva_cash else [],
+        revolut_cash_history if include_revolut_cash else [],
+    )
+    flow_dates = {trade.date for trade in trades} | {day for day in other_flow_dates if day <= end}
+    sorted_dates = sorted(valuation_date_grid(start, end, flow_dates))
 
     histories: dict[str, dict[str, Any]] = {}
     currencies: set[str] = set()
@@ -6820,11 +6961,6 @@ def calculate_valuation_series(
         revolut_cash_bal = revolut_cash_balance_eur(revolut_cash_history, valuation_date, fx_histories, live_fx_prices)
         revolut_contrib = revolut_contributions_eur(revolut_cash_history, valuation_date, fx_histories)
 
-        broker_lower = broker.lower()
-        include_tr_cash = (broker_lower == "all" or broker_lower == "trade republic")
-        include_bbva_cash = (broker_lower == "all" or broker_lower == "bbva")
-        include_revolut_cash = broker_lower == "all"
-
         # Reconstruct total market value including cash balance under total return
         total_market_value = market_value + accumulated_dividends_other + accumulated_interest_other
         if include_tr_cash:
@@ -6993,8 +7129,11 @@ def compute_position_variations(
                 invert = False
 
         unit_now = current_value_eur / quantity
-        for period, days in [("1d", 1), ("1w", 7), ("1m", 30)]:
-            target_date = today - timedelta(days=days)
+        for period, target_date in (
+            ("1d", today - timedelta(days=1)),
+            ("1w", today - timedelta(days=7)),
+            ("1m", months_before(today, 1)),
+        ):
             raw_price = get_historical_price_in_eur(prices, fx_prices, target_date, invert, currency) if prices else None
             past_price = Decimal(str(raw_price)) if raw_price is not None and raw_price > 0 else None
             traded, paid, received = position_window_flows(trades, target_date, known_splits)
@@ -7760,13 +7899,24 @@ def _build_dashboard_payload(
         berkshire_mode=berkshire_mode,
         proxy_mode=proxy_mode,
     )
+    merge_wallet = broker == "all" and bool(wallet_positions)
     valuation = (
         crypto_wallet_valuation(wallet_positions)
         if broker == "crypto wallet" and wallet_positions
-        else calculate_valuation_series(trades, mappings, refresh=False, person=person, broker=broker)
+        else calculate_valuation_series(
+            trades,
+            mappings,
+            refresh=False,
+            person=person,
+            broker=broker,
+            extra_flow_dates=crypto_wallet_flow_dates() if merge_wallet else None,
+        )
     )
-    if broker == "all" and wallet_positions and valuation.get("series"):
-        valuation = merge_crypto_wallet_series(valuation, crypto_wallet_valuation(wallet_positions))
+    if merge_wallet and valuation.get("series"):
+        # The wallet is priced on every date of the all-broker history, and that history
+        # on every wallet transaction date, so each merged point adds same-day values.
+        main_dates = {date.fromisoformat(point["date"]) for point in valuation["series"]}
+        valuation = merge_crypto_wallet_series(valuation, crypto_wallet_valuation(wallet_positions, extra_dates=main_dates))
 
     extra_frictions = read_ledger_frictions(person)
     if broker != "all":
@@ -8207,6 +8357,7 @@ def dashboard_export_context(
 ) -> list[list[Any]]:
     totals = payload.get("totals", {})
     date_range = payload.get("date_range", {})
+    window = export_window_metrics(payload, period, custom_start)
     toggles = [
         f"Person: {payload.get('person_name') or person}",
         f"Window: {export_period_label(period, custom_start)}",
@@ -8230,13 +8381,32 @@ def dashboard_export_context(
         ["Toggles", " | ".join(toggles)],
         ["Date range", f"{date_range.get('start') or '-'} to {date_range.get('end') or '-'}"],
         ["Market value EUR", totals.get("market_value")],
-        ["Return %", totals.get("return_pct")],
+        ["Return %", window["return_pct"]],
+        ["Return basis", window["return_basis"]],
         ["Unrealized P/L EUR", totals.get("unrealized_pl")],
-        ["Realized P/L EUR", totals.get("realized_pl")],
-        ["Net contributions EUR", totals.get("net_contributions")],
+        ["Unrealized P/L basis", "Holdings open today, since purchase"],
+        ["Realized P/L EUR", window["realized_pl"]],
+        ["Net contributions EUR", window["net_contributions"]],
+        ["Realized P/L and net contributions basis", window["flows_basis"]],
         ["Priced assets", totals.get("priced_assets")],
         ["Unpriced assets", totals.get("unpriced_assets")],
     ]
+
+
+def export_window_start(end: date, period: str, custom_start: date | None = None) -> date | None:
+    """First day of an exported window, as periodWindowStart in static/app.js sets it."""
+    period = (period or "all").lower()
+    if period == "ytd":
+        return date(end.year, 1, 1)
+    if period == "1w":
+        return end - timedelta(days=7)
+    if period == "1m":
+        return months_before(end, 1)
+    if period == "1y":
+        return months_before(end, 12)
+    if period == "custom":
+        return custom_start
+    return None
 
 
 def export_period_series(
@@ -8244,25 +8414,70 @@ def export_period_series(
     period: str,
     custom_start: date | None = None,
 ) -> list[dict[str, Any]]:
+    """The window's valuation points, chosen as filterByPeriod in static/app.js chooses them.
+
+    A window's return is measured from the value at its start, so when the start falls
+    between two points the nearer one is the base (31 December for year to date).
+    """
     if not series:
         return []
-    period = (period or "all").lower()
-    if period == "all":
+    start = export_window_start(date.fromisoformat(series[-1]["date"]), period, custom_start)
+    if start is None:
         return series
-    end = date.fromisoformat(series[-1]["date"])
-    if period == "ytd":
-        start = date(end.year, 1, 1)
-    elif period == "1w":
-        start = end - timedelta(days=7)
-    elif period == "1m":
-        start = end - timedelta(days=30)
-    elif period == "1y":
-        start = end.replace(year=end.year - 1)
-    elif period == "custom":
-        start = custom_start or date.min
-    else:
-        start = date.min
-    return [row for row in series if date.fromisoformat(row["date"]) >= start]
+    days = [date.fromisoformat(row["date"]) for row in series]
+    first = next((index for index, day in enumerate(days) if day >= start), None)
+    if first is None:
+        return []
+    if first > 0 and start - days[first - 1] <= days[first] - start:
+        first -= 1
+    return series[first:]
+
+
+def export_window_metrics(
+    payload: dict[str, Any],
+    period: str,
+    custom_start: date | None = None,
+) -> dict[str, Any]:
+    """Return, realised P/L and net contributions of the exported window, as the page shows them.
+
+    Twin of periodMetrics in static/app.js (price mode). The return is time-weighted over
+    the window; with fewer than two valuation points it falls back to the simple return
+    since the first trade, and says so. Trades count from the day after the window's
+    base point, whose close already holds that day's trades.
+    """
+    totals = payload.get("totals", {})
+    series = payload.get("valuation_series") or []
+    values = export_period_series(series, period, custom_start)
+    result: dict[str, Any] = {
+        "return_pct": totals.get("return_pct"),
+        "return_basis": "Simple return since the first trade (profit / net contributions)",
+        "realized_pl": totals.get("realized_pl"),
+        "net_contributions": totals.get("net_contributions"),
+        "flows_basis": "Since the first trade",
+    }
+    if len(values) >= 2:
+        twr = time_weighted_return_pct(values, "market_value", "net_contributions", "profit")
+        if twr is not None:
+            result["return_pct"] = round(twr, 2)
+            result["return_basis"] = f"Time-weighted, {values[0]['date']} to {values[-1]['date']}"
+    cash_series = payload.get("series") or []
+    start = export_window_start(date.fromisoformat(series[-1]["date"]), period, custom_start) if series else None
+    if start is not None and cash_series:
+        if values:
+            # A window that opens before the first point starts from nothing.
+            opens_before_history = values[0] is series[0] and start < date.fromisoformat(series[0]["date"])
+            cutoff = None if opens_before_history else values[0]["date"]
+            base = next((row for row in reversed(cash_series) if cutoff and str(row["date"]) <= cutoff), None)
+            result["flows_basis"] = f"Trades after {cutoff}" if cutoff else "Every trade: the window opens before the first one"
+        else:
+            base = next((row for row in reversed(cash_series) if str(row["date"]) < start.isoformat()), None)
+            result["flows_basis"] = f"Trades from {start.isoformat()}"
+        last = cash_series[-1]
+        result["realized_pl"] = round(float(last.get("realized_pl") or 0) - float((base or {}).get("realized_pl") or 0), 2)
+        result["net_contributions"] = round(
+            float(last.get("net_contributions") or 0) - float((base or {}).get("net_contributions") or 0), 2
+        )
+    return result
 
 
 def export_period_rows_by_date(
@@ -8284,18 +8499,7 @@ def export_period_rows_by_date(
     if not parsed_dates:
         return []
     end = max(parsed_dates)
-    if period == "ytd":
-        start = date(end.year, 1, 1)
-    elif period == "1w":
-        start = end - timedelta(days=7)
-    elif period == "1m":
-        start = end - timedelta(days=30)
-    elif period == "1y":
-        start = end.replace(year=end.year - 1)
-    elif period == "custom":
-        start = custom_start or date.min
-    else:
-        start = date.min
+    start = export_window_start(end, period, custom_start) or date.min
     output: list[dict[str, Any]] = []
     for row in rows:
         try:
@@ -8352,7 +8556,9 @@ def benchmark_export_rows(
         return []
     first = series[0]
     last = series[-1]
-    portfolio = normalized_return_delta(first, last, "return_pct")
+    # The window's time-weighted return, as the overview and the page report it; the
+    # ratio of two since-start simple returns is not a window return once money moves.
+    portfolio = round(time_weighted_return_pct(series, "market_value", "net_contributions", "profit") or 0.0, 2)
     msci = normalized_return_delta(first, last, "msci_return_pct")
     xeon = normalized_return_delta(first, last, "xeon_return_pct")
     inflation = normalized_return_delta(first, last, "inflation_return_pct")
