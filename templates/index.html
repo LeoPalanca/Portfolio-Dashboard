@@ -189,7 +189,7 @@
       <div class="view-options" id="view-options" hidden>
         <div class="view-option">
           <p class="view-option-title">Berkshire Hathaway</p>
-          <p class="view-option-text">Count BRK as one stock, or look through to the companies in its latest 13F filing.</p>
+          <p class="view-option-text">Count BRK as one stock, or look through it to the companies in its latest 13F filing plus modelled cash and operating businesses.</p>
           <div class="periods secondary-selector" id="berkshire-mode" aria-label="Berkshire exposure mode">
             <button type="button" data-berkshire="stock" class="active">BRK stock</button>
             <button type="button" data-berkshire="lookthrough">BRK 13F</button>
@@ -277,9 +277,9 @@
             <thead>
               <tr>
                 <th style="text-align: left; cursor: default;">User</th>
-                <th class="sortable" onclick="sortRankings('start')" id="rank-header-start">Return (Start of Portfolio)</th>
-                <th class="sortable" onclick="sortRankings('common')" id="rank-header-common">Return (Common Alignment) ↓</th>
-                <th class="sortable" onclick="sortRankings('ytd')" id="rank-header-ytd">Return (YTD)</th>
+                <th class="sortable" onclick="sortRankings('start')" id="rank-header-start" title="Time-weighted return since each person's own first history date. Start dates differ, so this column is not like-for-like.">Return (since own start)</th>
+                <th class="sortable" onclick="sortRankings('common')" id="rank-header-common" title="Time-weighted return since the latest of everyone's start dates.">Return (Common Alignment) ↓</th>
+                <th class="sortable" onclick="sortRankings('ytd')" id="rank-header-ytd" title="Time-weighted return since the 31 December close.">Return (YTD)</th>
               </tr>
             </thead>
             <tbody id="rankings-tbody">
@@ -287,6 +287,7 @@
             </tbody>
           </table>
         </div>
+        <p class="subtle ranking-note" id="rankings-note" hidden></p>
       </div>
     </section>
     {% endif %}
@@ -543,6 +544,8 @@
           <div class="info-box">
             <strong>How distribution is calculated:</strong>
             Direct shares use their full market value. ETFs and funds are split by rows in <code>asset_exposures.csv</code>; source metadata is in <code>data/etf_documents.json</code> and <code>data/proxy_exposures.csv</code>.
+            Asset classes are grouped as Equity, Bond, Cash, Crypto, Commodity, Real estate and Other.
+            Cash-account balances (Trade Republic, BBVA, Revolut) are not part of the allocation: it covers invested positions only.
           </div>
           <div class="table-wrap">
             <table>

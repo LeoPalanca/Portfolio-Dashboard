@@ -1779,6 +1779,7 @@ tbody tr:hover {
 }
 .hist-bar.portfolio { fill: color-mix(in srgb, var(--accent) 74%, transparent); }
 .hist-bar.msci { fill: color-mix(in srgb, var(--series-teal) 72%, transparent); }
+.hist-bar.overflow { opacity: 0.5; }
 .hist-mean-line.portfolio { stroke: var(--accent); }
 .hist-mean-line.msci { stroke: var(--series-teal); }
 .hist-mean-line {
@@ -2604,6 +2605,8 @@ main > section { backdrop-filter: none; background-color: var(--surface-panel); 
 .section-body .table-wrap > h3 { padding: var(--space-4) 0 var(--space-2); margin: 0; }
 .table-pages { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-3); }
 .ranking-message { display: block; color: var(--text-muted); font-weight: 400; white-space: normal; max-width: 280px; }
+.ranking-tag { display: inline-flex; align-items: center; margin-left: var(--space-2); padding: 1px var(--space-2); border: 1px solid var(--border-strong); border-radius: var(--radius-pill); color: var(--text-muted); font-size: var(--text-2xs); font-weight: 600; cursor: help; }
+.ranking-note { margin: 0; padding: var(--space-3) var(--space-4); line-height: 1.5; }
 @media (max-width: 900px) {
   .overview-grid { grid-template-columns: minmax(0,1fr); }
 }
