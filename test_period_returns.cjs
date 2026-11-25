@@ -86,4 +86,11 @@ result = run('all', flat);
 assert.equal(result.window.length, flat.valuation_series.length);
 assert.equal(result.totals.net_contributions, 5000);
 
+// One month before 31 March is the end of February, not 3 March.
+const monthEnd = { ...flat, date_range: { end: '2026-03-31' }, valuation_series: [
+  point('2026-02-27', 1000), point('2026-02-28', 1000), point('2026-03-03', 1000), point('2026-03-31', 1100),
+] };
+result = run('1m', monthEnd);
+assert.equal(result.window[0], '2026-02-28');
+
 console.log('Period windows, base points and window trade metrics passed.');

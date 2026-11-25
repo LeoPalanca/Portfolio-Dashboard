@@ -27,7 +27,8 @@ DATA_DIR = APP_DIR / "data"
 DOCUMENTS_JSON = DATA_DIR / "etf_documents.json"
 HOLDINGS_DIR = DATA_DIR / "etf_holdings"
 CLASSIFICATION_CSV = DATA_DIR / "holding_classifications.csv"
-EXPOSURES_CSV = APP_DIR / "asset_exposures.csv"
+# Written where the dashboard reads it (the private data directory).
+EXPOSURES_CSV = dashboard.EXPOSURES_CSV
 
 EXPOSURE_FIELDS = [
     "asset_name",
@@ -1237,10 +1238,10 @@ def update(args: argparse.Namespace) -> int:
 
     backup = None if args.no_backup else backup_exposures()
     if backup:
-        print(f"Backed up existing exposures to {backup.relative_to(APP_DIR)}")
+        print(f"Backed up existing exposures to {dashboard.configured_path_label(backup)}")
     save_documents(records)
     write_csv(EXPOSURES_CSV, exposure_rows, EXPOSURE_FIELDS)
-    print(f"Wrote {len(exposure_rows)} rows to {EXPOSURES_CSV.relative_to(APP_DIR)}")
+    print(f"Wrote {len(exposure_rows)} rows to {dashboard.configured_path_label(EXPOSURES_CSV)}")
     print(f"Wrote metadata to {DOCUMENTS_JSON.relative_to(APP_DIR)}")
     return 0
 

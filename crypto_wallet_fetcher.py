@@ -17,14 +17,15 @@ import jwt
 from src.portfolio_dashboard.config import get_settings
 
 
-PRIMARY_PORTFOLIO_ID = get_settings().primary_portfolio_id
+SETTINGS = get_settings()
+PRIMARY_PORTFOLIO_ID = SETTINGS.primary_portfolio_id
 
 
-APP_DIR = Path(__file__).resolve().parent
 DOWNLOADS_DIR = Path.home() / "Downloads"
-CONFIG_CSV = APP_DIR / "data" / "crypto_wallets.csv"
-POSITIONS_CSV = APP_DIR / "data" / "crypto_wallet_positions.csv"
-TRANSACTIONS_CSV = APP_DIR / "data" / "crypto_wallet_transactions.csv"
+# The same private data directory the dashboard reads wallets from.
+CONFIG_CSV = SETTINGS.data_path("crypto_wallets.csv")
+POSITIONS_CSV = SETTINGS.data_path("crypto_wallet_positions.csv")
+TRANSACTIONS_CSV = SETTINGS.data_path("crypto_wallet_transactions.csv")
 CDP_HOST = "api.cdp.coinbase.com"
 CDP_BASE_URL = f"https://{CDP_HOST}"
 COINBASE_HOST = "api.coinbase.com"

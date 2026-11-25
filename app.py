@@ -72,10 +72,26 @@ from src.portfolio_dashboard.imports.revolut import read_revolut_rows
 from src.portfolio_dashboard.movements import MovementStore
 from src.portfolio_dashboard.movements.personal import PersonalLedger
 
-try:
-    import yfinance as yf
-except Exception:  # pragma: no cover - handled at runtime in the dashboard
-    yf = None
+class _LazyModule:
+    """Import a heavy optional module on first use instead of at startup.
+
+    yfinance (with pandas) is about half of the import time and tens of MB of
+    memory, but is only needed for ISIN searches and watchlist quotes.
+    """
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+        self._module: Any = None
+
+    def __getattr__(self, attribute: str) -> Any:
+        if self._module is None:
+            import importlib
+
+            self._module = importlib.import_module(self._name)
+        return getattr(self._module, attribute)
+
+
+yf: Any = _LazyModule("yfinance")
 
 
 SETTINGS = get_settings()
@@ -6887,6 +6903,61 @@ def enrich_positions(
     }
 
 
+class RunningTotals:
+    """Cumulative sums of dated ``(day, first, second)`` events, read for increasing days."""
+
+    def __init__(self, events: list[tuple[date, Decimal, Decimal]]) -> None:
+        self._events = sorted(events, key=lambda item: item[0])
+        self._index = 0
+        self._totals = (ZERO, ZERO)
+
+    def through(self, day: date) -> tuple[Decimal, Decimal]:
+        first, second = self._totals
+        while self._index < len(self._events) and self._events[self._index][0] <= day:
+            _day, amount, other = self._events[self._index]
+            first += amount
+            second += other
+            self._index += 1
+        self._totals = (first, second)
+        return self._totals
+
+
+def statistics_unit_value_eur(
+    asset: str,
+    day: date,
+    refs: dict[str, dict[str, str]],
+    histories: dict[str, dict[str, Any]],
+    fx_histories: dict[str, dict[str, Any]],
+    live_prices: dict[str, Any],
+    live_fx_prices: dict[str, Any],
+) -> Decimal | None:
+    """EUR value of one unit on ``day``, or None without a quote or an exchange rate."""
+
+    ref = refs.get(asset) or next(
+        (value for key, value in refs.items() if value.get("isin") == asset or key == asset), None
+    )
+    symbol = (ref or {}).get("symbol", "")
+    history = histories.get(symbol) if symbol else None
+    if not history or history.get("status") != "priced":
+        return None
+    price_point = price_point_for_date(history.get("prices", {}), day, live_prices.get(symbol))
+    if price_point is None:
+        return None
+    value = Decimal(str(price_point[0]))
+    currency = normalize_currency_code(history.get("currency") or "EUR")
+    if currency == "EUR":
+        return value
+    fx_symbol, invert = fx_symbol_for(fx_base_currency(currency))
+    fx_history = fx_histories.get(fx_symbol) or {}
+    fx_point = price_point_for_date(fx_history.get("prices") or {}, day, live_fx_prices.get(fx_symbol)) if fx_history.get("prices") else None
+    if fx_point is None or not fx_point[0] or fx_point[0] <= 0:
+        return None
+    if currency == "GBp":
+        value /= Decimal(100)
+    rate = Decimal(str(fx_point[0]))
+    return value / rate if invert else value * rate
+
+
 def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID, broker="all", history_context=None):
     import numpy as np
 
@@ -6970,12 +7041,30 @@ def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID
     daily_metrics = []
     holdings = {}
     cost_basis = {}
+    # EUR value of one unit the last time an asset had both a price and an FX rate.
+    # A day without a quote (or without a rate) keeps that value instead of
+    # counting the position as 0 or its foreign-currency amount as euros.
+    last_unit_value_eur: dict[str, Decimal] = {}
     invested_other = ZERO
     proceeds_other = ZERO
     invested_tr = ZERO
     proceeds_tr = ZERO
     trade_idx = 0
-    
+    # Running totals of dated events, advanced day by day instead of re-summing
+    # every event for every day.
+    tr_running = RunningTotals([(item[0], item[1], item[2]) for item in tr_cash_events]) if include_tr_cash else None
+    bbva_running = RunningTotals([(item[0], item[1], item[2]) for item in bbva_cash_events]) if include_bbva_cash else None
+    dividend_running = RunningTotals(
+        [(div.date, div.amount_eur, ZERO) for div in dividends if div.broker.lower() != "trade republic"]
+    )
+    interest_running = RunningTotals(
+        [
+            (i["date"], Decimal(str(i["net_eur"])), ZERO)
+            for i in interests
+            if i.get("broker", "").lower() not in {"trade republic", "bbva"}
+        ]
+    )
+
     for d in dates_list:
         while trade_idx < len(ordered_trades) and ordered_trades[trade_idx].date <= d:
             t = ordered_trades[trade_idx]
@@ -7009,46 +7098,26 @@ def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID
         sec_mv = ZERO
         for asset, qty in holdings.items():
             if qty <= ZERO: continue
-            ref = refs.get(asset)
-            if not ref:
-                ref_found = next((r_val for r_asset, r_val in refs.items() if r_val.get("isin") == asset or r_asset == asset), None)
-                if ref_found: ref = ref_found
-                else: continue
-            symbol = ref.get("symbol", "")
-            if not symbol: continue
-            h = histories.get(symbol)
-            if not h or h.get("status") != "priced": continue
-            
-            price_point = price_point_for_date(h.get("prices", {}), d, live_prices.get(symbol))
-            if price_point is None: continue
-            price = price_point[0]
-            
-            val_in_curr = Decimal(str(price)) * qty
-            currency = normalize_currency_code(h.get("currency") or "EUR")
-            
-            if currency != "EUR":
-                normalized = fx_base_currency(currency)
-                fx_sym, is_div = fx_symbol_for(normalized)
-                fx_h = fx_histories.get(fx_sym)
-                if fx_h and fx_h.get("prices"):
-                    fx_point = price_point_for_date(fx_h["prices"], d, live_fx_prices.get(fx_sym))
-                    fx_rate = fx_point[0] if fx_point else None
-                    if fx_rate is not None and fx_rate > 0:
-                        rate_dec = Decimal(str(fx_rate))
-                        if currency == "GBp": val_in_curr = val_in_curr / Decimal('100')
-                        multiplier = Decimal('1') / rate_dec if is_div else rate_dec
-                        val_in_curr = val_in_curr * multiplier
-            sec_mv += val_in_curr
-            
-        tr_cash_bal = sum(item[1] for item in tr_cash_events if item[0] <= d) if include_tr_cash else ZERO
-        tr_contrib = sum(item[2] for item in tr_cash_events if item[0] <= d) if include_tr_cash else ZERO
-        bbva_cash_bal = sum(item[1] for item in bbva_cash_events if item[0] <= d) if include_bbva_cash else ZERO
-        bbva_contrib = sum(item[2] for item in bbva_cash_events if item[0] <= d) if include_bbva_cash else ZERO
+            unit_value = statistics_unit_value_eur(
+                asset, d, refs, histories, fx_histories, live_prices, live_fx_prices
+            )
+            if unit_value is not None:
+                last_unit_value_eur[asset] = unit_value
+            else:
+                unit_value = last_unit_value_eur.get(asset)
+            if unit_value is None:
+                # Never quoted yet: carry it at cost so buying it is not a loss.
+                sec_mv += cost_basis.get(asset, ZERO)
+                continue
+            sec_mv += unit_value * qty
+
+        tr_cash_bal, tr_contrib = tr_running.through(d) if tr_running else (ZERO, ZERO)
+        bbva_cash_bal, bbva_contrib = bbva_running.through(d) if bbva_running else (ZERO, ZERO)
         revolut_cash_bal = revolut_cash_balance_eur(revolut_cash_events, d, fx_histories, live_fx_prices) if include_revolut_cash else ZERO
         revolut_contrib = revolut_contributions_eur(revolut_cash_events, d, fx_histories) if include_revolut_cash else ZERO
-        
-        accumulated_dividends_other = sum((div.amount_eur for div in dividends if div.date <= d and div.broker.lower() != "trade republic"), ZERO)
-        accumulated_interest_other = sum((Decimal(str(i["net_eur"])) for i in interests if i["date"] <= d and i.get("broker", "").lower() not in {"trade republic", "bbva"}), ZERO)
+
+        accumulated_dividends_other = dividend_running.through(d)[0]
+        accumulated_interest_other = interest_running.through(d)[0]
         
         # Total Return metrics
         total_mv = sec_mv + accumulated_dividends_other + accumulated_interest_other + tr_cash_bal + bbva_cash_bal + revolut_cash_bal
