@@ -7,6 +7,8 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from ..domain.money import parse_decimal
+
 MONTHS = dict(zip(["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"], range(1, 13)))
 
 
@@ -22,7 +24,9 @@ def consolidated_date(value: str) -> date | None:
 
 
 def amount(value: str) -> str:
-    return re.sub(r"[^0-9,.+-]", "", value).replace(".", "").replace(",", ".")
+    """Native amount of a consolidated-statement cell such as ``-1.234,56€`` or ``12,50 CHF``."""
+
+    return str(parse_decimal(value)) if value.strip() else ""
 
 
 def read_revolut_rows(path: Path) -> list[dict[str, str]]:

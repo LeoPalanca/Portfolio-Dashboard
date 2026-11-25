@@ -272,7 +272,87 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       for (const error of status.migration_errors || []) {
         const item = document.createElement("li"); item.textContent = `Needs review: ${error}`; importLatestList.append(item);
       }
-      importLatest.hidden = sources.length === 0 && !(status.migration_errors || []).length;
+      const files = renderImportedFiles(status, labels);
+      importLatest.hidden = sources.length === 0 && !(status.migration_errors || []).length && files === 0;
+    }
+
+    function renderImportedFiles(status, labels) {
+      let details = document.getElementById("import-files");
+      if (!details) {
+        details = document.createElement("details");
+        details.id = "import-files";
+        details.className = "import-files";
+        importLatest.append(details);
+      }
+      const files = Array.isArray(status.import_list) ? status.import_list : [];
+      const summary = document.createElement("summary");
+      summary.textContent = `Imported files (${files.length})`;
+      const list = document.createElement("ul");
+      for (const file of files) {
+        const item = document.createElement("li");
+        const name = document.createElement("span");
+        name.className = "import-file-name";
+        name.textContent = file.name;
+        const meta = document.createElement("span");
+        meta.className = "import-file-meta";
+        const when = Number.isFinite(Date.parse(file.imported_at)) ? importDateFormatter.format(new Date(file.imported_at)) : "";
+        meta.textContent = [labels.get(file.source) || file.source, `${file.movements} movement${file.movements === 1 ? "" : "s"}`, when]
+          .filter(Boolean).join(" · ");
+        item.append(name, meta);
+        if (file.deletable) item.append(importDeleteButton(file));
+        list.append(item);
+      }
+      details.replaceChildren(summary, list);
+      details.hidden = files.length === 0;
+      return files.length;
+    }
+
+    function importDeleteButton(file) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "import-file-delete";
+      button.textContent = "Delete";
+      button.setAttribute("aria-label", `Delete import ${file.name}`);
+      let armed = null;
+      button.addEventListener("click", async () => {
+        if (!armed) {
+          button.textContent = `Delete ${file.movements} movement${file.movements === 1 ? "" : "s"}?`;
+          button.classList.add("armed");
+          armed = window.setTimeout(() => {
+            armed = null;
+            button.textContent = "Delete";
+            button.classList.remove("armed");
+          }, 5000);
+          return;
+        }
+        window.clearTimeout(armed);
+        armed = null;
+        button.disabled = true;
+        button.textContent = "Deleting…";
+        importStatus.className = "import-status";
+        importStatus.textContent = `Removing ${file.name} and re-reading the other files of that platform…`;
+        try {
+          const person = selectedPerson;
+          const response = await fetch(`/api/imports/${encodeURIComponent(file.id)}?portfolio_id=${encodeURIComponent(person)}`, { method: "DELETE" });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || "The import could not be deleted.");
+          const skipped = Array.isArray(result.not_rechecked) ? result.not_rechecked : [];
+          importStatus.className = skipped.length ? "import-status warning" : "import-status success";
+          importStatus.textContent = `Deleted ${result.deleted}: ${result.removed} movement${result.removed === 1 ? "" : "s"} removed`
+            + (result.restored ? `, ${result.restored} restored from other ${result.source_label} files that also contain them` : "")
+            + "."
+            + (skipped.length ? ` Could not re-read (missing archive copy, or retried at the next start): ${skipped.join(" · ")}` : "");
+          void loadImportHistory();
+          load(false, "Loading imported data");
+        } catch (error) {
+          importStatus.className = "import-status error";
+          importStatus.textContent = error.message;
+          button.disabled = false;
+          button.textContent = "Delete";
+          button.classList.remove("armed");
+        }
+      });
+      return button;
     }
 
     async function loadImportHistory() {

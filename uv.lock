@@ -1063,7 +1063,7 @@ wheels = [
 
 [[package]]
 name = "portfolio-dashboard"
-version = "0.14.6"
+version = "0.14.7"
 source = { editable = "." }
 dependencies = [
     { name = "flask" },

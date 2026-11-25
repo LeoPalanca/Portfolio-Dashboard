@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.7 — 2026-11-25
+
+- Archived statements are read again when the parser improves, and a re-read replaces that file's movements instead of adding to them. Rows the parser now reads differently are updated in place (keeping their categories), rows it no longer reads are removed with a revision kept, and nothing is stored twice. The first start after updating re-reads every archived file once: Intesa transfers and incoming bank transfers, and Fineco account transfers, that older parsers skipped are added; existing movements are unchanged.
+- Imported files can be deleted from the import dialog. Deleting a file removes its movements, re-reads the other files of the same platform so rows they also contain are kept, and stops the file from being imported again at startup; uploading it again restores it.
+- A Trade Republic export named after another portfolio's holder (`trade_republic_name`) in the archive folder is no longer imported into the primary portfolio at startup.
+- Revolut cash movements present in both the regular and the consolidated statement are stored once instead of doubling the cash balance.
+- Consolidated Revolut amounts are read with the shared parser, so `€12.50` is 12.50 rather than 1250.
+
 ## 0.14.6 — 2026-11-25
 
 - The crypto wallet tool no longer empties a wallet when a fetch fails: a rate limit (HTTP 429) or outage used to rewrite `crypto_wallet_positions.csv` without that wallet, so its value vanished from the dashboard. The last balance is kept, marked `stale` with the error, along with the account's transaction audit.
