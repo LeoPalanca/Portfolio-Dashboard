@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.6 — 2026-11-25
+
+- The crypto wallet tool no longer empties a wallet when a fetch fails: a rate limit (HTTP 429) or outage used to rewrite `crypto_wallet_positions.csv` without that wallet, so its value vanished from the dashboard. The last balance is kept, marked `stale` with the error, along with the account's transaction audit.
+- A cash-ledger deposit no longer hides an equal payment on the same day (or the other way round): rows repeating a statement row are matched on the signed amount, one cash row per statement row.
+- Splits with a small ratio (free shares, stock dividends, up to about 4:3) were re-applied to the stored price history on every load, flipping it back and forth. Price gaps are now only corrected when they sit clearly closer to the split ratio than to no gap, which makes the correction idempotent, and ratios under 3:2 are left to the provider.
+- A reverse split no longer reads as a realized loss: quantity-only corporate actions change the share count and keep the cost basis, and a split booked as "old shares out, new shares in" on one day restates the history by its net ratio. Shares written off to zero are still a loss.
+- eToro closed positions are imported as sales (amount invested plus profit, in USD), so they no longer stay open forever. Short positions are skipped and reported in the import result.
+- Current holdings quoted in pence (GBp, many `.L` tickers) are converted as hundredths of a pound; they were overstated 100× (the price history already divided by 100).
+- CI also runs the period-window frontend test.
+
 ## 0.14.5 — 2026-11-24
 
 - Read amounts in either notation: `1,234.56` was parsed as 1.23456, and `€1,234.56`, `(2.00)`, non-breaking-space grouping, `1.234.567` and the Unicode minus became 0. Empty cells and placeholders such as `-` or `n/a` still count as zero.
