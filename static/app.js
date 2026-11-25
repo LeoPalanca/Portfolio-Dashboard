@@ -118,57 +118,155 @@
         stats: `<svg viewBox="0 0 24 24"><path d="M5 19V5"/><path d="M5 19h14"/><path d="M8 16v-4"/><path d="M12 16V8"/><path d="M16 16v-6"/></svg>`,
         coverage: `<svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-2.8 8-7 10-4.2-2-7-5.5-7-10V6l7-3Z"/><path d="M8.5 12l2.2 2.2L15.8 9"/></svg>`,
         todo: `<svg viewBox="0 0 24 24"><path d="M5 6h14"/><path d="M5 12h14"/><path d="M5 18h9"/><path d="M16 17l2 2 4-4"/></svg>`,
-        panel: `<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16"/></svg>`
+        panel: `<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16"/></svg>`,
+        overview: `<svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="9" rx="1.5"/><rect x="13" y="4" width="7" height="5" rx="1.5"/><rect x="13" y="11" width="7" height="9" rx="1.5"/><rect x="4" y="15" width="7" height="5" rx="1.5"/></svg>`,
+        rankings: `<svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M6 20v-6h4v6"/><path d="M10 20V9h4v11"/><path d="M14 20v-4h4v4"/></svg>`,
+        wallet: `<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 15h2"/></svg>`,
+        export: `<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>`
       };
       return icons[name] || icons.panel;
     }
+    // Each section's icon, short navigation label and identity colour, by its stable key.
+    const SECTION_IDENTITY = {
+      "family-rankings": { tier: "core", accent: "violet", icon: "rankings", nav: "Family rankings" },
+      "portfolio-value": { tier: "primary", accent: "blue", icon: "value", nav: "Performance" },
+      "cash-flow-evolution": { tier: "core", accent: "teal", icon: "flow", nav: "Cash flows" },
+      "current-holdings": { tier: "core", accent: "green", icon: "holdings", nav: "Holdings" },
+      "mystyle-fee-drag-calculator": { tier: "risk", accent: "amber", icon: "calculator", nav: "Fee calculator" },
+      "watchlist": { tier: "support", accent: "violet", icon: "watch", nav: "Watchlist" },
+      "stock-news": { tier: "support", accent: "slate", icon: "news", nav: "News" },
+      "portfolio-distribution": { tier: "core", accent: "violet", icon: "distribution", nav: "Allocation" },
+      "dividends": { tier: "support", accent: "green", icon: "income", nav: "Dividends" },
+      "cash-account-interest": { tier: "support", accent: "teal", icon: "cash", nav: "Cash interest" },
+      "expenses": { tier: "core", accent: "red", icon: "wallet", nav: "Income & expenses" },
+      "net-contributions": { tier: "support", accent: "blue", icon: "contribution", nav: "Contributions" },
+      "taxes-and-costs": { tier: "risk", accent: "amber", icon: "risk", nav: "Taxes & costs" },
+      "portfolio-statistics": { tier: "core", accent: "blue", icon: "stats", nav: "Statistics" },
+      "pricing-coverage": { tier: "system", accent: "slate", icon: "coverage", nav: "Data & prices" },
+      "suggested-actions-and-to-dos": { tier: "risk", accent: "amber", icon: "todo", nav: "Actions" },
+      "import-your-statements": { tier: "system", accent: "slate", icon: "export", nav: "Export" }
+    };
+    const SECTION_ACCENTS = {
+      blue: ["var(--accent)", "color-mix(in srgb, var(--accent) 12%, transparent)"],
+      teal: ["var(--series-teal)", "color-mix(in srgb, var(--series-teal) 14%, transparent)"],
+      green: ["var(--positive)", "color-mix(in srgb, var(--positive) 12%, transparent)"],
+      amber: ["var(--warning)", "color-mix(in srgb, var(--warning) 14%, transparent)"],
+      violet: ["var(--series-violet)", "color-mix(in srgb, var(--series-violet) 14%, transparent)"],
+      red: ["var(--negative)", "color-mix(in srgb, var(--negative) 11%, transparent)"],
+      slate: ["var(--text-secondary)", "var(--tint-strong)"]
+    };
+    function sectionIdentity(key) {
+      return SECTION_IDENTITY[key] || { tier: "support", accent: "slate", icon: "panel", nav: "" };
+    }
+    function paintSectionAccent(element, key) {
+      const [accent, accentSoft] = SECTION_ACCENTS[sectionIdentity(key).accent] || SECTION_ACCENTS.slate;
+      element.style.setProperty("--section-accent", accent);
+      element.style.setProperty("--section-accent-soft", accentSoft);
+    }
     function initializeSectionIdentity() {
-      const accents = {
-        blue: ["var(--accent)", "color-mix(in srgb, var(--accent) 9%, transparent)"],
-        teal: ["var(--series-teal)", "color-mix(in srgb, var(--series-teal) 8%, transparent)"],
-        green: ["var(--positive)", "color-mix(in srgb, var(--positive) 8%, transparent)"],
-        amber: ["var(--warning)", "color-mix(in srgb, var(--warning) 8%, transparent)"],
-        violet: ["var(--series-violet)", "color-mix(in srgb, var(--series-violet) 8%, transparent)"],
-        red: ["var(--negative)", "color-mix(in srgb, var(--negative) 7%, transparent)"],
-        slate: ["var(--text-muted)", "color-mix(in srgb, var(--text-muted) 6%, transparent)"]
-      };
-      const config = {
-        "Portfolio Value": { tier: "primary", accent: "blue", icon: "value" },
-        "Cash Flow Evolution": { tier: "core", accent: "teal", icon: "flow" },
-        "Current Holdings": { tier: "core", accent: "green", icon: "holdings" },
-        "MyStyle Fee Drag Calculator": { tier: "risk", accent: "amber", icon: "calculator" },
-        "MyStyle Portfolio Breakdown": { tier: "risk", accent: "amber", icon: "layers" },
-        "Watchlist": { tier: "support", accent: "violet", icon: "watch" },
-        "Stock News": { tier: "support", accent: "slate", icon: "news" },
-        "Portfolio Distribution": { tier: "core", accent: "violet", icon: "distribution" },
-        "Dividends": { tier: "support", accent: "green", icon: "income" },
-        "Cash Account Interest": { tier: "support", accent: "teal", icon: "cash" },
-        "Net Contributions": { tier: "support", accent: "blue", icon: "contribution" },
-        "Taxes & Costs": { tier: "risk", accent: "amber", icon: "risk" },
-        "Portfolio Statistics": { tier: "core", accent: "blue", icon: "stats" },
-        "Pricing Coverage": { tier: "system", accent: "slate", icon: "coverage" },
-        "Suggested Actions & To-Dos": { tier: "risk", accent: "amber", icon: "todo" }
-      };
-
-      document.querySelectorAll(".section-head[data-collapse]").forEach(header => {
-        const title = header.querySelector("h2")?.textContent?.trim() || "";
-        const item = config[title] || { tier: "support", accent: "slate", icon: "panel" };
-        const section = header.closest("section");
-        if (!section) return;
-        const [accent, accentSoft] = accents[item.accent] || accents.slate;
-        section.classList.add(`section-${item.tier}`);
-        section.style.setProperty("--section-accent", accent);
-        section.style.setProperty("--section-accent-soft", accentSoft);
-
-        const left = header.querySelector(".section-head-left");
+      document.querySelectorAll("main > section[data-section]").forEach(section => {
+        const key = section.dataset.section;
+        section.classList.add(`section-${sectionIdentity(key).tier}`);
+        paintSectionAccent(section, key);
+        const head = section.querySelector(".section-head[data-collapse]");
+        const left = head?.querySelector(".section-head-left");
         const heading = left?.querySelector("h2");
         if (!left || !heading || left.querySelector(".section-icon")) return;
+        // The open/closed marker sits at the end of the head, after the summary.
+        const chevron = left.querySelector(".chevron");
+        if (chevron) head.appendChild(chevron);
         const icon = document.createElement("span");
         icon.className = "section-icon";
         icon.setAttribute("aria-hidden", "true");
-        icon.innerHTML = sectionIconSvg(item.icon);
+        icon.innerHTML = sectionIconSvg(sectionIdentity(key).icon);
         left.insertBefore(icon, heading);
       });
+    }
+    // Person buttons carry a generic glyph from the server; an initial tells them apart.
+    function initializePersonAvatars() {
+      document.querySelectorAll("#persons button").forEach(button => {
+        const avatar = button.querySelector(".user-avatar");
+        const name = (button.dataset.label || "").trim();
+        if (avatar && name) avatar.textContent = name.charAt(0).toUpperCase();
+      });
+    }
+    document.addEventListener("DOMContentLoaded", initializePersonAvatars);
+
+    /* ─── Section navigation: a rail on wide screens, a scrolling strip on narrow ones ─── */
+    let activeNavKey = "overview";
+    let sectionNavObserver = null;
+    function prefersReducedMotion() {
+      return matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+    function navigableSections() {
+      return allSections().filter(section => getComputedStyle(section).display !== "none");
+    }
+    function buildSectionNav() {
+      const list = document.getElementById("section-nav-list");
+      if (!list) return;
+      const items = [{ key: "overview", label: "Overview", icon: "overview" }].concat(
+        navigableSections().map(section => {
+          const key = section.dataset.section;
+          return { key, label: sectionIdentity(key).nav || sectionTitle(section), icon: sectionIdentity(key).icon };
+        })
+      );
+      list.innerHTML = items.map(item => `
+        <li><button type="button" class="rail-link" data-nav-target="${escapeHtml(item.key)}">
+          <span class="nav-icon" aria-hidden="true">${sectionIconSvg(item.icon)}</span>
+          <span class="nav-label">${escapeHtml(item.label)}</span>
+        </button></li>`).join("");
+      list.querySelectorAll(".rail-link").forEach(button => {
+        if (button.dataset.navTarget !== "overview") paintSectionAccent(button, button.dataset.navTarget);
+        button.addEventListener("click", () => goToSection(button.dataset.navTarget));
+      });
+      setActiveNav(activeNavKey, false);
+      observeSectionsForNav();
+    }
+    function goToSection(key) {
+      const behavior = prefersReducedMotion() ? "auto" : "smooth";
+      if (key === "overview") {
+        window.scrollTo({ top: 0, behavior });
+        setActiveNav("overview");
+        return;
+      }
+      const section = allSections().find(item => item.dataset.section === key);
+      if (!section) return;
+      const head = section.querySelector(".section-head[data-collapse]");
+      const content = head ? document.getElementById(head.dataset.collapse) : null;
+      if (content && !content.classList.contains("expanded")) toggleSection(head);
+      section.scrollIntoView({ behavior, block: "start" });
+      if (head) head.focus({ preventScroll: true });
+      setActiveNav(key);
+    }
+    function setActiveNav(key, follow = true) {
+      activeNavKey = key;
+      const rail = document.getElementById("section-nav");
+      let active = null;
+      document.querySelectorAll("#section-nav-list .rail-link").forEach(button => {
+        const isActive = button.dataset.navTarget === key;
+        if (isActive) { button.setAttribute("aria-current", "true"); active = button; }
+        else button.removeAttribute("aria-current");
+      });
+      // On the narrow strip, keep the current chip in view without moving the page.
+      if (follow && active && rail && rail.scrollWidth > rail.clientWidth + 1) {
+        rail.scrollTo({ left: active.offsetLeft - (rail.clientWidth - active.offsetWidth) / 2, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+      }
+    }
+    function observeSectionsForNav() {
+      if (!("IntersectionObserver" in window)) return;
+      if (sectionNavObserver) sectionNavObserver.disconnect();
+      const overview = [document.getElementById("lede"), document.querySelector(".overview-grid")].filter(Boolean);
+      const visible = new Set();
+      sectionNavObserver = new IntersectionObserver(entries => {
+        entries.forEach(entry => entry.isIntersecting ? visible.add(entry.target) : visible.delete(entry.target));
+        if (overview.some(element => visible.has(element))) {
+          if (activeNavKey !== "overview") setActiveNav("overview");
+          return;
+        }
+        const current = navigableSections().find(section => visible.has(section));
+        if (current && current.dataset.section !== activeNavKey) setActiveNav(current.dataset.section);
+      }, { rootMargin: "-20% 0px -70% 0px" });
+      overview.concat(navigableSections()).forEach(element => sectionNavObserver.observe(element));
     }
     function initializeSectionWrapButtons() {
       document.querySelectorAll(".section-content[id]").forEach(content => {
@@ -718,7 +816,60 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       }
       document.getElementById("lede-figure").textContent = moneyWhole(t.market_value);
       document.getElementById("lede-text").innerHTML = sentence.trim();
+      renderLedeDay(t);
       lede.hidden = false;
+    }
+    // The last day's move beside the headline figure, as a trading app shows it.
+    function renderLedeDay(totals) {
+      const target = document.getElementById("lede-day");
+      if (!target) return;
+      const raw = (totals.variations || {})["1d"];
+      const useTotal = raw && selectedReturnMode === "total" && Number.isFinite(Number(raw.total_pct ?? NaN));
+      const change = useTotal ? Number(raw.total_pct) : Number(raw?.pct);
+      const amount = useTotal ? Number(raw.total_amount ?? raw.amount) : Number(raw?.amount);
+      if (!raw || !Number.isFinite(change) || !Number.isFinite(amount) || (change === 0 && amount === 0)) {
+        target.hidden = true;
+        return;
+      }
+      const sign = value => (value >= 0 ? "+" : "\u2212");
+      target.className = `lede-day ${signedClass(change)}`;
+      target.innerHTML = `<span class="lede-day-arrow" aria-hidden="true">${change >= 0 ? "\u25B2" : "\u25BC"}</span>`
+        + `<strong>${sign(change)}${pct.format(Math.abs(change))}%</strong>`
+        + `<span>${sign(amount)}${moneyWhole(Math.abs(amount))}</span>`
+        + `<span class="lede-day-label">last day</span>`;
+      target.hidden = false;
+    }
+    // A quiet line of the market value over the selected window, under the headline.
+    function renderLedeSpark(series, key) {
+      const figure = document.getElementById("lede-chart");
+      const svg = document.getElementById("lede-spark");
+      if (!figure || !svg) return;
+      const points = (series || [])
+        .map(point => [new Date(point.date).getTime(), Number(point[key])])
+        .filter(([time, value]) => Number.isFinite(time) && Number.isFinite(value));
+      if (points.length < 2) {
+        figure.hidden = true;
+        svg.innerHTML = "";
+        return;
+      }
+      const width = 320;
+      const height = 120;
+      const inset = 8;
+      const start = points[0][0];
+      const span = (points[points.length - 1][0] - start) || 1;
+      const values = points.map(([, value]) => value);
+      const low = Math.min(...values);
+      const range = (Math.max(...values) - low) || 1;
+      const x = time => ((time - start) / span) * width;
+      const y = value => inset + (1 - (value - low) / range) * (height - inset * 2);
+      const line = points.map(([time, value], index) => `${index ? "L" : "M"}${x(time).toFixed(1)},${y(value).toFixed(1)}`).join("");
+      const trend = values[values.length - 1] >= values[0] ? "positive" : "negative";
+      svg.innerHTML = `<path class="lede-spark-area ${trend}" d="${line}L${width},${height}L0,${height}Z"/>`
+        + `<path class="lede-spark-line ${trend}" d="${line}"/>`;
+      const day = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
+      document.getElementById("lede-chart-range").textContent =
+        `${day.format(new Date(points[0][0]))} to ${day.format(new Date(points[points.length - 1][0]))}`;
+      figure.hidden = false;
     }
     function periodLabel(period) {
       if (period === "1d") return "1D";
@@ -1325,6 +1476,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         [isTotal ? "total_profit" : "profit", "Profit", "series-profit"]
       ];
       const activeReturnDefs = returnDefs.filter(([key]) => returnVisibility[key]);
+      renderLedeSpark(filtered, valueDefs[0][0]);
       renderLineChart("value-chart", filtered, valueDefs);
       
       const normalizedReturns = normalizeReturnSeries(filtered);
@@ -3552,6 +3704,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       document.getElementById("value-window").textContent = selectedWindowLabel();
       document.getElementById("meta").textContent = `Portfolio Dashboard v${APP_VERSION}`;
       updateExportSummary();
+      buildSectionNav();
     }
     function renderChartsOnly() {
       if (!dashboardData) return;
@@ -4193,6 +4346,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       writeSectionPrefs(prefs);
       applySectionPrefs(prefs);
       renderSectionsList(prefs);
+      buildSectionNav();
     }
 
     let sectionPrefs = readSectionPrefs();
@@ -4211,6 +4365,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
     allSections().forEach(section=>{const heading=section.querySelector("h2");if(heading&&sectionTitles[section.dataset.section])heading.textContent=sectionTitles[section.dataset.section];});
     renderSectionsList(sectionPrefs);
     initializeSectionWrapButtons();
+    buildSectionNav();
     const updateWrap = document.getElementById("update-wrap");
     const updateToggle = document.getElementById("update-toggle");
     const updatePanel = document.getElementById("update-panel");

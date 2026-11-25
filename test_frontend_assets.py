@@ -195,6 +195,19 @@ class FrontendAssetTest(unittest.TestCase):
         keys = re.findall(r'data-section="([^"]+)"', main)
         self.assertEqual(len(keys), len(set(keys)), "duplicate section keys")
 
+    def test_every_section_has_an_icon_and_a_place_in_the_rail(self) -> None:
+        """The section rail is built from these keys; a missing one would fall back to a blank icon."""
+        template = (APP_DIR / "templates" / "index.html").read_text(encoding="utf-8")
+        with app.app.test_client() as client:
+            js = client.get("/static/app.js").get_data(as_text=True)
+
+        identity = js[js.index("const SECTION_IDENTITY = {") : js.index("const SECTION_ACCENTS")]
+        known = set(re.findall(r'"([a-z-]+)": \{ tier:', identity))
+        keys = set(re.findall(r'data-section="([^"]+)"', template))
+        self.assertEqual(keys - known, set(), "sections without an icon or rail label")
+        self.assertIn('id="section-nav-list"', render())
+        self.assertIn("buildSectionNav();\n    }", js, "the rail must follow saved order and visibility")
+
     def test_section_preferences_survive_an_unknown_key(self) -> None:
         """A stored preference from an older build must not drop or duplicate sections."""
         with app.app.test_client() as client:

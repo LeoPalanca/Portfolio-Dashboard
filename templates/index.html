@@ -20,7 +20,7 @@
     })();
   </script>
 </head>
-<body>
+<body class="dashboard-page">
   <header>
     <div class="topbar-brand">
       <span class="brand-mark" aria-hidden="true">
@@ -128,6 +128,9 @@
       </div>
     </div>
   </header>
+  <nav class="rail" id="section-nav" aria-label="Dashboard sections">
+    <ul class="rail-list" id="section-nav-list"></ul>
+  </nav>
   <main>
     <div class="dashboard-refresh-overlay" aria-live="polite" aria-busy="true">
       <div class="refresh-card">
@@ -171,7 +174,7 @@
         <div class="periods selector-fancy broker-selector is-hidden" id="brokers" aria-label="Broker filter"></div>
       </div>
       <div class="control-row secondary-controls" aria-label="Secondary dashboard options">
-        <span class="secondary-label">Options</span>
+        <span class="secondary-label">View</span>
         <div class="periods secondary-selector" id="berkshire-mode" aria-label="Berkshire exposure mode">
           <button type="button" data-berkshire="stock" class="active">BRK stock</button>
           <button type="button" data-berkshire="lookthrough">BRK 13F</button>
@@ -191,12 +194,38 @@
       </div>
     </div>
     <div class="lede" id="lede" aria-live="polite" hidden>
-      <p class="lede-figure" id="lede-figure"></p>
-      <p class="lede-text" id="lede-text"></p>
+      <div class="lede-copy">
+        <p class="lede-label" id="lede-label">Market value</p>
+        <div class="lede-headline">
+          <p class="lede-figure" id="lede-figure"></p>
+          <p class="lede-day" id="lede-day" hidden></p>
+        </div>
+        <p class="lede-text" id="lede-text"></p>
+      </div>
+      <figure class="lede-chart" id="lede-chart" hidden>
+        <svg id="lede-spark" viewBox="0 0 320 120" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <figcaption class="lede-chart-range" id="lede-chart-range"></figcaption>
+      </figure>
     </div>
     <div class="overview-grid">
-      <div class="overview-investments"><h2>Investments</h2><p class="subtle" id="investment-scope"></p><div class="metrics" id="metrics"></div></div>
-      <div class="overview-money"><h2>Income &amp; expenses</h2><p class="subtle" id="money-window"></p><div id="money-overview" class="money-overview"></div><p class="subtle" id="money-coverage"></p><button type="button" onclick="openIncomeExpenses()">Manage income, expenses &amp; cash</button></div>
+      <div class="overview-investments">
+        <div class="sheet-head">
+          <span class="sheet-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15l4-4 3 3 5-6"/></svg></span>
+          <h2>Investments</h2>
+        </div>
+        <p class="subtle" id="investment-scope"></p>
+        <div class="metrics" id="metrics"></div>
+      </div>
+      <div class="overview-money">
+        <div class="sheet-head">
+          <span class="sheet-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 15h2"/></svg></span>
+          <h2>Income &amp; expenses</h2>
+        </div>
+        <p class="subtle" id="money-window"></p>
+        <div id="money-overview" class="money-overview"></div>
+        <p class="subtle" id="money-coverage"></p>
+        <button type="button" class="sheet-link" onclick="openIncomeExpenses()">Manage income, expenses &amp; cash</button>
+      </div>
     </div>
     <div class="movers-panel" id="movers-panel" hidden></div>
 
