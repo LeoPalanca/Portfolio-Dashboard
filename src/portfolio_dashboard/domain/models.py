@@ -45,6 +45,9 @@ class FrictionEvent:
     date: date
     amount_eur: Decimal
     description: str
+    # True when the dashboard inferred the amount (Fineco's capital-gain and dividend
+    # tax) rather than reading it from a broker statement.
+    estimated: bool = False
 
 
 @dataclass(frozen=True)

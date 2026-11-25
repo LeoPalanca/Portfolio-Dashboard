@@ -36,7 +36,8 @@ class DividendTaxTest(unittest.TestCase):
         self.assertEqual(summary["gross_eur"], 100.0)
         self.assertEqual(summary["rows"][0]["gross_eur"], 100.0)
 
-    def test_fineco_sell_net_gain_implies_capital_gain_tax_event(self) -> None:
+    def test_fineco_sell_gain_implies_capital_gain_tax_event(self) -> None:
+        # Fineco sale cash is pre-tax, so the 74 gain is taxed at 26% (not grossed up).
         trades = [
             app.Trade(
                 asset="Example",
@@ -80,8 +81,9 @@ class DividendTaxTest(unittest.TestCase):
         summary = app.summarize_trades(trades)
 
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].amount_eur, Decimal("26"))
-        self.assertEqual(summary["totals"]["taxes"], 26.0)
+        self.assertEqual(events[0].amount_eur, Decimal("19.24"))
+        self.assertTrue(events[0].estimated)
+        self.assertEqual(summary["totals"]["taxes"], 19.24)
 
 
 class RevolutCashHistoryTest(unittest.TestCase):

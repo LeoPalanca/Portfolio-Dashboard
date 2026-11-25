@@ -22,7 +22,7 @@ import warnings
 import xml.etree.ElementTree as ET
 from bisect import bisect_right
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
@@ -854,11 +854,23 @@ def fineco_dividend_tax_from_net(net_amount: Decimal) -> Decimal:
     return gross - net_amount
 
 
-def fineco_capital_gain_tax_from_net_gain(net_gain: Decimal) -> Decimal:
-    if net_gain <= ZERO:
+# Italian rate on capital gains and fund income; Fineco's withholding setting is that
+# same 26%. Government bonds' 12.5% rate is not modelled.
+CAPITAL_GAIN_TAX_RATE = SETTINGS.fineco_withholding_tax_rate
+# A realised loss offsets later gains until 31 December of the fourth following year.
+LOSS_CREDIT_YEARS = 4
+
+
+def capital_gain_tax(gain: Decimal) -> Decimal:
+    """Italian capital-gain tax (26%) on a realised gain.
+
+    The gain is already the taxable base: Fineco books a sale at its pre-tax value
+    (controvalore minus commission) and debits the tax separately from the current
+    account. Only dividends arrive net and need grossing up (see above).
+    """
+    if gain <= ZERO:
         return ZERO
-    gross_gain = net_gain / FINECO_DIVIDEND_NET_RATE
-    return gross_gain - net_gain
+    return gain * CAPITAL_GAIN_TAX_RATE
 
 
 FINECO_TRADE_DESCRIPTION = "compravendita titoli"
@@ -2547,47 +2559,229 @@ def trade_friction_events(trades: list[Trade]) -> list[FrictionEvent]:
     return events
 
 
-def inferred_fineco_sell_tax_events(trades: list[Trade]) -> list[FrictionEvent]:
-    quantities: dict[str, Decimal] = {}
-    cost_basis: dict[str, Decimal] = {}
-    events: list[FrictionEvent] = []
+# Sale cash from these parsers is net of the tax in ``Trade.tax`` (Trade Republic books
+# amount + fee + tax, Interactive Brokers proceeds + commission + tax).
+SALE_CASH_NET_OF_TAX_SOURCES = frozenset({"trade_republic", "interactive_brokers"})
 
-    for trade in trades:
-        asset_key = trade.isin or trade.asset
-        quantities.setdefault(asset_key, ZERO)
-        cost_basis.setdefault(asset_key, ZERO)
+
+def pre_tax_sale_amount(trade: Trade, amount: Decimal) -> Decimal:
+    """EUR proceeds of a sale before the tax the broker withheld from them.
+
+    Realised P/L is shown before tax at every broker, as at Fineco whose sale cash is
+    pre-tax; the withheld tax is listed under Taxes & costs. Only realised P/L uses this:
+    proceeds, contributions and return flows keep the cash that actually moved.
+    """
+    if not trade.tax or trade.source not in SALE_CASH_NET_OF_TAX_SOURCES:
+        return amount
+    withheld, _ = convert_cash_to_eur(trade.tax, trade.cash_currency, trade.date)
+    return amount + withheld
+
+
+# Exchange-traded commodities and notes trade like ETFs but are taxed as "redditi diversi".
+ETC_NAME_PATTERN = re.compile(r"\b(etc|etn)\b|\bphysical\b.*\b(gold|silver|platinum|palladium|metals?)\b")
+FUND_NAME_PATTERN = re.compile(r"\b(etf|ucits|sicav|oicr|oicvm|fund|fondo|acc|dist)\b")
+COMMODITY_EXPOSURE_CLASSES = frozenset({"commodity", "commodities", "gold", "silver", "precious metals"})
+
+
+def is_fund_for_tax(
+    asset: str,
+    isin: str,
+    exposures: dict[str, list[dict[str, Any]]],
+    fund_isins: set[str],
+) -> bool:
+    """Whether a gain is fund income ("redditi di capitale": ETF, UCITS fund).
+
+    Follows determine_asset_type's signals in order of reliability, with two tax
+    differences: an ETC is not a fund even though its exposure rows read as commodities,
+    and fund names must match whole words ("acc" is not "Accenture").
+    """
+    name = " ".join(re.split(r"[^a-z0-9]+", (asset or "").casefold()))
+    if ETC_NAME_PATTERN.search(name):
+        return False
+    # etf_fetcher writes one "Single share" row for anything that is not a fund.
+    rows = exposures.get(exposure_key(asset, isin)) or exposures.get(exposure_key(asset, "")) or []
+    classes = {str(row.get("asset_class") or "").strip().casefold() for row in rows} - {""}
+    if classes:
+        return not (classes <= {"single share"} or classes <= COMMODITY_EXPOSURE_CLASSES)
+    if isin and isin.upper() in fund_isins:
+        return True
+    if FUND_NAME_PATTERN.search(name):
+        return True
+    # Unclassified: treated as a single stock ("redditi diversi"), so its gain can use
+    # the loss credit. A fund misread this way shows a lower estimate.
+    return False
+
+
+def tax_fund_classifier(
+    mappings: dict[str, dict[str, str]] | None = None,
+    exposures: dict[str, list[dict[str, Any]]] | None = None,
+) -> Callable[[Trade], bool]:
+    """``is_fund_for_tax`` for trades, reading the local exposure and fund data on first use."""
+
+    data: dict[str, Any] = {}
+    cache: dict[tuple[str, str], bool] = {}
+
+    def classify(trade: Trade) -> bool:
+        key = (trade.asset, trade.isin)
+        if key not in cache:
+            if not data:
+                data["mappings"] = read_mappings() if mappings is None else mappings
+                data["exposures"] = read_exposures() if exposures is None else exposures
+                data["fund_isins"] = {isin for isin in read_etf_documents() if isin}
+            isin = trade.isin or mapping_for(trade.asset, "", data["mappings"]).get("isin", "")
+            cache[key] = is_fund_for_tax(trade.asset, isin, data["exposures"], data["fund_isins"])
+        return cache[key]
+
+    return classify
+
+
+def estimate_fineco_sell_taxes(
+    trades: Sequence[Trade],
+    is_fund: Callable[[Trade], bool] | None = None,
+) -> list[dict[str, Any]]:
+    """Estimated Italian capital-gain tax on each Fineco sale, oldest first.
+
+    Fineco debits the tax from the current account, so its securities export never shows
+    it. The estimate follows the administered regime:
+
+    - the gain uses Fineco's own average cost per ISIN; shares sold beyond what Fineco
+      holds on record (transferred in) use the average cost across all brokers;
+    - a loss on any sale (stock, bond, ETC or ETF) adds to a loss credit ("zainetto
+      fiscale") that expires on 31 December of the fourth year after the loss;
+    - a gain on a single stock, bond or ETC ("redditi diversi") first uses the oldest
+      unexpired credit and only the rest is taxed at 26%;
+    - a gain on an ETF or UCITS fund ("redditi di capitale") is taxed in full.
+
+    Pass the whole ledger, not a filtered view: the credit spans every Fineco sale.
+    """
+    corporate_inflows = {
+        (trade.isin or trade.asset, trade.date)
+        for trade in trades
+        if trade.source in CORPORATE_ACTION_SOURCES and trade.quantity_diff > ZERO
+    }
+    sold_at_fineco = {trade.isin or trade.asset for trade in trades if trade.broker == "Fineco" and trade.quantity_diff < ZERO}
+    all_quantity: dict[str, Decimal] = {}
+    all_cost: dict[str, Decimal] = {}
+    fineco_quantity: dict[str, Decimal] = {}
+    fineco_cost: dict[str, Decimal] = {}
+    credits: list[list[Any]] = []  # [expiry date, unused EUR], oldest first
+    estimates: list[dict[str, Any]] = []
+
+    for trade in sorted(trades, key=lambda item: item.date):
+        key = trade.isin or trade.asset
+        if key not in sold_at_fineco:
+            continue
+        at_fineco = trade.broker == "Fineco"
         amount, _ = trade_cash_amount(trade)
-
+        held = all_quantity.get(key, ZERO)
+        held_cost = all_cost.get(key, ZERO)
         if trade.quantity_diff >= ZERO:
-            quantities[asset_key] += trade.quantity_diff
-            cost_basis[asset_key] += amount
+            all_quantity[key] = held + trade.quantity_diff
+            all_cost[key] = held_cost + amount
+            if at_fineco:
+                fineco_quantity[key] = fineco_quantity.get(key, ZERO) + trade.quantity_diff
+                fineco_cost[key] = fineco_cost.get(key, ZERO) + amount
+            continue
+        if is_quantity_only_event(trade, held, corporate_inflows):
+            all_quantity[key] = held + trade.quantity_diff
+            if at_fineco:
+                fineco_quantity[key] = max(ZERO, fineco_quantity.get(key, ZERO) + trade.quantity_diff)
             continue
 
-        sell_quantity = abs(trade.quantity_diff)
-        previous_quantity = quantities[asset_key]
-        previous_cost = cost_basis[asset_key]
-        if previous_quantity > ZERO and sell_quantity > ZERO:
-            removed_cost = min(previous_cost, previous_cost * sell_quantity / previous_quantity)
+        sold = -trade.quantity_diff
+        average_cost = held_cost / held if held > ZERO else ZERO
+        all_cost[key] = max(ZERO, held_cost - min(held_cost, average_cost * sold))
+        all_quantity[key] = held - sold
+        if not at_fineco:
+            continue
+
+        fineco_held = fineco_quantity.get(key, ZERO)
+        fineco_held_cost = fineco_cost.get(key, ZERO)
+        if fineco_held <= ZERO:
+            covered, covered_cost = ZERO, ZERO
+        elif sold >= fineco_held:
+            covered, covered_cost = fineco_held, fineco_held_cost
         else:
-            removed_cost = ZERO
+            covered, covered_cost = sold, fineco_held_cost * sold / fineco_held
+        fineco_quantity[key] = fineco_held - covered
+        fineco_cost[key] = max(ZERO, fineco_held_cost - covered_cost)
+        if trade.tax:
+            continue  # the broker reported the tax itself
 
-        net_gain = amount - removed_cost
-        if trade.broker == "Fineco" and trade.tax == ZERO and net_gain > ZERO:
-            tax = fineco_capital_gain_tax_from_net_gain(net_gain)
-            if tax:
-                events.append(
-                    FrictionEvent(
-                        broker="Fineco",
-                        event_type="tax",
-                        date=trade.date,
-                        amount_eur=tax,
-                        description=f"Implied capital gain tax - {trade.asset}",
-                    )
-                )
+        gain = amount - covered_cost - average_cost * (sold - covered)  # Fineco sale cash is pre-tax
+        offset = ZERO
+        fund = False
+        if gain < ZERO:
+            credits.append([date(trade.date.year + LOSS_CREDIT_YEARS, 12, 31), -gain])
+        elif gain > ZERO:
+            if is_fund is None:
+                is_fund = tax_fund_classifier()
+            fund = is_fund(trade)
+            if not fund:
+                credits = [credit for credit in credits if credit[0] >= trade.date and credit[1] > ZERO]
+                for credit in credits:
+                    used = min(credit[1], gain - offset)
+                    credit[1] -= used
+                    offset += used
+                    if offset == gain:
+                        break
+        estimates.append(
+            {
+                "trade": trade,
+                "gain_eur": gain,
+                "loss_offset_eur": offset,
+                "is_fund": fund,
+                "tax_eur": capital_gain_tax(gain - offset),
+            }
+        )
 
-        cost_basis[asset_key] = max(ZERO, previous_cost - removed_cost)
-        quantities[asset_key] = previous_quantity - sell_quantity
+    return estimates
 
+
+def estimated_tax_queue(estimates: Sequence[dict[str, Any]]) -> dict[Trade, list[Decimal]]:
+    """Estimated tax per sale, matched by trade so a filtered view finds its own sales."""
+
+    queue: dict[Trade, list[Decimal]] = {}
+    for item in estimates:
+        queue.setdefault(item["trade"], []).append(item["tax_eur"])
+    return queue
+
+
+def inferred_fineco_sell_tax_events(
+    trades: Sequence[Trade],
+    estimates: Sequence[dict[str, Any]] | None = None,
+) -> list[FrictionEvent]:
+    """Estimated Fineco capital-gain tax for the sales in ``trades``.
+
+    ``estimates`` come from ``estimate_fineco_sell_taxes`` over the whole ledger; without
+    them the estimate covers ``trades`` alone.
+    """
+    if estimates is None:
+        estimates = estimate_fineco_sell_taxes(trades)
+    in_view = Counter(trades)
+    events: list[FrictionEvent] = []
+    for item in estimates:
+        trade = item["trade"]
+        if not in_view[trade]:
+            continue
+        in_view[trade] -= 1
+        if not item["tax_eur"]:
+            continue
+        description = f"Estimated capital gain tax - {trade.asset}"
+        if item["loss_offset_eur"]:
+            description += f" (after {item['loss_offset_eur']:.2f} EUR loss offset)"
+        elif item["is_fund"]:
+            description += " (fund gain, no loss offset)"
+        events.append(
+            FrictionEvent(
+                broker="Fineco",
+                event_type="tax",
+                date=trade.date,
+                amount_eur=item["tax_eur"],
+                description=description,
+                estimated=True,
+            )
+        )
     return events
 
 
@@ -2630,6 +2824,7 @@ def read_fineco_friction_events(path: Path) -> list[FrictionEvent]:
                 date=parse_fineco_date(row["operazione"]),
                 amount_eur=tax,
                 description=f"Implied dividend withholding - {str(row['titolo'] or '').strip()}",
+                estimated=True,
             )
         )
     return events
@@ -2698,33 +2893,69 @@ def read_extra_friction_events() -> list[FrictionEvent]:
     return events
 
 
-def summarize_frictions(events: list[FrictionEvent], market_value: Decimal | float | int | None) -> dict[str, Any]:
+def estimated_exit_tax(positions: Sequence[dict[str, Any]]) -> Decimal:
+    """Tax due if every open position were sold today: 26% of each position's own gain.
+
+    Deliberately simple: losses do not offset gains, carried-forward losses and the
+    12.5% government-bond rate are ignored, and selling costs are not deducted.
+    """
+    total = ZERO
+    for position in positions:
+        if not position.get("is_open"):
+            continue
+        gain = position.get("unrealized_pl_eur")
+        if gain is None and position.get("market_value_eur") is not None and position.get("cost_basis_eur") is not None:
+            # Snapshot-valued positions carry a market value but no P/L of their own.
+            gain = Decimal(str(position["market_value_eur"])) - Decimal(str(position["cost_basis_eur"]))
+        if gain is not None and Decimal(str(gain)) > ZERO:
+            total += capital_gain_tax(Decimal(str(gain)))
+    return total
+
+
+FRICTION_TYPE_LABELS = {"cost": "Cost", "dividend_tax": "Dividend tax", "tax": "Tax"}
+
+
+def summarize_frictions(
+    events: list[FrictionEvent],
+    market_value: Decimal | float | int | None,
+    positions: Sequence[dict[str, Any]] = (),
+) -> dict[str, Any]:
+    """Costs and taxes, split into broker-withheld and estimated, plus the after-tax value.
+
+    Amounts keep their sign: a tax refund is negative and lowers the total. The after-tax
+    value (``net_liquidation_eur``) is the market value minus the estimated tax on open
+    positions' gains, before selling costs; fees and taxes already paid are history, not
+    something still to be deducted.
+    """
     costs = ZERO
     trade_taxes = ZERO
     dividend_taxes = ZERO
+    estimated_taxes = ZERO
     by_broker: dict[str, dict[str, Decimal]] = {}
     rows = []
 
     for event in sorted(events, key=lambda item: (item.date, item.broker, item.description), reverse=True):
-        by_broker.setdefault(event.broker, {"costs": ZERO, "taxes": ZERO, "dividend_tax": ZERO})
+        by_broker.setdefault(event.broker, {"costs": ZERO, "taxes": ZERO, "dividend_tax": ZERO, "estimated_taxes": ZERO})
         if event.event_type == "cost":
             costs += event.amount_eur
             by_broker[event.broker]["costs"] += event.amount_eur
-            type_label = "Cost"
         elif event.event_type == "dividend_tax":
             dividend_taxes += event.amount_eur
             by_broker[event.broker]["dividend_tax"] += event.amount_eur
-            type_label = "Dividend tax"
         else:
             trade_taxes += event.amount_eur
             by_broker[event.broker]["taxes"] += event.amount_eur
-            type_label = "Tax"
+        if event.estimated and event.event_type != "cost":
+            estimated_taxes += event.amount_eur
+            by_broker[event.broker]["estimated_taxes"] += event.amount_eur
+        type_label = FRICTION_TYPE_LABELS.get(event.event_type, "Tax")
         rows.append(
             {
                 "date": event.date.isoformat(),
                 "broker": event.broker,
                 "type": event.event_type,
-                "type_label": type_label,
+                "type_label": f"{type_label} (estimated)" if event.estimated else type_label,
+                "estimated": event.estimated,
                 "description": event.description,
                 "amount_eur": money(event.amount_eur),
             }
@@ -2733,6 +2964,7 @@ def summarize_frictions(events: list[FrictionEvent], market_value: Decimal | flo
     tax_total = trade_taxes + dividend_taxes
     total_drag = costs + tax_total
     market = Decimal(str(market_value)) if market_value is not None else ZERO
+    exit_tax = estimated_exit_tax(positions)
     broker_rows = []
     for broker, values in sorted(by_broker.items()):
         taxes = values["taxes"] + values["dividend_tax"]
@@ -2745,6 +2977,7 @@ def summarize_frictions(events: list[FrictionEvent], market_value: Decimal | flo
                 "costs_eur": money(values["costs"]),
                 "taxes_eur": money(taxes),
                 "dividend_tax_eur": money(values["dividend_tax"]),
+                "estimated_taxes_eur": money(values["estimated_taxes"]),
                 "total_eur": money(total),
             }
         )
@@ -2754,10 +2987,13 @@ def summarize_frictions(events: list[FrictionEvent], market_value: Decimal | flo
         "message": "",
         "total_costs_eur": money(costs),
         "total_taxes_eur": money(tax_total),
+        "withheld_taxes_eur": money(tax_total - estimated_taxes),
+        "estimated_taxes_eur": money(estimated_taxes),
         "trade_taxes_eur": money(trade_taxes),
         "dividend_tax_eur": money(dividend_taxes),
         "total_drag_eur": money(total_drag),
-        "net_liquidation_eur": money(market - total_drag),
+        "estimated_exit_tax_eur": money(exit_tax),
+        "net_liquidation_eur": money(market - exit_tax),
         "by_broker": broker_rows,
         "rows": rows,
     }
@@ -2769,9 +3005,12 @@ def empty_frictions(status: str = "unavailable", message: str = "") -> dict[str,
         "message": message,
         "total_costs_eur": 0.0,
         "total_taxes_eur": 0.0,
+        "withheld_taxes_eur": 0.0,
+        "estimated_taxes_eur": 0.0,
         "trade_taxes_eur": 0.0,
         "dividend_tax_eur": 0.0,
         "total_drag_eur": 0.0,
+        "estimated_exit_tax_eur": 0.0,
         "net_liquidation_eur": None,
         "by_broker": [],
         "rows": [],
@@ -3208,11 +3447,11 @@ def family_dashboard_payload(
         f_events.extend(read_trade_republic_tax_events(tr_file))
 
     if has_tr or profile.extra_frictions:
-        frictions_payload = summarize_frictions(f_events, priced["market_value"])
+        frictions_payload = summarize_frictions(f_events, priced["market_value"], priced["positions"])
     else:
         frictions_payload = empty_frictions(
             "snapshot_unavailable",
-            "Taxes, broker costs, and net liquidation are not available from monthly snapshot CSV files.",
+            "Taxes, broker costs, and the after-tax value are not available from monthly snapshot CSV files.",
         )
 
     tax_losses = [
@@ -5210,6 +5449,8 @@ def fx_symbol_for(currency: str) -> tuple[str, bool]:
 
 
 def convert_cash_to_eur(amount: Decimal, currency: str, target_date: date) -> tuple[Decimal, bool]:
+    if normalize_currency_code(currency) == "GBp":
+        amount = amount / 100  # pence: a hundredth of the pound the FX rate quotes
     currency = fx_base_currency(currency)
     if currency in {"", "E", "EUR"}:
         return amount, False
@@ -5223,7 +5464,18 @@ def convert_cash_to_eur(amount: Decimal, currency: str, target_date: date) -> tu
     return amount * Decimal(str(rate)), False
 
 
-def summarize_trades(trades: list[Trade]) -> dict[str, Any]:
+def summarize_trades(
+    trades: list[Trade],
+    fineco_tax_estimates: Sequence[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Positions and cumulative cash series; realised P/L is before tax at every broker.
+
+    ``fineco_tax_estimates`` (from ``estimate_fineco_sell_taxes`` over the whole ledger)
+    feed the Fineco share of the taxes total; without them ``trades`` alone are used.
+    """
+    if fineco_tax_estimates is None:
+        fineco_tax_estimates = estimate_fineco_sell_taxes(trades)
+    pending_fineco_tax = estimated_tax_queue(fineco_tax_estimates)
     quantities: dict[str, Decimal] = {}
     cost_basis: dict[str, Decimal] = {}
     realized_by_asset: dict[str, Decimal] = {}
@@ -5276,9 +5528,9 @@ def summarize_trades(trades: list[Trade]) -> dict[str, Any]:
                 removed_cost = min(previous_cost, previous_cost * sell_quantity / previous_quantity)
             else:
                 removed_cost = ZERO
-            realized_delta = amount - removed_cost
-            if trade.broker == "Fineco" and trade.tax == ZERO and realized_delta > ZERO:
-                taxes += fineco_capital_gain_tax_from_net_gain(realized_delta)
+            realized_delta = pre_tax_sale_amount(trade, amount) - removed_cost
+            if trade.broker == "Fineco" and trade.tax == ZERO and pending_fineco_tax.get(trade):
+                taxes += pending_fineco_tax[trade].pop(0)
             proceeds += amount
             cost_basis[asset] = max(ZERO, previous_cost - removed_cost)
             quantities[asset] = previous_quantity - sell_quantity
@@ -7421,6 +7673,9 @@ def _build_dashboard_payload(
         return family_dashboard_payload(person, refresh=refresh, berkshire_mode=berkshire_mode, proxy_mode=proxy_mode, broker=broker, live_only=live_only)
 
     trades, source = read_ledger_trades(person)
+    # The Fineco tax estimate spans the whole account (loss credit, cross-broker cost),
+    # whatever broker or live-only filter the view applies.
+    ledger_trades = trades
     dividends = read_ledger_dividends(person)
     wallet_positions = read_crypto_wallet_positions(person)
 
@@ -7452,7 +7707,8 @@ def _build_dashboard_payload(
         dividends = [d for d in dividends if any(t.asset == d.asset for t in trades)]
         if wallet_positions:
             wallet_positions = [p for p in wallet_positions if p.get("pricing_status") != "snapshot"]
-    summary = summarize_trades(trades)
+    fineco_tax_estimates = estimate_fineco_sell_taxes(ledger_trades, tax_fund_classifier(mappings))
+    summary = summarize_trades(trades, fineco_tax_estimates)
     if wallet_positions:
         summary["positions"].extend(wallet_positions)
         if broker == "crypto wallet" and not summary["series"]:
@@ -7517,8 +7773,9 @@ def _build_dashboard_payload(
         extra_frictions = [f for f in extra_frictions if f.broker.lower() == broker]
 
     frictions = summarize_frictions(
-        trade_friction_events(trades) + inferred_fineco_sell_tax_events(trades) + extra_frictions,
+        trade_friction_events(trades) + inferred_fineco_sell_tax_events(trades, fineco_tax_estimates) + extra_frictions,
         priced["market_value"],
+        priced["positions"],
     )
     expenses = summarize_expense_events(read_ledger_expenses(person))
     mapped_assets = set(mappings)
@@ -9087,6 +9344,12 @@ def read_ledger_dividends(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[Divi
 
 
 def read_ledger_frictions(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[FrictionEvent]:
+    """Stored costs and taxes with the sign their parser gave them.
+
+    Parsers store a cost or a tax paid as positive and a refund as negative (a Trade
+    Republic tax refund or dividend-tax reversal), so a refund lowers the totals.
+    Fineco's dividend tax is implied from the net amount, hence estimated.
+    """
     owner = configured_portfolio_id(portfolio_id)
     ensure_legacy_statements_imported(owner)
     return [
@@ -9094,8 +9357,9 @@ def read_ledger_frictions(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[Fric
             broker=str(row.get("account") or SOURCE_LABELS.get(str(row.get("source_kind")), "")),
             event_type=str(row.get("event_type") or "cost"),
             date=movement_date(row),
-            amount_eur=abs(movement_decimal(row, "amount")),
+            amount_eur=movement_decimal(row, "amount"),
             description=str(row.get("description") or "Cost or tax"),
+            estimated=row.get("source_kind") == "fineco" and row.get("event_type") == "dividend_tax",
         )
         for row in get_movement_store().movements(owner, ("cost", "tax", "dividend_tax"))
     ]
