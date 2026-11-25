@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.18.0 — 2026-11-25
+
+- **Family rankings are time-weighted.** Each person is ranked on the same time-weighted return their own dashboard shows, so money paid in or taken out no longer moves the ranking. Each window starts from the last value on or before its start date (YTD from the 31 December close). Portfolios rebuilt from a holdings snapshot are tagged "reconstructed": their history assumes today's holdings were bought on the start date, so it has no past sales or cash flows and carries hindsight.
+- **Risk statistics.** The Sharpe ratio is now the mean of each day's return minus XEON's return that day, over its standard deviation, times √252. A fixed rate is used only when XEON quotes are missing, and the page says which one was used. XEON itself has no Sharpe ratio. Standard deviations are sample estimates (n−1). Below 60 daily returns, annualised volatility and Sharpe show "—" with the number of days instead of a figure that is mostly noise. With a broker filter, other brokers' dividends and interest no longer enter the daily returns. The statistics say that the crypto wallet is not included.
+- **Return histogram.** Bars show the share of days, so the portfolio and MSCI are drawn on the same scale even with different numbers of days. The range covers the 1st to 99th percentile, with an overflow bin at each end.
+- **Allocation.** Asset classes are grouped into Equity, Bond, Cash, Crypto, Commodity, Real estate and Other instead of each source's own wording. Open positions with no price are listed as not covered. The page says that cash-account balances are not part of the allocation, and the Berkshire look-through note gives its 13F / cash / operating-business split.
+
 ## 0.17.1 — 2026-11-25
 
 - **Movers count your money.** The 1D/1W/1M movers used to multiply the stock's move by the shares held today, so a position bought during the window showed the whole move, including the part before the purchase. The euro figure now starts from the value held at the start of the window, adds what was bought and takes off what was sold in it, so it is the gain or loss on your money; its percentage is on the money at stake. The left column ranks by the stock's own price move, the right one by the euro result. Splits inside the window are counted in today's shares.
