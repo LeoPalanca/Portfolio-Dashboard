@@ -58,11 +58,29 @@
     };
 
     /* ─── Collapsible section toggle ─── */
+    // Section heads are <div>s in the template; give them button semantics so
+    // they can be reached with Tab and opened with Enter or Space.
+    function makeSectionHeadsOperable() {
+      document.querySelectorAll(".section-head[data-collapse]").forEach(head => {
+        head.setAttribute("role", "button");
+        head.tabIndex = 0;
+        head.setAttribute("aria-controls", head.dataset.collapse);
+        const content = document.getElementById(head.dataset.collapse);
+        head.setAttribute("aria-expanded", String(Boolean(content && content.classList.contains("expanded"))));
+        head.addEventListener("keydown", event => {
+          if (event.target !== head || (event.key !== "Enter" && event.key !== " ")) return;
+          event.preventDefault();
+          toggleSection(head);
+        });
+      });
+    }
+    document.addEventListener("DOMContentLoaded", makeSectionHeadsOperable);
     function toggleSection(header) {
       const targetId = header.dataset.collapse;
       const content = document.getElementById(targetId);
       if (!content) return;
       const isExpanded = content.classList.contains('expanded');
+      header.setAttribute("aria-expanded", String(!isExpanded));
       if (isExpanded) {
         content.style.maxHeight = content.scrollHeight + 'px';
         requestAnimationFrame(() => {
@@ -167,7 +185,7 @@
             <span class="section-wrap-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>
             </span>
-            <span>Collapse section</span>
+            <span>Collapse</span>
           </button>
         `;
         wrap.querySelector("button").addEventListener("click", event => {
@@ -640,7 +658,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         return `
           <div class="metric clickable" onclick="toggleVariationMode()" title="Click to toggle % / €">
             <div class="metric-label-row">
-              <span>${period.toUpperCase()} Var</span>
+              <span>${VARIATION_LABELS[period] || period}</span>
               <button type="button" class="metric-plus ${activeClass}" onclick="toggleMovers('${period}', event)" aria-label="Show ${period.toUpperCase()} movers" title="Show ${period.toUpperCase()} movers">+</button>
             </div>
             <strong class="${colorClass}">${displayVal}</strong>
@@ -662,6 +680,45 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       document.getElementById("metrics").innerHTML =
         marketValueHtml + restHtml + `<div class="metrics-variations">${variationHtml}</div>`;
       renderMoversPanel();
+      renderLede(totals);
+    }
+    const VARIATION_LABELS = { "1d": "Last day", "1w": "Last week", "1m": "Last month" };
+    // The opening line of the report: value, the window's return and how it
+    // compares with MSCI World, written as a sentence rather than a grid of cards.
+    let ledeTotals = null;
+    let ledeEquityGap = null;
+    function renderLede(totals, equityGap) {
+      if (totals !== undefined) ledeTotals = totals;
+      if (equityGap !== undefined) ledeEquityGap = equityGap;
+      const lede = document.getElementById("lede");
+      if (!lede || !ledeTotals || !Number.isFinite(Number(ledeTotals.market_value))) {
+        if (lede) lede.hidden = true;
+        return;
+      }
+      const t = ledeTotals;
+      const opening = {
+        "1w": "Over the last week", "1m": "Over the last month", "ytd": "So far this year",
+        "1y": "Over the last year", "all": "Since the first trade",
+      }[selectedPeriod] || selectedWindowLabel();
+      const parts = [];
+      if (Number.isFinite(Number(t.return_pct))) {
+        const value = Number(t.return_pct);
+        parts.push(`${escapeHtml(opening)}, investments ${value >= 0 ? "gained" : "lost"} <span class="${signedClass(value)}">${pct.format(Math.abs(value))}%</span> time-weighted`);
+      }
+      let sentence = parts.length ? `${parts.join(", ")}.` : "";
+      if (ledeEquityGap !== null && ledeEquityGap !== undefined && Number.isFinite(Number(ledeEquityGap))) {
+        const gap = Number(ledeEquityGap);
+        sentence += Math.abs(gap) < 0.05
+          ? " Equities kept level with MSCI World."
+          : ` Equities ran ${pct.format(Math.abs(gap))} points ${gap > 0 ? "ahead of" : "behind"} MSCI World.`;
+      }
+      if (Number.isFinite(Number(t.unrealized_pl)) && Number.isFinite(Number(t.open_cost_basis))) {
+        const gain = Number(t.unrealized_pl);
+        sentence += ` Holdings that cost ${moneyWhole(t.open_cost_basis)} carry an unrealized ${gain >= 0 ? "gain" : "loss"} of <span class="${signedClass(gain)}">${moneyWhole(Math.abs(gain))}</span>.`;
+      }
+      document.getElementById("lede-figure").textContent = moneyWhole(t.market_value);
+      document.getElementById("lede-text").innerHTML = sentence.trim();
+      lede.hidden = false;
     }
     function periodLabel(period) {
       if (period === "1d") return "1D";
@@ -1284,6 +1341,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       const finalReturns = equityComparable ? normalizedReturns[normalizedReturns.length - 1] : null;
       const returnGap = finalReturns ? finalReturns.equity_return_pct - finalReturns.msci_return_pct : null;
       const returnGapLabel = returnGap === null ? "—" : `${returnGap > 0 ? "+" : ""}${returnGap.toFixed(1)} pp`;
+      renderLede(undefined, returnGap);
       const windowReturnLabel = finalReturns
         ? `Equities ${finalReturns.equity_return_pct.toFixed(1)}% · MSCI ETF ${finalReturns.msci_return_pct.toFixed(1)}% · EUR, same window, net dividends included`
         : "Equity comparison unavailable: select at least two dates with priced equities and refreshed valuation data.";
@@ -1469,23 +1527,11 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         th.textContent = th.dataset.sort === sortState.key ? `${base} ${sortState.direction === "asc" ? "↑" : "↓"}` : base;
       });
     }
+    // Instrument type as quiet small type next to the name; colour stays reserved for gains and losses.
+    const ASSET_TYPE_LABELS = { ETF: "ETF", STOCK: "Stock", CUR: "Cash" };
     function badgeHtml(type) {
-      if (!type) return "";
-      let color = "";
-      let bg = "";
-      if (type === "ETF") {
-        color = "var(--positive)";
-        bg = "color-mix(in srgb, var(--positive) 12%, transparent)";
-      } else if (type === "STOCK") {
-        color = "var(--warning)";
-        bg = "color-mix(in srgb, var(--warning) 12%, transparent)";
-      } else if (type === "CUR") {
-        color = "var(--series-violet)";
-        bg = "color-mix(in srgb, var(--series-violet) 12%, transparent)";
-      } else {
-        return "";
-      }
-      return `<span style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: ${color}; background: ${bg}; border: 1px solid ${color}33; padding: 1px 5px; border-radius: 4px; letter-spacing: 0.5px; display: inline-flex; align-items: center; line-height: 12px; margin-left: 4px; flex-shrink: 0;">${type}</span>`;
+      const label = ASSET_TYPE_LABELS[type];
+      return label ? `<span class="asset-type">${label}</span>` : "";
     }
     function focusedOpenHoldings(open) {
       if (!open.length) return { rows: [], targetCount: 0 };

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.15.0 — 2026-11-25
+
+A calmer, editorial look: the dashboard now reads like a private monthly report. Every section and control is still there.
+
+- **Paper and ink.** Warm paper in the light theme and a lamp-lit dark theme. Gains are set in a dark green ink and losses in red ink, with blue reserved for links and the selection; the colour-blind palette is kept.
+- **Type.** A book serif (Iowan Old Style or Charter, falling back to Georgia) for headings and the figures that matter, and the system sans with tabular figures for tables and controls. No more capitalised labels.
+- **An opening line.** Above the key figures, the portfolio value and a sentence for the selected window: the time-weighted return, how equities did against MSCI World, and the unrealised gain on current holdings.
+- **Key figures as a statement.** Investments and income & expenses are two columns of label-and-figure rows separated by hairlines instead of boxed cards; the day/week/month changes are named "Last day", "Last week" and "Last month".
+- **Chapters instead of cards.** Sections are separated by a rule and a serif title, without shadows, coloured borders or icons; tables, charts, legends and dialogs follow the same quiet style. Instrument types appear as small text ("ETF", "Stock", "Cash").
+- **Selectors as words.** Portfolios, windows, brokers and options are plain words with an underline under the current choice.
+- **Keyboard.** Section headings can be reached with Tab and opened with Enter or Space, and announce whether they are expanded.
+- **Phones.** The masthead stays on a compact line with icon buttons, and selectors wrap instead of truncating names.
+
 ## 0.14.9 — 2026-11-25
 
 - Risk statistics no longer see a crash when a position has no quote yet or no exchange rate on a day: it keeps its last EUR value (or its cost until its first quote) instead of counting as 0, and amounts in USD or pence are no longer added as euros when the rate is missing. Cash, dividend and interest totals are accumulated day by day instead of re-summed for every day.
