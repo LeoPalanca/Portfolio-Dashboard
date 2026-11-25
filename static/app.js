@@ -322,6 +322,9 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
     const HAS_MULTIPLE_PORTFOLIOS = APP_CONFIG.hasMultiplePortfolios;
     const PORTFOLIO_FEATURES = APP_CONFIG.portfolioFeatures || {};
     const ANNUAL_RISK_FREE_RATE = APP_CONFIG.annualRiskFreeRate;
+    // Twins of MIN_ANNUALISED_RETURNS and XEON_RISK_FREE_COVERAGE in app.py.
+    const MIN_ANNUALISED_DAYS = 60;
+    const XEON_RISK_FREE_COVERAGE = 0.8;
     const importModal = document.getElementById("import-modal");
     const importForm = document.getElementById("import-form");
     const importFile = document.getElementById("import-file");
@@ -376,7 +379,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
     const statsInfo = document.getElementById("stats-info");
     if (statsInfo) {
       const pct = (Number(ANNUAL_RISK_FREE_RATE || 0) * 100).toFixed(1);
-      statsInfo.innerHTML = `<strong>Volatility & Risk Summary:</strong> Daily variance, standard deviation (volatility), and annualized volatility are calculated using the strictly daily business-day return series of the portfolio and the MSCI World index. Sharpe ratio is annualized assuming a ${pct}% risk-free rate.`;
+      statsInfo.innerHTML = `<strong>Volatility & Risk Summary:</strong> Daily variance and standard deviation (volatility) are sample estimates (n−1) over the business-day return series of the portfolio and the MSCI World index. The Sharpe ratio is the mean of each day's return minus XEON's return that day, over its standard deviation, times √252; a fixed ${pct}% a year stands in only when XEON quotes are missing for the window. Annualized volatility and Sharpe need at least ${MIN_ANNUALISED_DAYS} daily returns.<span id="stats-scope-note" hidden><br><strong>Crypto wallet excluded:</strong> these statistics are built from trades; the wallet's value history is priced only at month ends before the last 35 days, too coarse for daily returns. The headline value includes it.</span>`;
     }
 
     function renderImportHistory(status) {
@@ -3315,33 +3318,57 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         ["Position prices", priceDates.length ? `oldest ${priceDates[0]}, newest ${priceDates[priceDates.length - 1]}` : "unavailable"],
         ["MSCI World benchmark", last.msci_price_date ? `last close ${last.msci_price_date}` : "unavailable"],
         ["History vs holdings", series.length ? (Math.abs(gap) < 1 ? "latest history point matches holdings" : `latest history point differs from holdings by ${money(gap)}`) : "no history", Math.abs(gap) >= 1],
-        ["Allocation data", missingExposure.length ? `no breakdown for ${missingExposure.map(row => row.asset).join(", ")}` : "all holdings covered", missingExposure.length > 0],
+        ["Allocation data", missingExposure.length ? `not covered: ${missingExposure.map(row => row.status === "unpriced" ? `${row.asset} (no price)` : row.asset).join(", ")}` : "all holdings covered", missingExposure.length > 0],
         ...coverage.map(row => [`Statements · ${row.source}`, `${row.first_date} → ${row.last_date}`]),
       ];
       target.innerHTML = lines.map(([label, text, warn]) => `<div class="${warn ? "warning" : ""}"><span class="subtle">${escapeHtml(label)}:</span> ${escapeHtml(text)}</div>`).join("");
     }
-    function calculateReturnStats(portfolioReturns, msciReturns, xeonReturns) {
-      const rfDaily = Number(ANNUAL_RISK_FREE_RATE || 0) / 252;
-      const sqrt252 = Math.sqrt(252);
-      const mean = values => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
-      const variance = (values, avg) => values.length ? values.reduce((sum, value) => sum + Math.pow(value - avg, 2), 0) / values.length : 0;
-      const statsFor = values => {
-        const avg = mean(values);
-        const varValue = variance(values, avg);
-        const std = Math.sqrt(varValue);
-        const sharpe = std > 0 ? ((avg - rfDaily) / std * sqrt252) : 0;
-        return {
-          daily_variance_pct: varValue * 10000,
-          daily_volatility_pct: std * 100,
-          annualized_volatility_pct: std * sqrt252 * 100,
-          sharpe_ratio: sharpe,
-          mean_daily_return_pct: avg * 100
-        };
-      };
+    // Sample statistics of daily returns; twin of daily_return_summary in app.py.
+    // Below MIN_ANNUALISED_DAYS returns, annualised volatility and Sharpe are noise
+    // (a calm +1% week reads as Sharpe 40), so they are null and shown as "—".
+    function dailyReturnSummary(values, excess = null) {
+      const count = values.length;
+      const mean = count ? values.reduce((sum, value) => sum + value, 0) / count : null;
+      const variance = count > 1 ? values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (count - 1) : null;
+      const std = variance === null ? null : Math.sqrt(variance);
+      const enough = count >= MIN_ANNUALISED_DAYS;
+      let sharpe = null;
+      if (enough && excess && excess.length > 1) {
+        const excessMean = excess.reduce((sum, value) => sum + value, 0) / excess.length;
+        const excessStd = Math.sqrt(excess.reduce((sum, value) => sum + (value - excessMean) ** 2, 0) / (excess.length - 1));
+        if (excessStd > 0) sharpe = excessMean / excessStd * Math.sqrt(252);
+      }
       return {
-        portfolio: statsFor(portfolioReturns),
-        msci: statsFor(msciReturns),
-        xeon: statsFor(xeonReturns)
+        days: count,
+        mean_daily_return_pct: mean === null ? null : mean * 100,
+        daily_variance_pct: variance === null ? null : variance * 10000,
+        daily_volatility_pct: std === null ? null : std * 100,
+        annualized_volatility_pct: enough && std !== null ? std * Math.sqrt(252) * 100 : null,
+        sharpe_ratio: sharpe,
+        best_daily_return_pct: count ? values.reduce((best, value) => Math.max(best, value), -Infinity) * 100 : null,
+        worst_daily_return_pct: count ? values.reduce((worst, value) => Math.min(worst, value), Infinity) * 100 : null,
+        sample_too_small: !enough
+      };
+    }
+    // Risk statistics of one return column of the daily rows; twin of
+    // return_series_statistics in app.py. The risk-free return of a row is XEON's
+    // return on it (0 when its quote did not move); the fixed configured rate stands
+    // in only when XEON quotes cover under XEON_RISK_FREE_COVERAGE of the window.
+    function calculateReturnStats(rows, key) {
+      const finite = value => value !== null && value !== undefined && Number.isFinite(Number(value));
+      const portfolioRows = rows.filter(row => finite(row[key]));
+      const msciRows = rows.filter(row => finite(row.msci_return));
+      const xeon = rows.filter(row => finite(row.xeon_return)).map(row => Number(row.xeon_return));
+      const covered = portfolioRows.filter(row => finite(row.xeon_return)).length;
+      const useXeon = portfolioRows.length > 0 && covered >= XEON_RISK_FREE_COVERAGE * portfolioRows.length;
+      const fixedRate = Number(ANNUAL_RISK_FREE_RATE || 0);
+      const riskFree = row => useXeon ? (finite(row.xeon_return) ? Number(row.xeon_return) : 0) : fixedRate / 252;
+      const excess = (selected, column) => selected.map(row => Number(row[column]) - riskFree(row));
+      return {
+        portfolio: dailyReturnSummary(portfolioRows.map(row => Number(row[key])), excess(portfolioRows, key)),
+        msci: dailyReturnSummary(msciRows.map(row => Number(row.msci_return)), excess(msciRows, "msci_return")),
+        xeon: dailyReturnSummary(xeon),
+        risk_free: { source: useXeon ? "xeon" : "fixed", annual_rate: useXeon ? null : fixedRate }
       };
     }
     function statsForSelectedWindow(data, mode) {
@@ -3376,7 +3403,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       }
 
       return {
-        statsData: calculateReturnStats(portfolioReturns, msciReturns, xeonReturns),
+        statsData: calculateReturnStats(windowRows, key),
         daysEvaluated: portfolioReturns.length,
         startDate: windowRows[0] ? windowRows[0].date : "",
         endDate: windowRows.length ? windowRows[windowRows.length - 1].date : "",
@@ -3403,29 +3430,42 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       const medianValue = quantile(pctValues, 0.5);
       const lowValue = quantile(pctValues, 0.05);
       const highValue = quantile(pctValues, 0.95);
-      return `n=${pctValues.length}<br>mean ${signedReturnPct(meanValue)} | median ${signedReturnPct(medianValue)}<br>5-95% ${signedReturnPct(lowValue)} to ${signedReturnPct(highValue)}`;
+      return `n=${pctValues.length}<br>mean ${signedReturnPct(meanValue)} | median ${signedReturnPct(medianValue)}<br>5-95% ${signedReturnPct(lowValue)} to ${signedReturnPct(highValue)}<br>worst ${signedReturnPct(pctValues[0])} | best ${signedReturnPct(pctValues[pctValues.length - 1])}`;
     }
+    // The single largest move must not set the scale for every other day: the range
+    // is bounded by the 1st and 99th percentiles of both series, and days beyond it
+    // fall into an overflow bin at each end.
     function returnDistributionDomain(portfolioReturns, msciReturns) {
       const values = [...(portfolioReturns || []), ...(msciReturns || [])]
         .map(value => Number(value) * 100)
-        .filter(Number.isFinite);
-      const maxAbs = Math.max(0.25, ...values.map(value => Math.abs(value)));
-      const padded = maxAbs * 1.08;
+        .filter(Number.isFinite)
+        .sort((a, b) => a - b);
+      const bound = values.length ? Math.max(Math.abs(quantile(values, 0.01)), Math.abs(quantile(values, 0.99))) : 0;
+      const padded = Math.max(0.25, bound) * 1.08;
       const step = padded <= 1 ? 0.25 : padded <= 3 ? 0.5 : padded <= 8 ? 1 : 2;
       const limit = Math.ceil(padded / step) * step;
       return { min: -limit, max: limit };
     }
+    // counts[0] and counts[bins + 1] are the overflow bins. Shares are of the series'
+    // own days, so a portfolio with fewer days than MSCI is drawn on the same scale.
     function histogramForReturns(values, domain, bins) {
       const pctValues = (values || []).map(value => Number(value) * 100).filter(Number.isFinite);
-      const counts = Array.from({ length: bins }, () => 0);
+      const counts = Array.from({ length: bins + 2 }, () => 0);
       const width = (domain.max - domain.min) / bins;
       pctValues.forEach(value => {
-        const rawIndex = Math.floor((value - domain.min) / width);
-        const index = Math.max(0, Math.min(bins - 1, rawIndex));
+        let index;
+        if (value < domain.min) index = 0;
+        else if (value > domain.max) index = bins + 1;
+        else index = 1 + Math.max(0, Math.min(bins - 1, Math.floor((value - domain.min) / width)));
         counts[index] += 1;
       });
+      const shares = counts.map(count => pctValues.length ? count / pctValues.length * 100 : 0);
       const meanValue = pctValues.length ? pctValues.reduce((sum, value) => sum + value, 0) / pctValues.length : 0;
-      return { counts, meanValue, values: pctValues };
+      return { counts, shares, meanValue, values: pctValues };
+    }
+    function histogramScaleMax(...histograms) {
+      const largest = Math.max(0, ...histograms.flatMap(histogram => histogram.shares));
+      return Math.max(5, Math.ceil(largest / 5) * 5);
     }
     function renderHistogramSvg(svgId, histogram, domain, yMax, seriesClass) {
       const svg = document.getElementById(svgId);
@@ -3442,21 +3482,29 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       const margin = { top: 14, right: 18, bottom: 32, left: 36 };
       const plotW = width - margin.left - margin.right;
       const plotH = height - margin.top - margin.bottom;
-      const bins = histogram.counts.length;
-      const binW = plotW / bins;
-      const domainWidth = domain.max - domain.min;
-      const xFor = value => margin.left + ((value - domain.min) / domainWidth) * plotW;
-      const yFor = count => margin.top + plotH - (count / Math.max(1, yMax)) * plotH;
+      const slots = histogram.counts.length;
+      const bins = slots - 2;
+      const slotW = plotW / slots;
+      const binWidth = (domain.max - domain.min) / bins;
+      const xFor = value => margin.left + slotW + ((value - domain.min) / (domain.max - domain.min)) * (plotW - 2 * slotW);
+      const yFor = share => margin.top + plotH - (share / Math.max(1, yMax)) * plotH;
       const bars = histogram.counts.map((count, index) => {
-        const x = margin.left + index * binW + 1.5;
-        const y = yFor(count);
+        const share = histogram.shares[index];
+        const x = margin.left + index * slotW + 1.5;
+        const y = yFor(share);
         const h = margin.top + plotH - y;
-        return `<rect class="hist-bar ${seriesClass}" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${Math.max(1, binW - 3).toFixed(2)}" height="${Math.max(0, h).toFixed(2)}" rx="3"><title>${count} days</title></rect>`;
+        const overflow = index === 0 || index === slots - 1;
+        const range = index === 0
+          ? `below ${signedReturnPct(domain.min)}`
+          : index === slots - 1
+            ? `above ${signedReturnPct(domain.max)}`
+            : `${signedReturnPct(domain.min + (index - 1) * binWidth)} to ${signedReturnPct(domain.min + index * binWidth)}`;
+        return `<rect class="hist-bar ${seriesClass}${overflow ? " overflow" : ""}" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${Math.max(1, slotW - 3).toFixed(2)}" height="${Math.max(0, h).toFixed(2)}" rx="3"><title>${count} day${count === 1 ? "" : "s"} (${share.toFixed(1)}% of days) ${range}</title></rect>`;
       }).join("");
       const zeroLine = domain.min < 0 && domain.max > 0
         ? `<line class="hist-zero-line" x1="${xFor(0).toFixed(2)}" y1="${margin.top}" x2="${xFor(0).toFixed(2)}" y2="${margin.top + plotH}"></line>`
         : "";
-      const meanX = xFor(histogram.meanValue);
+      const meanX = xFor(Math.min(domain.max, Math.max(domain.min, histogram.meanValue)));
       const grid = [0.25, 0.5, 0.75, 1].map(step => {
         const y = margin.top + plotH - plotH * step;
         return `<line class="hist-grid-line" x1="${margin.left}" y1="${y.toFixed(2)}" x2="${margin.left + plotW}" y2="${y.toFixed(2)}"></line>`;
@@ -3468,10 +3516,10 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         ${zeroLine}
         ${bars}
         <line class="hist-mean-line ${seriesClass}" x1="${meanX.toFixed(2)}" y1="${margin.top}" x2="${meanX.toFixed(2)}" y2="${margin.top + plotH}"><title>Mean ${signedReturnPct(histogram.meanValue)}</title></line>
-        <text class="hist-label" x="${margin.left}" y="${height - 10}" text-anchor="start">${signedReturnPct(domain.min)}</text>
+        <text class="hist-label" x="${margin.left}" y="${height - 10}" text-anchor="start">&lt; ${signedReturnPct(domain.min)}</text>
         <text class="hist-label" x="${xFor(0).toFixed(2)}" y="${height - 10}" text-anchor="middle">0%</text>
-        <text class="hist-label" x="${margin.left + plotW}" y="${height - 10}" text-anchor="end">${signedReturnPct(domain.max)}</text>
-        <text class="hist-label" x="${margin.left}" y="${margin.top + 10}" text-anchor="start">${yMax} days</text>
+        <text class="hist-label" x="${margin.left + plotW}" y="${height - 10}" text-anchor="end">&gt; ${signedReturnPct(domain.max)}</text>
+        <text class="hist-label" x="${margin.left}" y="${margin.top + 10}" text-anchor="start">${yMax}% of days</text>
       `;
     }
     function renderReturnDistributions(windowStats) {
@@ -3482,11 +3530,11 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       const bins = 18;
       const portfolioHistogram = histogramForReturns(portfolioReturns, domain, bins);
       const msciHistogram = histogramForReturns(msciReturns, domain, bins);
-      const yMax = Math.max(1, ...portfolioHistogram.counts, ...msciHistogram.counts);
+      const yMax = histogramScaleMax(portfolioHistogram, msciHistogram);
 
       const summary = document.getElementById("stats-dist-summary");
       if (summary) {
-        summary.textContent = `${selectedWindowLabel()} | same daily-return bins | dashed line = mean`;
+        summary.textContent = `${selectedWindowLabel()} | share of days in the same bins | end bins hold days beyond the 1st-99th percentile range | dashed line = mean`;
       }
       const portfolioMeta = document.getElementById("stats-port-dist-meta");
       if (portfolioMeta) portfolioMeta.innerHTML = distributionMeta(portfolioReturns);
@@ -3495,6 +3543,35 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
 
       renderHistogramSvg("stats-port-dist", portfolioHistogram, domain, yMax, "portfolio");
       renderHistogramSvg("stats-msci-dist", msciHistogram, domain, yMax, "msci");
+    }
+    function setStatCell(id, text, hint = "", title = "") {
+      const cell = document.getElementById(id);
+      if (!cell) return;
+      cell.textContent = text;
+      if (hint) {
+        const note = document.createElement("span");
+        note.className = "subtle";
+        note.textContent = ` ${hint}`;
+        cell.append(note);
+      }
+      cell.title = title;
+    }
+    function fixedStat(value, digits, suffix = "") {
+      return value === null || value === undefined || !Number.isFinite(Number(value)) ? "—" : `${Number(value).toFixed(digits)}${suffix}`;
+    }
+    function renderStatsColumn(prefix, summary, sharpeTitle) {
+      const small = summary.sample_too_small ? `sample too small (${summary.days} days)` : "";
+      const smallTitle = summary.sample_too_small ? `Annualized figures need at least ${MIN_ANNUALISED_DAYS} daily returns; this window has ${summary.days}.` : "";
+      const variance = summary.daily_variance_pct;
+      setStatCell(`stats-${prefix}-mean`, fixedStat(summary.mean_daily_return_pct, 4, "%"));
+      setStatCell(`stats-${prefix}-var`, variance === null || variance === undefined ? "—" : `${Number(variance).toFixed(4)}%² (${(Number(variance) / 10000).toFixed(8)})`);
+      setStatCell(`stats-${prefix}-daily-vol`, fixedStat(summary.daily_volatility_pct, 4, "%"));
+      setStatCell(`stats-${prefix}-ann-vol`, fixedStat(summary.annualized_volatility_pct, 2, "%"), small, smallTitle);
+      if (sharpeTitle === null) {
+        setStatCell(`stats-${prefix}-sharpe`, "—", "", "XEON is the risk-free proxy: its excess return over itself is zero, so it has no Sharpe ratio.");
+      } else {
+        setStatCell(`stats-${prefix}-sharpe`, fixedStat(summary.sharpe_ratio, 2), small, small ? smallTitle : sharpeTitle);
+      }
     }
     function renderStats(data) {
       const statsSection = document.getElementById("stats-section");
@@ -3517,33 +3594,23 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         statsSection.style.display = "none";
         return;
       }
-      
+
+      const riskFree = statsData.risk_free || {};
+      const riskFreeLabel = riskFree.source === "xeon"
+        ? "risk-free: XEON"
+        : `risk-free: fixed ${(Number(riskFree.annual_rate ?? ANNUAL_RISK_FREE_RATE ?? 0) * 100).toFixed(1)}%`;
+      const sharpeTitle = riskFree.source === "xeon"
+        ? "Mean daily excess return over XEON on the same days, divided by its sample standard deviation, times √252."
+        : `XEON quotes are missing for this window: excess return over a fixed ${(Number(riskFree.annual_rate ?? ANNUAL_RISK_FREE_RATE ?? 0) * 100).toFixed(1)}% a year instead.`;
       document.getElementById("stats-summary").textContent = 
-        `${windowStats.daysEvaluated} trading days evaluated | period: ${windowStats.startDate} to ${windowStats.endDate} | window: ${selectedWindowLabel()} | mode: ${modeLabel}`;
-      
-      const p = statsData.portfolio;
-      document.getElementById("stats-port-mean").textContent = `${p.mean_daily_return_pct.toFixed(4)}%`;
-      document.getElementById("stats-port-var").textContent = `${p.daily_variance_pct.toFixed(4)}%² (${(p.daily_variance_pct / 10000).toFixed(8)})`;
-      document.getElementById("stats-port-daily-vol").textContent = `${p.daily_volatility_pct.toFixed(4)}%`;
-      document.getElementById("stats-port-ann-vol").textContent = `${p.annualized_volatility_pct.toFixed(2)}%`;
-      document.getElementById("stats-port-sharpe").textContent = p.sharpe_ratio.toFixed(2);
+        `${windowStats.daysEvaluated} trading days evaluated | period: ${windowStats.startDate} to ${windowStats.endDate} | window: ${selectedWindowLabel()} | mode: ${modeLabel} | ${riskFreeLabel}${stats.excludes_crypto_wallet ? " | excludes crypto wallet" : ""}`;
+      const scopeNote = document.getElementById("stats-scope-note");
+      if (scopeNote) scopeNote.hidden = !stats.excludes_crypto_wallet;
+
+      renderStatsColumn("port", statsData.portfolio, sharpeTitle);
       renderReturnDistributions(windowStats);
-      
-      const m = statsData.msci;
-      document.getElementById("stats-msci-mean").textContent = `${m.mean_daily_return_pct.toFixed(4)}%`;
-      document.getElementById("stats-msci-var").textContent = `${m.daily_variance_pct.toFixed(4)}%² (${(m.daily_variance_pct / 10000).toFixed(8)})`;
-      document.getElementById("stats-msci-daily-vol").textContent = `${m.daily_volatility_pct.toFixed(4)}%`;
-      document.getElementById("stats-msci-ann-vol").textContent = `${m.annualized_volatility_pct.toFixed(2)}%`;
-      document.getElementById("stats-msci-sharpe").textContent = m.sharpe_ratio.toFixed(2);
-      
-      const x = statsData.xeon;
-      if (x) {
-        document.getElementById("stats-xeon-mean").textContent = `${x.mean_daily_return_pct.toFixed(4)}%`;
-        document.getElementById("stats-xeon-var").textContent = `${x.daily_variance_pct.toFixed(4)}%² (${(x.daily_variance_pct / 10000).toFixed(8)})`;
-        document.getElementById("stats-xeon-daily-vol").textContent = `${x.daily_volatility_pct.toFixed(4)}%`;
-        document.getElementById("stats-xeon-ann-vol").textContent = `${x.annualized_volatility_pct.toFixed(2)}%`;
-        document.getElementById("stats-xeon-sharpe").textContent = x.sharpe_ratio.toFixed(2);
-      }
+      renderStatsColumn("msci", statsData.msci, sharpeTitle);
+      if (statsData.xeon) renderStatsColumn("xeon", statsData.xeon, null);
     }
     function selectorButtonLabel(button) {
       return button.dataset.label || (button.querySelector(".selector-label")?.textContent || button.textContent || "").trim();
@@ -3625,6 +3692,23 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       return `<span style="color:${color};font-weight:600">${sign}${num.toFixed(2)}%</span>`;
     }
 
+    const RANKING_HEADERS = {
+      start: "Return (since own start)",
+      common: "Return (Common Alignment)",
+      ytd: "Return (YTD)"
+    };
+    // Rows without a figure sort last whatever the direction.
+    function compareRankings(a, b, modeKey) {
+      const value = row => {
+        const raw = row.returns?.[modeKey]?.[rankingsSort.key];
+        return raw === null || raw === undefined || !Number.isFinite(Number(raw)) ? null : Number(raw);
+      };
+      const valueA = value(a);
+      const valueB = value(b);
+      if (valueA === null || valueB === null) return (valueA === null) - (valueB === null);
+      return rankingsSort.direction === "desc" ? valueB - valueA : valueA - valueB;
+    }
+
     function renderRankings(data) {
       if (!data) return;
       const rankingsTbody = document.getElementById("rankings-tbody");
@@ -3634,21 +3718,11 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       const isTotal = (selectedReturnMode === "total");
       const modeKey = isTotal ? "total" : "price";
       
-      const commonDateStr = data.common_start_date || "—";
-      const ytdDateStr = data.ytd_start_date || "—";
-      windowLabel.innerHTML = `Common alignment from <span style="color:var(--series-violet);font-weight:600">${commonDateStr}</span> | YTD from <span style="color:var(--warning);font-weight:600">${ytdDateStr}</span>`;
+      const commonDateStr = escapeHtml(data.common_start_date || "—");
+      const ytdDateStr = escapeHtml(data.ytd_start_date || "—");
+      windowLabel.innerHTML = `Time-weighted | Common alignment from <span style="color:var(--series-violet);font-weight:600">${commonDateStr}</span> | YTD from the <span style="color:var(--warning);font-weight:600">${ytdDateStr}</span> close`;
 
-      const sorted = [...data.rankings].sort((a, b) => {
-        let valA = 0.0;
-        let valB = 0.0;
-        if (a.returns && a.returns[modeKey]) {
-          valA = a.returns[modeKey][rankingsSort.key] || 0.0;
-        }
-        if (b.returns && b.returns[modeKey]) {
-          valB = b.returns[modeKey][rankingsSort.key] || 0.0;
-        }
-        return rankingsSort.direction === "desc" ? valB - valA : valA - valB;
-      });
+      const sorted = [...data.rankings].sort((a, b) => compareRankings(a, b, modeKey));
 
       rankingsTbody.innerHTML = sorted.map(user => {
         const ret = user.returns?.[modeKey] || {};
@@ -3659,6 +3733,10 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         const isCurrentPerson = (user.person === selectedPerson);
         const rowStyle = isCurrentPerson ? 'background: color-mix(in srgb, var(--accent) 8%, transparent); font-weight: 500;' : '';
         const nameStyle = isCurrentPerson ? 'color: var(--accent); font-weight: 700;' : '';
+        const reconstructedTag = user.reconstructed
+          ? `<span class="ranking-tag" title="${escapeHtml(user.reconstructed_note || "History rebuilt from a holdings snapshot.")}">reconstructed</span>`
+          : "";
+        const startDate = user.start_date ? `<small class="ranking-message">from ${escapeHtml(user.start_date)}</small>` : "";
 
         return `
           <tr style="${rowStyle}">
@@ -3666,21 +3744,30 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
               <span class="user-avatar ${escapeHtml(user.person)}" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
               </span>
-              <span style="${nameStyle}">${escapeHtml(user.name)}${user.message ? `<small class="ranking-message">${escapeHtml(user.message)}</small>` : ""}</span>
+              <span style="${nameStyle}">${escapeHtml(user.name)}${reconstructedTag}${user.message ? `<small class="ranking-message">${escapeHtml(user.message)}</small>` : ""}</span>
             </td>
-            <td>${formatRankingPct(startVal)}</td>
+            <td>${formatRankingPct(startVal)}${startDate}</td>
             <td>${formatRankingPct(commonVal)}</td>
             <td>${formatRankingPct(ytdVal)}</td>
           </tr>
         `;
       }).join("");
+
+      const note = document.getElementById("rankings-note");
+      if (note) {
+        const rebuilt = data.rankings.filter(user => user.reconstructed).map(user => user.name);
+        note.hidden = !rebuilt.length;
+        note.textContent = rebuilt.length
+          ? `Reconstructed (${rebuilt.join(", ")}): history rebuilt from the latest holdings snapshot, booked as one purchase on the start date. Past sales and cash flows are missing and today's holdings get hindsight credit, so these returns are not like-for-like with portfolios built from imported trades.`
+          : "";
+      }
     }
 
     function updateRankingsHeaders() {
       ["start", "common", "ytd"].forEach(k => {
         const el = document.getElementById(`rank-header-${k}`);
         if (!el) return;
-        let title = k === "start" ? "Return (Start of Portfolio)" : (k === "common" ? "Return (Common Alignment)" : "Return (YTD)");
+        const title = RANKING_HEADERS[k];
         if (rankingsSort.key === k) {
           const arrow = rankingsSort.direction === "desc" ? " ↓" : " ↑";
           el.textContent = title + arrow;

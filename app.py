@@ -3233,6 +3233,10 @@ def family_dashboard_payload(
         "proxy_mode": proxy_mode,
         "trade_file": configured_path_label(snapshot["path"]),
         "trade_source": f"{snapshot['person_name']} CSV snapshot",
+        # Snapshot holdings are booked as one purchase on the history start: no
+        # sales, no later flows, and today's winners chosen with hindsight.
+        "history_reconstructed": any(trade.source == "snapshot" for trade in fake_trades)
+        or any(adjustment.use_history_start for adjustment in profile.extra_trades),
         "mapping_file": configured_path_label(MAPPINGS_CSV),
         "trade_count": len(fake_trades),
         "asset_count": len(trade_assets),
@@ -3856,6 +3860,13 @@ def read_berkshire_metadata() -> dict[str, Any]:
         return {}
     weight_sum = sum((parse_decimal(row.get("weight_pct")) for row in rows), ZERO)
     first = rows[0]
+    # The look-through file is a model: the 13F equities plus assumed cash and
+    # operating-business slices. Say how it splits, not only where the 13F part is from.
+    split = {"13f": ZERO, "cash": ZERO, "operating": ZERO}
+    for row in rows:
+        label = str(row.get("asset_class") or "")
+        part = "13f" if "13f" in label.casefold() else "cash" if asset_class_group(label) == "Cash" else "operating"
+        split[part] += parse_decimal(row.get("weight_pct"))
     return {
         "issuer": "Berkshire Hathaway",
         "status": "official_sec_13f",
@@ -3863,7 +3874,13 @@ def read_berkshire_metadata() -> dict[str, Any]:
         "holdings_url": first.get("source_url") or "",
         "rows": len(rows),
         "weight_sum": str(weight_sum.quantize(Decimal("0.0001")).normalize()),
-        "message": f"SEC 13F-HR public equity holdings, report date {first.get('report_date') or 'unknown'}.",
+        "split_pct": {key: float(value.quantize(Decimal("0.01"))) for key, value in split.items()},
+        "message": (
+            f"Look-through model: {split['13f']:.0f}% SEC 13F-HR public equity holdings "
+            f"(report date {first.get('report_date') or 'unknown'}), {split['cash']:.0f}% cash and short-term "
+            f"Treasuries, {split['operating']:.0f}% operating businesses. Only the 13F part is disclosed; "
+            "the cash and operating-business shares are assumptions."
+        ),
     }
 
 
@@ -4884,6 +4901,28 @@ def holding_classification_index(exposures: dict[str, list[dict[str, Any]]]) -> 
 
 UNKNOWN_CLASSIFICATIONS = {"", "unclassified", "unknown", "unknown from issuer data", "--", "-", "n/a"}
 CASH_ASSET_CLASSES = {"cash", "cash equivalent", "cash collateral and margins", "money market", "currency", "fx"}
+# Issuer files, proxies, the 13F model and single shares each name asset classes their
+# own way ("Equities", "Proxy ETF underlying", "Berkshire 13F ..."). The asset-class view
+# groups them; the first group whose term appears in the label wins.
+ASSET_CLASS_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Crypto", ("crypto", "digital asset", "bitcoin")),
+    ("Cash", ("cash", "money market", "currency", "liquidity", "deposit")),
+    ("Real estate", ("real estate", "reit", "property")),
+    ("Bond", ("bond", "fixed income", "debt", "treasur", "government", "obbligaz")),
+    ("Equity", ("equit", "share", "stock", "13f", "etf underlying")),
+    ("Commodity", ("commodit", "gold", "silver", "precious metal")),
+)
+
+
+def asset_class_group(label: str) -> str:
+    """Equity, Bond, Cash, Crypto, Commodity, Real estate or Other for a source asset-class label."""
+    value = (label or "").strip().casefold()
+    if value in {"fx", "forex"}:
+        return "Cash"
+    for group, terms in ASSET_CLASS_GROUPS:
+        if any(term in value for term in terms):
+            return group
+    return "Other"
 
 
 def fill_unknown_classification(
@@ -4944,6 +4983,11 @@ def calculate_distribution(
         for position in positions
         if position.get("is_open") and position.get("market_value_eur") is not None and Decimal(str(position["market_value_eur"])) > ZERO
     ]
+    # Open but with neither a price nor a saved value: no weight can be given, so
+    # they are listed as not covered instead of silently leaving the denominator.
+    unpriced_positions = [
+        position for position in positions if position.get("is_open") and position.get("market_value_eur") is None
+    ]
     total_value = sum((Decimal(str(position["market_value_eur"])) for position in open_positions), ZERO)
     by_holding: dict[str, Decimal] = {}
     by_holding_sources: dict[str, set[str]] = {}
@@ -4994,7 +5038,7 @@ def calculate_distribution(
             by_sector_holdings.setdefault(fallback_sector, {})[fallback_holding] = \
                 by_sector_holdings.setdefault(fallback_sector, {}).get(fallback_holding, ZERO) + value
             add_distribution_amount(by_geo, fallback_geo, value)
-            add_distribution_amount(by_asset_class, fallback_asset_class, value)
+            add_distribution_amount(by_asset_class, asset_class_group(fallback_asset_class), value)
             fallback_ticker = normalize_holding_ticker(str(position.get("symbol") or ""), fallback_holding, fallback_geo)
             holding_tickers[fallback_holding] = fallback_ticker
             holding_classes[fallback_holding] = fallback_asset_class
@@ -5019,6 +5063,7 @@ def calculate_distribution(
         row_weight = sum((row["weight_pct"] for row in rows), ZERO)
         divisor = row_weight if row_weight > Decimal("100") else Decimal("100")
         allocated = ZERO
+        position_groups: dict[str, Decimal] = {}
         for row in rows:
             amount = value * row["weight_pct"] / divisor
             allocated += amount
@@ -5036,7 +5081,9 @@ def calculate_distribution(
             by_sector_holdings.setdefault(norm_sector, {})[holding] = \
                 by_sector_holdings.setdefault(norm_sector, {}).get(holding, ZERO) + amount
             add_distribution_amount(by_geo, row_geo, amount)
-            add_distribution_amount(by_asset_class, row["asset_class"], amount)
+            group = asset_class_group(row["asset_class"])
+            add_distribution_amount(by_asset_class, group, amount)
+            position_groups[group] = position_groups.get(group, ZERO) + amount
             
             ticker = row["holding_ticker"]
             if not ticker:
@@ -5074,17 +5121,35 @@ def calculate_distribution(
             by_sector_holdings.setdefault(norm_remainder_sector, {})[label] = \
                 by_sector_holdings.setdefault(norm_remainder_sector, {}).get(label, ZERO) + remainder
             add_distribution_amount(by_geo, "Unknown from issuer data", remainder)
-            add_distribution_amount(by_asset_class, "ETF underlying", remainder)
+            # The unlisted part of a fund is most likely what the fund mostly holds.
+            remainder_group = max(position_groups, key=lambda name: position_groups[name]) if position_groups else "Other"
+            add_distribution_amount(by_asset_class, remainder_group, remainder)
             holding_tickers[label] = ""
             holding_classes[label] = "ETF underlying"
+
+    for position in unpriced_positions:
+        missing.append(
+            {
+                "asset": str(position.get("asset") or "").strip(),
+                "isin": str(position.get("isin") or "").strip().upper(),
+                "market_value_eur": None,
+                "status": "unpriced",
+                "message": "No price or saved value yet, so it has no weight in the allocation.",
+            }
+        )
 
     return {
         "source_file": configured_path_label(EXPOSURES_CSV),
         "documents_file": configured_path_label(ETF_DOCUMENTS_JSON) if ETF_DOCUMENTS_JSON.exists() else "",
         "total_value_eur": money(total_value),
         "covered_assets": covered_assets,
-        "open_assets": len(open_positions),
-        "missing": sorted(missing, key=lambda item: item["market_value_eur"], reverse=True),
+        "open_assets": len(open_positions) + len(unpriced_positions),
+        "unpriced_assets": len(unpriced_positions),
+        "missing": sorted(
+            missing,
+            key=lambda item: item["market_value_eur"] if item["market_value_eur"] is not None else -1.0,
+            reverse=True,
+        ),
         "composition_sources": sorted(composition_sources, key=lambda item: (item["status"] != "ok", item["asset"])),
         "composition_source_coverage": {
             "resolved": sum(
@@ -7017,9 +7082,76 @@ def statistics_unit_value_eur(
     return value / rate if invert else value * rate
 
 
-def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID, broker="all", history_context=None):
-    import numpy as np
+MIN_ANNUALISED_RETURNS = 60
+XEON_RISK_FREE_COVERAGE = 0.8
 
+
+def daily_return_summary(values: list[float], excess: list[float] | None = None) -> dict[str, Any]:
+    """Sample statistics of daily returns; twin of dailyReturnSummary in static/app.js.
+
+    Variance and volatility are sample (n-1) estimates. Annualised volatility and
+    the Sharpe ratio need MIN_ANNUALISED_RETURNS returns: on a week of data they are
+    noise (a calm +1% week reads as a Sharpe of 40), so below that they are None.
+    The Sharpe ratio is mean(excess) / std(excess) * sqrt(252) of the daily excess
+    returns; no excess series means no Sharpe ratio (the cash proxy itself).
+    """
+    count = len(values)
+    mean = sum(values) / count if count else None
+    variance = sum((value - mean) ** 2 for value in values) / (count - 1) if count > 1 and mean is not None else None
+    std = math.sqrt(variance) if variance is not None else None
+    enough = count >= MIN_ANNUALISED_RETURNS
+    sharpe = None
+    if enough and excess is not None and len(excess) > 1:
+        excess_mean = sum(excess) / len(excess)
+        excess_std = math.sqrt(sum((value - excess_mean) ** 2 for value in excess) / (len(excess) - 1))
+        if excess_std > 0:
+            sharpe = excess_mean / excess_std * math.sqrt(252)
+    return {
+        "days": count,
+        "mean_daily_return_pct": mean * 100 if mean is not None else None,
+        "daily_variance_pct": variance * 10000 if variance is not None else None,
+        "daily_volatility_pct": std * 100 if std is not None else None,
+        "annualized_volatility_pct": std * math.sqrt(252) * 100 if enough and std is not None else None,
+        "sharpe_ratio": sharpe,
+        "best_daily_return_pct": max(values) * 100 if values else None,
+        "worst_daily_return_pct": min(values) * 100 if values else None,
+        "sample_too_small": not enough,
+    }
+
+
+def return_series_statistics(rows: list[dict[str, Any]], key: str, fallback_annual_rate: float) -> dict[str, Any]:
+    """Risk statistics of one return column of the daily rows; twin of calculateReturnStats in static/app.js.
+
+    The risk-free return of each row is XEON's return on that row (zero on a day its
+    quote did not move: the accrual shows in the next quote), so the Sharpe ratio
+    measures the excess over cash day by day. Only when XEON quotes cover less than
+    XEON_RISK_FREE_COVERAGE of the window's days does the fixed configured rate stand in.
+    """
+    portfolio_rows = [row for row in rows if row.get(key) is not None]
+    msci_rows = [row for row in rows if row.get("msci_return") is not None]
+    xeon = [float(row["xeon_return"]) for row in rows if row.get("xeon_return") is not None]
+    covered = sum(1 for row in portfolio_rows if row.get("xeon_return") is not None)
+    use_xeon = bool(portfolio_rows) and covered >= XEON_RISK_FREE_COVERAGE * len(portfolio_rows)
+    fixed_daily = float(fallback_annual_rate) / 252
+
+    def risk_free(row: dict[str, Any]) -> float:
+        return float(row.get("xeon_return") or 0.0) if use_xeon else fixed_daily
+
+    def excess(selected: list[dict[str, Any]], column: str) -> list[float]:
+        return [float(row[column]) - risk_free(row) for row in selected]
+
+    return {
+        "portfolio": daily_return_summary([float(row[key]) for row in portfolio_rows], excess(portfolio_rows, key)),
+        "msci": daily_return_summary([float(row["msci_return"]) for row in msci_rows], excess(msci_rows, "msci_return")),
+        "xeon": daily_return_summary(xeon),
+        "risk_free": {
+            "source": "xeon" if use_xeon else "fixed",
+            "annual_rate": None if use_xeon else float(fallback_annual_rate),
+        },
+    }
+
+
+def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID, broker="all", history_context=None):
     if not trades:
         return None
     trades = split_adjusted_trade_history(trades)
@@ -7039,10 +7171,16 @@ def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID
         return None
         
     tr_cash_events, bbva_cash_events, revolut_cash_events = load_cash_histories(person)
-                
+
+    broker_lower = (broker or "all").strip().lower()
     dividends = read_portfolio_dividends(person)
     interests = read_cash_interests(person)
-    
+    # Same filter as the valuation series: with one broker selected, another
+    # broker's dividend must not show up as a return day of this one.
+    if broker_lower != "all":
+        dividends = [d for d in dividends if d.broker.lower() == broker_lower]
+        interests = [i for i in interests if str(i.get("broker") or "").lower() == broker_lower]
+
     refs = build_instrument_refs(trades, mappings, refresh=False)
     history_context = history_context or {}
     context_histories = history_context.get("histories", {}) if isinstance(history_context, dict) else {}
@@ -7085,8 +7223,7 @@ def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID
         h_xeon = fetch_history("XEON.DE", start_date - timedelta(days=30), end_date, refresh=False)
         if h_xeon and h_xeon.get("status") == "priced" and h_xeon.get("prices"):
             xeon_prices = h_xeon["prices"]
-            
-    broker_lower = broker.lower()
+
     include_tr_cash = (broker_lower == "all" or broker_lower == "trade republic")
     include_bbva_cash = (broker_lower == "all" or broker_lower == "bbva")
     include_revolut_cash = broker_lower == "all"
@@ -7209,8 +7346,6 @@ def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID
     # Compute returns for both
     total_returns = []
     price_returns = []
-    msci_returns = []
-    xeon_returns = []
     daily_returns = []
     
     for i in range(1, len(daily_metrics)):
@@ -7239,7 +7374,6 @@ def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID
         msci_ret = None
         if p_prev and p_curr and p_prev > 0 and curr.get("msci_date") != prev.get("msci_date"):
             msci_ret = (p_curr - p_prev) / p_prev
-            msci_returns.append(msci_ret)
 
         # XEON
         x_prev = prev['xeon']
@@ -7247,7 +7381,6 @@ def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID
         xeon_ret = None
         if x_prev and x_curr and x_prev > 0 and curr.get("xeon_date") != prev.get("xeon_date"):
             xeon_ret = (x_curr - x_prev) / x_prev
-            xeon_returns.append(xeon_ret)
 
         daily_returns.append({
             "date": curr["date"].isoformat(),
@@ -7259,56 +7392,12 @@ def calculate_portfolio_statistics(trades, mappings, person=PRIMARY_PORTFOLIO_ID
             
     if not total_returns or not price_returns:
         return None
-        
-    tot_rets = np.array(total_returns)
-    prc_rets = np.array(price_returns)
-    msci_rets_only = np.array(msci_returns)
-    xeon_rets_only = np.array(xeon_returns)
-    
-    rf_annual = SETTINGS.annual_risk_free_rate
-    rf_daily = rf_annual / 252
-    
-    def calculate_stats(rets, m_rets, x_rets):
-        mean = np.mean(rets)
-        std = np.std(rets)
-        sharpe = ((mean - rf_daily) / std * np.sqrt(252)) if std > 0 else 0.0
-        
-        m_mean = np.mean(m_rets) if len(m_rets) > 0 else 0.0
-        m_std = np.std(m_rets) if len(m_rets) > 0 else 0.0
-        m_sharpe = ((m_mean - rf_daily) / m_std * np.sqrt(252)) if m_std > 0 else 0.0
 
-        x_mean = np.mean(x_rets) if len(x_rets) > 0 else 0.0
-        x_std = np.std(x_rets) if len(x_rets) > 0 else 0.0
-        x_sharpe = ((x_mean - rf_daily) / x_std * np.sqrt(252)) if x_std > 0 else 0.0
-        
-        return {
-            "portfolio": {
-                "daily_variance_pct": float(np.var(rets) * 10000),
-                "daily_volatility_pct": float(std * 100),
-                "annualized_volatility_pct": float(std * np.sqrt(252) * 100),
-                "sharpe_ratio": float(sharpe),
-                "mean_daily_return_pct": float(mean * 100),
-            },
-            "msci": {
-                "daily_variance_pct": float(np.var(m_rets) * 10000) if len(m_rets) > 0 else 0.0,
-                "daily_volatility_pct": float(m_std * 100) if len(m_rets) > 0 else 0.0,
-                "annualized_volatility_pct": float(m_std * np.sqrt(252) * 100) if len(m_rets) > 0 else 0.0,
-                "sharpe_ratio": float(m_sharpe),
-                "mean_daily_return_pct": float(m_mean * 100) if len(m_rets) > 0 else 0.0,
-            },
-            "xeon": {
-                "daily_variance_pct": float(np.var(x_rets) * 10000) if len(x_rets) > 0 else 0.0,
-                "daily_volatility_pct": float(x_std * 100) if len(x_rets) > 0 else 0.0,
-                "annualized_volatility_pct": float(x_std * np.sqrt(252) * 100) if len(x_rets) > 0 else 0.0,
-                "sharpe_ratio": float(x_sharpe),
-                "mean_daily_return_pct": float(x_mean * 100) if len(x_rets) > 0 else 0.0,
-            }
-        }
-        
+    rf_annual = SETTINGS.annual_risk_free_rate
     return {
-        "total_return": calculate_stats(tot_rets, msci_rets_only, xeon_rets_only),
-        "price_return": calculate_stats(prc_rets, msci_rets_only, xeon_rets_only),
-        "days_evaluated": len(tot_rets),
+        "total_return": return_series_statistics(daily_returns, "total_return", rf_annual),
+        "price_return": return_series_statistics(daily_returns, "price_return", rf_annual),
+        "days_evaluated": len(total_returns),
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "daily_returns": daily_returns,
@@ -7512,6 +7601,11 @@ def _build_dashboard_payload(
             history_context=valuation.get("_history_context", {}),
         ),
     }
+    if payload["stats"] and wallet_positions:
+        # Daily statistics are built from trades. The wallet's value history is priced
+        # only at month ends before the last 35 days (or is a single snapshot), so
+        # merging it would book a month of crypto moves on one day. Say it is left out.
+        payload["stats"]["excludes_crypto_wallet"] = True
     open_price_dates = [
         str(position["price_date"])
         for position in payload["positions"]
@@ -9680,6 +9774,61 @@ def api_news():
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
+
+RANKING_RECONSTRUCTED_NOTE = (
+    "Reconstructed history: today's holdings are booked as one purchase on the start date, "
+    "so past sales and cash flows are missing and the return carries hindsight."
+)
+
+
+def payload_history_reconstructed(payload: dict[str, Any]) -> bool:
+    """Whether a dashboard snapshot rebuilt its history from a holdings snapshot."""
+    if "history_reconstructed" in payload:
+        return bool(payload["history_reconstructed"])
+    # Snapshots saved before the flag existed: family snapshot payloads say so here.
+    return str(payload.get("trade_source") or "").endswith("CSV snapshot")
+
+
+def ranking_anchor_index(series: list[dict[str, Any]], target_date: str) -> int:
+    """Index of the last point on or before ``target_date``.
+
+    A window is measured from the value at its start, so YTD starts from the
+    31 December close. History that begins later starts from its first point.
+    """
+    anchor = 0
+    for index, point in enumerate(series):
+        if str(point.get("date") or "") > target_date:
+            break
+        anchor = index
+    return anchor
+
+
+def ranking_return_pct(series: list[dict[str, Any]], anchor: int, total: bool) -> float | None:
+    """Time-weighted return from ``series[anchor]`` to the last point, as each dashboard shows it.
+
+    Chaining from the anchor equals (1 + TWR to the end) / (1 + TWR to the anchor) - 1,
+    so money paid in or taken out is never counted as a gain or a loss.
+    """
+    keys = ("total_market_value", "total_net_contributions", "total_profit") if total else (
+        "market_value", "net_contributions", "profit"
+    )
+    value = time_weighted_return_pct(series[anchor:], *keys)
+    return round(value, 2) if value is not None and math.isfinite(value) else None
+
+
+def portfolio_ranking_returns(series: list[dict[str, Any]], common_start: str | None, ytd_anchor: str) -> dict[str, dict[str, float | None]]:
+    """Price and total time-weighted returns since each start, the common start and YTD."""
+    anchors = {
+        "start": 0,
+        "common": ranking_anchor_index(series, common_start) if common_start else 0,
+        "ytd": ranking_anchor_index(series, ytd_anchor),
+    }
+    return {
+        mode: {window: ranking_return_pct(series, anchor, mode == "total") for window, anchor in anchors.items()}
+        for mode in ("price", "total")
+    }
+
+
 @app.get("/api/rankings")
 def api_rankings():
     refresh = request.args.get("refresh") == "1"
@@ -9690,6 +9839,7 @@ def api_rankings():
     try:
         users = [PRIMARY_PORTFOLIO_ID] + list(FAMILY_PORTFOLIOS.keys())
         user_series = {}
+        reconstructed = {}
         availability = {}
         for user in users:
             try:
@@ -9708,98 +9858,50 @@ def api_rankings():
                     job = queue_dashboard_refresh(path, options, force=refresh)
                     availability[user] = "Refresh failed: " + job.get("error", "Unknown error") if job["status"] == "error" else "Updating saved data"
                 user_series[user] = (payload or {}).get("valuation_series", [])
+                reconstructed[user] = payload_history_reconstructed(payload or {})
             except Exception as exc:
                 user_series[user] = []
+                reconstructed[user] = False
                 availability[user] = str(exc)
-            
-        start_dates = {}
-        for user, series in user_series.items():
-            if series:
-                start_dates[user] = series[0]["date"]
-                
-        common_start_date = None
-        if start_dates:
-            common_start_date = max(start_dates.values())
-            
-        current_year_start = f"{datetime.now().year}-01-01"
-        
+
+        start_dates = [series[0]["date"] for series in user_series.values() if series]
+        common_start_date = max(start_dates) if start_dates else None
+        ytd_anchor_date = f"{datetime.now().year - 1}-12-31"
+
         rankings = []
         for user in users:
             series = user_series[user]
+            name = FAMILY_PORTFOLIOS.get(user, {}).get("name", user.capitalize())
             if not series:
                 rankings.append({
                     "person": user,
-                    "name": FAMILY_PORTFOLIOS.get(user, {}).get("name", user.capitalize()),
+                    "name": name,
                     "start_date": None,
                     "status": "unavailable",
                     "message": availability.get(user, "Waiting for first portfolio snapshot"),
+                    "reconstructed": False,
                     "returns": {
                         "price": {"start": None, "common": None, "ytd": None},
                         "total": {"start": None, "common": None, "ytd": None}
                     }
                 })
                 continue
-                
-            p_first = series[0]
-            p_last = series[-1]
-            
-            def find_point_on_or_after(target_date):
-                for p in series:
-                    if p["date"] >= target_date:
-                        return p
-                return series[-1]
-                
-            p_common = find_point_on_or_after(common_start_date) if common_start_date else p_first
-            p_ytd = find_point_on_or_after(current_year_start)
-            
-            def point_number(point, key):
-                try:
-                    return float(point.get(key) or 0.0)
-                except (TypeError, ValueError):
-                    return 0.0
 
-            def calc_period_return(p_t, p_0, total=False):
-                profit_key = "total_profit" if total else "profit"
-                contrib_key = "total_net_contributions" if total else "net_contributions"
-                value_key = "total_market_value" if total else "market_value"
-                period_profit = point_number(p_t, profit_key) - point_number(p_0, profit_key)
-                period_contributions = point_number(p_t, contrib_key) - point_number(p_0, contrib_key)
-                start_value = point_number(p_0, value_key)
-                capital_at_work = max(0.01, start_value + max(0.0, period_contributions))
-                return round(period_profit / capital_at_work * 100.0, 2)
-                
-            ret_start_price = calc_period_return(p_last, p_first, total=False)
-            ret_start_total = calc_period_return(p_last, p_first, total=True)
-            
-            ret_common_price = calc_period_return(p_last, p_common, total=False)
-            ret_common_total = calc_period_return(p_last, p_common, total=True)
-            
-            ret_ytd_price = calc_period_return(p_last, p_ytd, total=False)
-            ret_ytd_total = calc_period_return(p_last, p_ytd, total=True)
-            
             rankings.append({
                 "person": user,
-                "name": FAMILY_PORTFOLIOS.get(user, {}).get("name", user.capitalize()),
-                "start_date": p_first["date"],
+                "name": name,
+                "start_date": series[0]["date"],
                 "status": "refreshing" if user in availability else "available",
                 "message": availability.get(user, ""),
-                "returns": {
-                    "price": {
-                        "start": ret_start_price,
-                        "common": ret_common_price,
-                        "ytd": ret_ytd_price
-                    },
-                    "total": {
-                        "start": ret_start_total,
-                        "common": ret_common_total,
-                        "ytd": ret_ytd_total
-                    }
-                }
+                "reconstructed": reconstructed[user],
+                "reconstructed_note": RANKING_RECONSTRUCTED_NOTE if reconstructed[user] else "",
+                "returns": portfolio_ranking_returns(series, common_start_date, ytd_anchor_date),
             })
-            
+
         return jsonify({
+            "method": "time_weighted",
             "common_start_date": common_start_date,
-            "ytd_start_date": current_year_start,
+            "ytd_start_date": ytd_anchor_date,
             "refreshing": any(message == "Updating saved data" for message in availability.values()),
             "rankings": rankings
         })

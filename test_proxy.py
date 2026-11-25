@@ -350,42 +350,31 @@ class PriceHistoryLookupTest(unittest.TestCase):
         self.assertGreaterEqual(latest_return_date, end - timedelta(days=3))
         self.assertTrue(any(row["price_return"] is not None for row in stats["daily_returns"]))
 
-    def test_rankings_ytd_uses_period_return_formula(self) -> None:
+    def test_rankings_ytd_is_time_weighted_from_the_31_december_close(self) -> None:
+        # Month-end history: +10% in H2 last year, +10% in January, 1000 added on
+        # 1 February (no market move), +10% to June. YTD starts at the 31 December
+        # close, so January counts, and the February deposit is not a gain.
         current_year = app.datetime.now().year
+
+        def point(day: str, value: float, contributions: float) -> dict[str, float | str]:
+            return {
+                "date": day,
+                "market_value": value,
+                "net_contributions": contributions,
+                "profit": value - contributions,
+                "total_market_value": value,
+                "total_net_contributions": contributions,
+                "total_profit": value - contributions,
+                "priced_positions": 1,
+                "unpriced_positions": 0,
+            }
+
         series = [
-            {
-                "date": f"{current_year - 1}-01-01",
-                "market_value": 1000.0,
-                "profit": 0.0,
-                "net_contributions": 1000.0,
-                "return_pct": 0.0,
-                "total_market_value": 1000.0,
-                "total_profit": 0.0,
-                "total_net_contributions": 1000.0,
-                "total_return_pct": 0.0,
-            },
-            {
-                "date": f"{current_year}-01-02",
-                "market_value": 5007.68,
-                "profit": 1408.34,
-                "net_contributions": 3599.34,
-                "return_pct": 39.13,
-                "total_market_value": 5266.44,
-                "total_profit": 1945.57,
-                "total_net_contributions": 3320.86,
-                "total_return_pct": 58.59,
-            },
-            {
-                "date": f"{current_year}-06-20",
-                "market_value": 5193.09,
-                "profit": 2161.13,
-                "net_contributions": 3031.97,
-                "return_pct": 71.28,
-                "total_market_value": 6108.78,
-                "total_profit": 2733.82,
-                "total_net_contributions": 3374.96,
-                "total_return_pct": 81.0,
-            },
+            point(f"{current_year - 1}-06-30", 1000.0, 1000.0),
+            point(f"{current_year - 1}-12-31", 1100.0, 1000.0),
+            point(f"{current_year}-01-31", 1210.0, 1000.0),
+            point(f"{current_year}-02-01", 2210.0, 2000.0),
+            point(f"{current_year}-06-20", 2431.0, 2000.0),
         ]
 
         def fake_payload(*args, **kwargs):
@@ -395,11 +384,13 @@ class PriceHistoryLookupTest(unittest.TestCase):
             response = app.app.test_client().get("/api/rankings")
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["ytd_start_date"], f"{current_year - 1}-12-31")
         primary = next(row for row in response.get_json()["rankings"] if row["person"] == app.PRIMARY_PORTFOLIO_ID)
-        self.assertEqual(primary["returns"]["price"]["ytd"], 15.03)
-        self.assertEqual(primary["returns"]["total"]["ytd"], 14.82)
-        self.assertNotEqual(primary["returns"]["price"]["ytd"], 23.11)
-
+        self.assertEqual(primary["returns"]["price"]["ytd"], 21.0)
+        self.assertEqual(primary["returns"]["total"]["ytd"], 21.0)
+        self.assertEqual(primary["returns"]["price"]["start"], 33.1)
+        # The old anchor (first point on or after 1 January) skipped January.
+        self.assertNotEqual(primary["returns"]["price"]["ytd"], 10.0)
 
 if __name__ == "__main__":
     unittest.main()
