@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.8 — 2026-11-25
+
+- The portfolio response is about 80% smaller (about 75 KB instead of 400 KB compressed for a typical portfolio), which matters most over a relayed or mobile connection. Income and expense rows are no longer sent twice: the page requests them from `/api/expenses` alongside the portfolio and shows "…" until they arrive. Fund and sector holdings are fetched from `/api/portfolio/distribution-details` when first opened. Floats are rounded to the precision shown. Saved snapshots and exports are unchanged.
+- The page, scripts and stylesheets are sent gzip-compressed (about 80% smaller), and versioned static files are cached by the browser for a year instead of being revalidated on every visit.
+- News feeds are fetched in parallel instead of one after another (up to 12 seconds each), and news cache entries older than a week are dropped.
+- Cache files are serialized under their write lock from a point-in-time copy, so a concurrent update can no longer abort a save with "dictionary changed size during iteration".
+- A full snapshot is no longer pre-encoded to JSON every time it is kept in memory.
+
 ## 0.14.7 — 2026-11-25
 
 - Archived statements are read again when the parser improves, and a re-read replaces that file's movements instead of adding to them. Rows the parser now reads differently are updated in place (keeping their categories), rows it no longer reads are removed with a revision kept, and nothing is stored twice. The first start after updating re-reads every archived file once: Intesa transfers and incoming bank transfers, and Fineco account transfers, that older parsers skipped are added; existing movements are unchanged.
