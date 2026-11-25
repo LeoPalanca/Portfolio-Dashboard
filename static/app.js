@@ -996,28 +996,46 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
           const variation = (p.variations || {})[period] || {};
           const amount = Number(variation.amount || 0);
           const pctMove = Number(variation.pct || 0);
+          // Older snapshots carry only the price move, stored as pct.
+          const priceMove = variation.price_pct === undefined ? pctMove : variation.price_pct;
           return {
             asset: p.asset || p.symbol || "",
             symbol: p.symbol || p.isin || "",
             type: String(p.asset_type || "").toUpperCase(),
             amount,
-            pct: pctMove
+            pct: pctMove,
+            pricePct: priceMove === null ? null : Number(priceMove)
           };
         })
         .filter(row => row.asset && Number.isFinite(row.amount) && Number.isFinite(row.pct) && (row.amount !== 0 || row.pct !== 0));
     }
-    function moverRowsHtml(rows) {
+    function signedPct(value) {
+      return `${value >= 0 ? "+" : ""}${pct.format(value)}%`;
+    }
+    function signedMoney(value) {
+      return `${value >= 0 ? "+" : ""}${money(value)}`;
+    }
+    // byMoney: lead with the euro result on your money; otherwise with the price move.
+    function moverRowsHtml(rows, byMoney) {
       if (!rows.length) return `<div class="empty-state">No stock or ETF movement data available for this window.</div>`;
-      return rows.map(row => `
+      return rows.map(row => {
+        const lead = byMoney
+          ? `<strong class="${signedClass(row.amount)}">${signedMoney(row.amount)}</strong>`
+          : `<strong class="${signedClass(row.pricePct)}">${signedPct(row.pricePct)}</strong>`;
+        const note = byMoney
+          ? `<small class="${signedClass(row.pct)}" title="Return on the money in this position over the window">${signedPct(row.pct)} on your money</small>`
+          : `<small class="${signedClass(row.amount)}" title="What the window did to your money in this position">${signedMoney(row.amount)} for you</small>`;
+        return `
         <div class="mover-row">
           <div class="mover-name" title="${escapeHtml(row.asset)}">${escapeHtml(row.asset)}</div>
           <span class="mover-pill">${escapeHtml(row.type)}</span>
           <div class="mover-values">
-            <strong class="${signedClass(row.amount)}">${row.pct >= 0 ? "+" : ""}${pct.format(row.pct)}%</strong>
-            <small class="${signedClass(row.amount)}">${row.amount >= 0 ? "+" : ""}${money(row.amount)}</small>
+            ${lead}
+            ${note}
           </div>
         </div>
-      `).join("");
+      `;
+      }).join("");
     }
     function renderMoversPanel() {
       const panel = document.getElementById("movers-panel");
@@ -1028,23 +1046,23 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         return;
       }
       const movers = positionMovers(activeMoversPeriod);
-      const byPct = [...movers].sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 3);
+      const byPct = movers.filter(row => Number.isFinite(row.pricePct)).sort((a, b) => Math.abs(b.pricePct) - Math.abs(a.pricePct)).slice(0, 3);
       const byAmount = [...movers].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, 3);
       const label = periodLabel(activeMoversPeriod);
       panel.hidden = false;
       panel.innerHTML = `
         <div class="movers-head">
           <strong>${label} stock/ETF movers</strong>
-          <span class="subtle">Based on current holding value and cached/live price history</span>
+          <span class="subtle">Euro figures count only your money: the value held at the start of the window, plus buys and minus sales made in it</span>
         </div>
         <div class="movers-grid">
           <div class="movers-column">
-            <h3>Top 3 by % move</h3>
-            ${moverRowsHtml(byPct)}
+            <h3>Top 3 by price move</h3>
+            ${moverRowsHtml(byPct, false)}
           </div>
           <div class="movers-column">
-            <h3>Top 3 by portfolio € move</h3>
-            ${moverRowsHtml(byAmount)}
+            <h3>Top 3 by € on your money</h3>
+            ${moverRowsHtml(byAmount, true)}
           </div>
         </div>
       `;
