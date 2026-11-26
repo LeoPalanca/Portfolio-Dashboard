@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20.0 — 2026-11-26
+
+- **Revolut sub-accounts.** A consolidated Revolut statement is read account by account: the personal account in each currency, Pro, pockets and vaults, the savings deposit and a joint account. Every movement carries its sub-account. Moving money between your own sub-accounts, including currency exchanges, is an internal transfer on both sides, never spending or income. Each sub-account is reconciled against its own running balance, in its own currency. Foreign-currency sub-accounts are now read from their own currency column, and the parser moves to `ledger-7`, so archived statements are re-read once.
+- **Household profile for a joint account.** A profile with the `revolut_joint_account` feature takes only the joint account's rows from a Revolut statement, and every other profile leaves them out, so the same file can be imported into both. Transfers between your account and the joint one are a transfer out on your side and a contribution on the household's. A profile with only bank data loads with empty investment sections and is left out of the rankings.
+- **Transfers between your own banks.** Transfers from Revolut to Trade Republic, Intesa or BBVA pair with the top-up they produced, recognising the bank's name or Revolut's Italian IBAN in the text.
+- **Cash.** When you keep a cash ledger, cash withdrawals add to it and cash paid into a bank account comes out of it (and is no longer counted as income), so a cash balance doesn't turn every withdrawal into calculated income.
+- **Investments at Intesa.** Fund and securities subscriptions, sales and redemptions are investment flows, and money coming back from an investment lowers the net amount invested. A redemption paid for someone else's name is "Money received", not a refund; card refunds stay refunds.
+- **Income + money received − expenses.** A new line in Income & expenses counts money received (credits) together with income.
+
 ## 0.19.0 — 2026-11-26
 
 - **Intesa quarterly statements (PDF).** Intesa's quarterly PDF statements can be imported. Every movement is read across pages, with wrapped descriptions joined, and a statement is accepted only when its opening balance plus its movements equals its closing balance. The statement's opening and closing balances are kept as balance checkpoints. A movement that also appears in an Excel export is counted once.
