@@ -44,9 +44,10 @@ class BankOnlyProfileTest(unittest.TestCase):
 
     def test_the_person_selector_lists_it_and_the_rankings_skip_it(self) -> None:
         profiles = household_profiles()
-        family = app.SETTINGS.model_copy(update={"portfolios": profiles}).family_portfolios
         with ExitStack() as stack:
             stack.enter_context(patch.dict(app.SETTINGS.portfolios, profiles))
+            # Read through the settings object itself, whatever class implements it.
+            family = app.SETTINGS.family_portfolios
             stack.enter_context(patch.object(app, "FAMILY_PORTFOLIOS", family))
             stack.enter_context(patch.object(app, "read_dashboard_cache", return_value=None))
             stack.enter_context(patch.object(app, "queue_dashboard_refresh", return_value={"status": "running"}))
