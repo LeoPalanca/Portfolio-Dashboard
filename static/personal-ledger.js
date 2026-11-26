@@ -75,12 +75,23 @@
       finally {button.disabled = false;}
     };
   };
+  // An account's balance as of today; it reconciles the account's movements since its previous balance.
+  function openAccountBalance(account, id = "", current = "") {
+    if (!data.categories) return;
+    dialog(id ? `Edit balance · ${account}` : `Current balance · ${account}`, `<p class="subtle">The balance shown by ${escape(account)} today (EUR, negative when overdrawn). Money the imported movements do not explain since the previous balance becomes Calculated expenses or Calculated income.</p><form id="account-balance-form" class="personal-ledger-form"><label>Balance EUR<input name="amount" type="number" min="-1000000000" max="1000000000" step="0.01" required value="${escape(current)}"></label><button type="submit">Save balance</button></form>`);
+    node("account-balance-form").onsubmit = async event => {
+      event.preventDefault(); const button = event.submitter || event.target.querySelector('[type="submit"]'); button.disabled = true;
+      try {await write({action:"save_balance", account, id, amount:new FormData(event.target).get("amount")}); node("personal-ledger-dialog").close();}
+      catch (error) {node("personal-ledger-error").textContent = error.message;}
+      finally {button.disabled = false;}
+    };
+  }
   function openCategory(id) {
     const row = (data.rows || []).find(item => item.movement_id === id);
     if (!row) return;
     dialog("Set transaction category", `<p>${escape(row.merchant)} · ${escape(row.source_label)} · ${escape(row.date)}</p>
       <form id="category-entry-form" class="personal-ledger-form">
-      <label class="personal-ledger-wide">Transaction type (explicit correction)<select name="flow_kind">${[["spend","Expense"],["income","Income"],["credit","Refund / credit"],["personal_transfer","Own-account transfer"],["investment","Investment"],["cash_withdrawal","Cash withdrawal"],["fee","Bank fee"]].map(([kind,label])=>`<option value="${kind}" ${row.flow_kind===kind?"selected":""}>${label}</option>`).join("")}</select></label>
+      <label class="personal-ledger-wide">Transaction type (explicit correction)<select name="flow_kind">${[["spend","Expense"],["income","Income"],["credit","Refund / credit"],["personal_transfer","Own-account transfer"],["top_up","Money in from own account"],["investment","Investment"],["cash_withdrawal","Cash withdrawal"],["fee","Bank fee"]].map(([kind,label])=>`<option value="${kind}" ${row.flow_kind===kind?"selected":""}>${label}</option>`).join("")}</select></label>
       <label>Category<select name="category">${options(row.category)}</select></label>
       <label>Subcategory<input name="subcategory" maxlength="500" value="${escape(row.subcategory)}"></label>
       <label class="personal-ledger-wide personal-ledger-check"><input name="learn" type="checkbox" checked>Use for the same merchant, source and direction</label>
@@ -114,7 +125,11 @@
     if (!button) return;
     if (button.dataset.categoryEdit) return openCategory(Number(button.dataset.categoryEdit));
     if (button.dataset.cashEdit) return window.openCashEntry(button.dataset.cashEdit);
+    if (button.dataset.balanceAccount) return openAccountBalance(button.dataset.balanceAccount, button.dataset.balanceEdit || "", button.dataset.balanceAmount || "");
     try {
+      if (button.dataset.balanceDelete && confirm("Remove this balance?")) {
+        button.disabled = true; await write({action:"delete_balance", id:button.dataset.balanceDelete});
+      }
       if (button.dataset.cashDelete && confirm("Delete this manual cash entry?")) {
         button.disabled = true; await write({action:"delete_cash", id:button.dataset.cashDelete});
       }

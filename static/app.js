@@ -2544,7 +2544,8 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
     }
     function expenseKind(row) {
       const flow = String(row.flow_kind || "");
-      const known = {income: "income", credit: "credits", investment: "investments", personal_transfer: "transfers", spend: "spend", fee: "spend", cash_withdrawal: "transfers", top_up: "topups", transfer_out: "transfers"};
+      // Calculated rows are balance gaps of reconciled accounts: expenses and income of their own category.
+      const known = {income: "income", credit: "credits", investment: "investments", personal_transfer: "transfers", spend: "spend", fee: "spend", cash_withdrawal: "transfers", top_up: "topups", transfer_out: "transfers", calculated_expense: "spend", calculated_income: "income"};
       if (known[flow]) return known[flow];
       const category = String(row.category || "");
       if (flow === "income" || category === "Income") return "income";
@@ -2593,6 +2594,12 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       let investments = 0;
       let credits = 0;
       let topups = 0;
+      // Money in from the user's own accounts, whether or not the giroconti are shown,
+      // and the part no imported account's outgoing transfer explains.
+      let topupsAll = 0;
+      let unmatchedTopups = 0;
+      let calculatedExpenses = 0;
+      let calculatedIncome = 0;
       const creditRows = [];
       const incomeRows = [];
 
@@ -2601,8 +2608,14 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         const isRefund = row.flow_kind === "refund";
         const amount = Number(row.amount_eur || 0) * (isRefund ? -1 : 1);
         if (!Number.isFinite(amount) || amount === 0) return;
-        if (row.internal && !includeGiroconti) return;
         const kind = isRefund ? "spend" : expenseKind(row);
+        if (kind === "topups") {
+          topupsAll += amount;
+          if (!row.internal) unmatchedTopups += amount;
+        }
+        if (row.internal && !includeGiroconti) return;
+        if (row.flow_kind === "calculated_expense") calculatedExpenses += amount;
+        else if (row.flow_kind === "calculated_income") calculatedIncome += amount;
         if (kind === "income") {
           income += amount;
           incomeRows.push(row);
@@ -2672,6 +2685,10 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         investments,
         credits,
         topups,
+        topupsAll,
+        unmatchedTopups,
+        calculatedExpenses,
+        calculatedIncome,
         totalOutflow,
         netOutflow,
         balance: income - spend,
@@ -2919,7 +2936,8 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       document.getElementById("expense-metrics").innerHTML = expenses.loading ? `<div class="empty-state">Loading transactions…</div>` : unavailable ? `<div class="empty-state">${escapeHtml(message)}</div>` : `
         <div class="expense-item"><span>Income</span><strong class="positive">${money(expenses.income)}</strong></div>
         <div class="expense-item"><span>Expenses</span><strong class="negative">${money(expenses.spend)}</strong></div>
-        <div class="expense-item"><span>Balance</span><strong class="${signedClass(expenses.balance)}">${money(expenses.balance)}</strong></div>
+        <div class="expense-item"><span>Money in from your other accounts</span><strong>${money(expenses.topupsAll)}</strong></div>
+        <div class="expense-item"><span>${NET_IMPORTED_LABEL}</span><strong class="${signedClass(expenses.balance)}">${money(expenses.balance)}</strong></div>
         <div class="expense-item"><span>Transfers</span><strong class="negative">${money(expenses.transfers)}</strong></div>
         <div class="expense-item"><span>Investments</span><strong class="negative">${money(expenses.investments)}</strong></div>
         <div class="expense-item"><span>Credits</span><strong>${money(expenses.credits)}</strong></div>
@@ -2995,8 +3013,58 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
             <td>${money(row.amount)}</td>
           </tr>
         `).join("");
+      const topupNote = document.getElementById("expense-topup-note");
+      if (topupNote) {
+        topupNote.textContent = expenses.loading || unavailable ? "" : unmatchedTopupNote(expenses);
+        topupNote.hidden = !topupNote.textContent;
+      }
+      renderReconciliation(expenses.reconciliation);
       renderExpenseTransactions();
       renderExpenseTrend(expenses.months);
+    }
+    const NET_IMPORTED_LABEL = "Income − expenses (imported accounts)";
+    // Top-ups no imported account's outgoing transfer explains came from an account
+    // that is not imported: the income that funded them never reaches this page.
+    function unmatchedTopupNote(expenses) {
+      const amount = Number(expenses.unmatchedTopups || 0);
+      return amount >= 0.5 ? `${money(amount)} came in from accounts that are not imported, so the income that funded it is not counted.` : "";
+    }
+    // Balances do not follow the selected window: every interval of every account is listed.
+    function renderReconciliation(reconciliation) {
+      const accountsBody = document.getElementById("reconciliation-accounts");
+      const intervalsBody = document.getElementById("reconciliation-intervals");
+      if (!accountsBody || !intervalsBody) return;
+      const accounts = reconciliation?.accounts || [];
+      const intervals = reconciliation?.intervals || [];
+      accountsBody.innerHTML = !accounts.length
+        ? `<tr><td colspan="4" class="empty-state">No imported cash accounts yet.</td></tr>`
+        : accounts.map(row => {
+          const entries = row.manual_balances || [];
+          const latest = entries[entries.length - 1];
+          const actions = latest
+            ? `<button type="button" data-balance-edit="${escapeHtml(latest.id)}" data-balance-account="${escapeHtml(row.account)}" data-balance-amount="${Number(latest.balance_eur)}">Edit ${escapeHtml(latest.date)}</button> <button type="button" data-balance-delete="${escapeHtml(latest.id)}">Remove</button> <button type="button" data-balance-account="${escapeHtml(row.account)}">Enter current balance</button>`
+            : `<button type="button" data-balance-account="${escapeHtml(row.account)}">Enter current balance</button>`;
+          return `
+          <tr>
+            <td>${escapeHtml(row.account)}</td>
+            <td class="ta-l">${escapeHtml(row.message || "")}</td>
+            <td>${row.latest_balance_eur === null || row.latest_balance_eur === undefined ? "-" : `${money(row.latest_balance_eur)} · ${escapeHtml(row.latest_balance_date || "")}`}</td>
+            <td>${actions}</td>
+          </tr>`;
+        }).join("");
+      intervalsBody.innerHTML = !intervals.length
+        ? `<tr><td colspan="7" class="empty-state">Two balances of one account are needed for a reconciliation period.</td></tr>`
+        : intervals.slice().reverse().map(row => `
+          <tr>
+            <td>${escapeHtml(row.account)}</td>
+            <td>${escapeHtml(row.start)} → ${escapeHtml(row.end)}</td>
+            <td>${money(row.opening_eur)}</td>
+            <td>${money(row.closing_eur)}</td>
+            <td>${money(row.recorded_eur)}${row.movements ? "" : " · none imported"}</td>
+            <td class="${row.calculated ? signedClass(row.gap_eur) : ""}">${money(row.gap_eur)}</td>
+            <td>${row.calculated === "expense" ? "Calculated expenses" : row.calculated === "income" ? "Calculated income" : "Reconciled"}</td>
+          </tr>
+        `).join("");
     }
     let expenseRowLimit = 30;
     function renderExpenseTransactions() {
@@ -3876,10 +3944,15 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       const expenses = periodExpenses(data);
       const cash = data.expenses?.cash_ledger || {};
       const loading = Boolean(data.expenses?.loading);
-      target.innerHTML = [["Income",expenses.income,"positive"],["Expenses",expenses.spend,"negative"],["Income minus expenses",expenses.balance,signedClass(expenses.balance)],["Refunds & credits",expenses.credits,""],["Transfers (gross movements)",expenses.transfers,""],["Manual cash · all dates",cash.balance, signedClass(cash.balance)]].map(([label,value,klass])=>`<div class="metric"><span>${escapeHtml(label)}</span><strong class="${loading ? "" : klass}">${loading ? "…" : moneyWhole(value)}</strong></div>`).join("");
+      target.innerHTML = [["Income",expenses.income,"positive"],["Expenses",expenses.spend,"negative"],["Money in from your other accounts",expenses.topupsAll,""],[NET_IMPORTED_LABEL,expenses.balance,signedClass(expenses.balance)],["Refunds & credits",expenses.credits,""],["Transfers (gross movements)",expenses.transfers,""],["Manual cash · all dates",cash.balance, signedClass(cash.balance)]].map(([label,value,klass])=>`<div class="metric"><span>${escapeHtml(label)}</span><strong class="${loading ? "" : klass}">${loading ? "…" : moneyWhole(value)}</strong></div>`).join("");
       document.getElementById("money-window").textContent = loading ? `${selectedWindowLabel()} · loading transactions…` : `${selectedWindowLabel()} · ${expenses.rows.length} classified transactions`;
       const coverage = data.expenses?.coverage || [];
       document.getElementById("money-coverage").textContent = coverage.length ? coverage.map(row=>`${row.source}: ${row.first_date} → ${row.last_date}`).join(" · ") : "Coverage is limited to imported statements; receipts are not necessarily salary.";
+      const topupNote = document.getElementById("money-topup-note");
+      if (topupNote) {
+        topupNote.textContent = loading ? "" : unmatchedTopupNote(expenses);
+        topupNote.hidden = !topupNote.textContent;
+      }
       document.getElementById("investment-scope").textContent = `${selectedWindowLabel()} · ${selectedReturnMode === "total" ? "Securities + reconstructed investment cash, dividends included" : "Securities only, excluding dividends"}. Benchmark chart compares equity total return with MSCI World.`;
     }
     window.openIncomeExpenses = () => {

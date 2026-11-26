@@ -9,6 +9,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook  # type: ignore[import-untyped]
 
+from . import intesa_pdf
 from .fineco import has_fineco_bank_headers
 
 ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx", ".pdf"}
@@ -28,7 +29,7 @@ SOURCE_EXTENSIONS = {
     "interactive_brokers": (".pdf",),
     "etoro": (".xlsx",),
     "revolut": (".csv",),
-    "intesa": (".xlsx",),
+    "intesa": (".xlsx", ".pdf"),
     "bbva": (".xls",),
     "manual": (".csv", ".xlsx"),
 }
@@ -67,7 +68,8 @@ def detect_statement_source(path: Path, requested_source: str = "auto") -> str:
         return requested
 
     if suffix == ".pdf":
-        return "interactive_brokers"
+        # Without pdftotext the text cannot be read; IBKR stays the PDF default.
+        return "intesa" if intesa_pdf.looks_like_intesa_statement(path) else "interactive_brokers"
     if suffix == ".xls":
         return "bbva"
     if suffix == ".csv":
@@ -116,7 +118,8 @@ def import_destination(source_dir: Path, source: str, digest: str, original_name
         filename = f"account-statement-{stamp}-{digest[:10]}{suffix}"
         return source_dir / "cash_exports" / source / filename
     if source == "intesa":
-        filename = f"account_operations-{stamp}-{digest[:10]}{suffix}"
+        stem = "intesa-statement" if suffix == ".pdf" else "account_operations"
+        filename = f"{stem}-{stamp}-{digest[:10]}{suffix}"
         return source_dir / "cash_exports" / source / filename
     if source == "bbva":
         filename = f"bbva-{stamp}-{digest[:10]}{suffix}"

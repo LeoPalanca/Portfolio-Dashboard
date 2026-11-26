@@ -255,6 +255,7 @@
         </div>
         <p class="subtle" id="money-window"></p>
         <div id="money-overview" class="money-overview"></div>
+        <p class="subtle topup-note" id="money-topup-note" hidden></p>
         <p class="subtle" id="money-coverage"></p>
         <button type="button" class="sheet-link" onclick="openIncomeExpenses()">Manage income, expenses &amp; cash</button>
       </div>
@@ -721,6 +722,7 @@
       <div class="section-content" id="expenses-content">
         <div class="section-body">
           <div class="expense-summary" id="expense-metrics"></div>
+          <p class="subtle topup-note" id="expense-topup-note" hidden></p>
           <div class="personal-ledger-toolbar">
             <button type="button" onclick="openCashEntry()">Add cash income / expense</button>
             <button type="button" onclick="openNewCategory()">Create category</button>
@@ -728,7 +730,7 @@
             <span id="personal-ledger-status" class="subtle" role="status"></span>
           </div>
           <p class="subtle">Cash entries are separate from bank imports and investment returns. Identified bank withdrawals are transfers, not expenses. Record the withdrawal as a cash transfer in to fund this ledger, then enter cash purchases as expenses. Do not enter bank/card purchases here again.</p>
-          <p class="subtle">Balance = income minus expenses. Credits, transfers and investments are shown separately. Figures cover imported, classified transactions in the selected period.</p>
+          <p class="subtle">Income − expenses covers the imported accounts only. Credits, transfers, investments and money in from your other accounts are shown separately. Figures cover imported, classified transactions in the selected period. Calculated expenses and calculated income are balance gaps: money that left or reached a reconciled account without a recorded movement.</p>
           <div class="expense-grid">
             <div class="table-wrap">
               <h3>Expense categories</h3>
@@ -834,6 +836,18 @@
               <tbody id="expense-rows"></tbody>
             </table>
             <button type="button" id="expense-show-more" onclick="showMoreExpenseTransactions()">Show more transactions</button>
+          </div>
+          <div class="table-wrap">
+            <h3>Balance reconciliation <span class="subtle">(all dates)</span></h3>
+            <p class="subtle">Statement balances and the current balances you enter anchor each account. Between two balances, whatever the recorded movements do not explain becomes Calculated expenses or Calculated income (gaps under €1 are ignored), so the account ends at its real balance.</p>
+            <table>
+              <thead><tr><th>Account</th><th>Status</th><th>Latest balance</th><th>Current balance</th></tr></thead>
+              <tbody id="reconciliation-accounts"></tbody>
+            </table>
+            <table>
+              <thead><tr><th>Account</th><th>Period</th><th>Opening</th><th>Closing</th><th>Recorded movements</th><th>Gap</th><th>Result</th></tr></thead>
+              <tbody id="reconciliation-intervals"></tbody>
+            </table>
           </div>
           <div class="table-wrap">
             <h3>Manual cash ledger <span class="subtle">(all dates)</span></h3>

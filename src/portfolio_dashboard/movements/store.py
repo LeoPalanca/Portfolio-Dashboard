@@ -21,7 +21,7 @@ def _event_family(kind: str) -> str:
     return (
         "bank"
         if kind
-        in {"income", "spend", "credit", "personal_transfer", "investment", "fee", "cash_withdrawal", "cash_movement"}
+        in {"income", "spend", "credit", "personal_transfer", "investment", "fee", "cash_withdrawal", "cash_movement", "top_up"}
         else kind
     )
 

@@ -109,7 +109,7 @@ layout compatible.
 | Interactive Brokers | PDF | Trade-confirmation report; requires `pdftotext` |
 | eToro | XLSX | Account-statement workbook; opened positions are purchases and long positions in `Posizioni chiuse` are sales (short positions are skipped and reported) |
 | Revolut | CSV | Account statement or Italian consolidated statement, including native-currency transactions and net savings interest |
-| Intesa | XLSX | Account-operations workbook |
+| Intesa | XLSX or PDF | Account-operations workbook, or the quarterly current-account statement (`pdftotext`; statements whose amounts carry no text are refused) |
 | BBVA | XLS | Account workbook |
 | Personal trades | CSV or XLSX | Header-based template available during onboarding |
 | Snapshot portfolio | CSV | Declared in a local portfolio profile |
@@ -133,8 +133,17 @@ appended twice. The import dialog lists every imported file; deleting one remove
 movements, re-reads the other files of that platform so rows they also contain stay,
 and keeps the file from being imported again at startup (uploading it again brings it
 back). Revolut cash rows that appear in both the regular and the consolidated
-statement are stored once. A Trade Republic export named after another portfolio's
-holder is only imported into that portfolio.
+statement are stored once, and so are Intesa movements found in both a quarterly PDF
+and the XLSX export. A Trade Republic export named after another portfolio's holder
+is only imported into that portfolio. Startup also re-reads any import an older parser
+produced from the file its record points to, wherever it is archived.
+
+Statement balances (Intesa PDF opening and closing balances, Revolut's running
+balance) and the current balances entered under Income & expenses are reconciliation
+checkpoints, never cash flows. Between two checkpoints of an account, a change its
+recorded movements do not explain (beyond €1) is shown as Calculated expenses or
+Calculated income, so the account ends at its real balance; accounts without two
+balances are listed as not reconciled and get nothing calculated.
 
 ### Personal trade template
 

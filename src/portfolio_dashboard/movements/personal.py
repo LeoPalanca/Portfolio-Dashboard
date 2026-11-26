@@ -50,6 +50,11 @@ class PersonalLedger:
             CREATE TABLE IF NOT EXISTS manual_cash_settings (
                 portfolio_id TEXT PRIMARY KEY, opening_balance TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS account_balances (
+                id TEXT PRIMARY KEY, portfolio_id TEXT NOT NULL, account TEXT NOT NULL,
+                occurred_on TEXT NOT NULL, balance TEXT NOT NULL,
+                UNIQUE (portfolio_id, account, occurred_on)
+            );
         """)
         columns = {row[1] for row in connection.execute("PRAGMA table_info(expense_overrides)")}
         if "flow_kind" not in columns:
@@ -143,7 +148,7 @@ class PersonalLedger:
             ]
 
     def set_direction(self, owner: str, movement_id: int, flow_kind: str) -> None:
-        if flow_kind not in {"income", "spend", "credit", "personal_transfer", "investment", "cash_withdrawal", "fee"}:
+        if flow_kind not in {"income", "spend", "credit", "personal_transfer", "investment", "cash_withdrawal", "fee", "top_up"}:
             raise ValueError("Choose a supported transaction type")
         with closing(self.connect()) as connection, connection:
             connection.execute(
@@ -278,3 +283,55 @@ class PersonalLedger:
             "balance": float(opening + change) if opening is not None else None,
             "change": float(change),
         }
+
+    def account_balances(self, owner: str) -> list[dict]:
+        """Current balances the user entered per account, oldest first."""
+
+        with closing(self.connect()) as connection:
+            rows = connection.execute(
+                "SELECT id, account, occurred_on, balance FROM account_balances WHERE portfolio_id=? ORDER BY occurred_on, account",
+                (owner,),
+            ).fetchall()
+        return [
+            {"id": row["id"], "account": row["account"], "date": date.fromisoformat(row["occurred_on"]), "balance": Decimal(row["balance"])}
+            for row in rows
+        ]
+
+    def save_account_balance(self, owner: str, payload: dict, accounts: Collection[str]) -> str:
+        """Record an account's balance as of today; editing keeps the day it was first saved."""
+
+        account = str(payload.get("account") or "").strip()
+        if account not in accounts:
+            raise ValueError("Choose an imported account")
+        try:
+            balance = Decimal(str(payload.get("amount", "")))
+        except InvalidOperation:
+            raise ValueError("Enter a valid EUR balance") from None
+        if not balance.is_finite() or abs(balance) > Decimal(1000000000) or balance != balance.quantize(Decimal("0.01")):
+            raise ValueError("The balance must be EUR with at most two decimal places")
+        identifier = str(payload.get("id") or "")
+        with closing(self.connect()) as connection, connection:
+            if identifier:
+                if not connection.execute(
+                    "UPDATE account_balances SET balance=? WHERE id=? AND portfolio_id=? AND account=?",
+                    (str(balance), identifier, owner, account),
+                ).rowcount:
+                    raise ValueError("Balance entry not found")
+                return identifier
+            today = date.today().isoformat()  # noqa: DTZ011 - balances use the server's local calendar
+            existing = connection.execute(
+                "SELECT id FROM account_balances WHERE portfolio_id=? AND account=? AND occurred_on=?", (owner, account, today)
+            ).fetchone()
+            identifier = existing[0] if existing else str(uuid.uuid4())
+            connection.execute(
+                "INSERT INTO account_balances VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET balance=excluded.balance",
+                (identifier, owner, account, today, str(balance)),
+            )
+        return identifier
+
+    def delete_account_balance(self, owner: str, identifier: str) -> None:
+        with closing(self.connect()) as connection, connection:
+            if not connection.execute(
+                "DELETE FROM account_balances WHERE portfolio_id=? AND id=?", (owner, identifier)
+            ).rowcount:
+                raise ValueError("Balance entry not found")

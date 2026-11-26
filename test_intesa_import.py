@@ -58,7 +58,8 @@ class IntesaImportTest(unittest.TestCase):
                 response = upload()
                 self.assertEqual(response.status_code, 200, response.get_json())
                 self.assertEqual(response.get_json()["source"], "intesa")
-                self.assertEqual(response.get_json()["movements"], 6)
+                # The receipt from the owner's own name is kept as a top-up, not income.
+                self.assertEqual(response.get_json()["movements"], 7)
                 self.assertEqual(upload().get_json()["status"], "duplicate")
                 events = app.read_ledger_expenses()
                 summary = app.summarize_expense_events(events)["summary"]
@@ -66,6 +67,7 @@ class IntesaImportTest(unittest.TestCase):
                 self.assertEqual(summary["spend_eur"], 50)
                 self.assertEqual(summary["credits_eur"], 20)
                 self.assertEqual(summary["transfers_eur"], 750)
+                self.assertEqual(summary["topups_eur"], 500)
                 self.assertEqual(summary["investments_eur"], 0)
                 self.assertEqual(app.get_movement_store().movements(event_types=("trade", "cash_flow")), [])
                 self.assertEqual(len(list((root / "sources/cash_exports/intesa").glob("account_operations-*.xlsx"))), 1)
