@@ -2554,6 +2554,18 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       if (flow === "personal_transfer" || category === "Personal Transfers") return "transfers";
       return "spend";
     }
+    // Money back from an investment (a redemption or a sale) is an inflow: it lowers
+    // the net investment outflow and shows as money in, never as income or spending.
+    function isInvestmentInflow(row) {
+      return expenseKind(row) === "investments" && Number(row.native_amount || 0) > 0;
+    }
+    // A row's amount as money in (+) or out (−) of the account.
+    function expenseSignedAmount(row) {
+      const kind = expenseKind(row);
+      const amount = Number(row.amount_eur || 0);
+      if (row.cash_id) return Number(row.native_amount || 0);
+      return kind === "income" || kind === "credits" || isInvestmentInflow(row) ? amount : -amount;
+    }
     // Card statements spell one shop many ways (processor prefixes, store numbers,
     // city suffixes, legal forms). Group them under one display name.
     const MERCHANT_ALIASES = [
@@ -2606,7 +2618,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       (rows || []).forEach(row => {
         // Card refunds are negative spending, matching the server-side summary.
         const isRefund = row.flow_kind === "refund";
-        const amount = Number(row.amount_eur || 0) * (isRefund ? -1 : 1);
+        const amount = Number(row.amount_eur || 0) * (isRefund || isInvestmentInflow(row) ? -1 : 1);
         if (!Number.isFinite(amount) || amount === 0) return;
         const kind = isRefund ? "spend" : expenseKind(row);
         if (kind === "topups") {
@@ -2692,6 +2704,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         totalOutflow,
         netOutflow,
         balance: income - spend,
+        balanceWithCredits: income + credits - spend,
         rows: rows || [],
         incomeRows: incomeRows.sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))),
         creditRows: creditRows.sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))),
@@ -2938,8 +2951,9 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
         <div class="expense-item"><span>Expenses</span><strong class="negative">${money(expenses.spend)}</strong></div>
         <div class="expense-item"><span>Money in from your other accounts</span><strong>${money(expenses.topupsAll)}</strong></div>
         <div class="expense-item"><span>${NET_IMPORTED_LABEL}</span><strong class="${signedClass(expenses.balance)}">${money(expenses.balance)}</strong></div>
+        <div class="expense-item"><span>${NET_WITH_CREDITS_LABEL}</span><strong class="${signedClass(expenses.balanceWithCredits)}">${money(expenses.balanceWithCredits)}</strong></div>
         <div class="expense-item"><span>Transfers</span><strong class="negative">${money(expenses.transfers)}</strong></div>
-        <div class="expense-item"><span>Investments</span><strong class="negative">${money(expenses.investments)}</strong></div>
+        <div class="expense-item"><span>Investments</span><strong class="${signedClass(-expenses.investments)}">${money(expenses.investments)}</strong></div>
         <div class="expense-item"><span>Credits</span><strong>${money(expenses.credits)}</strong></div>
       `;
       document.getElementById("expense-categories").innerHTML = !expenses.categories.length
@@ -3023,11 +3037,22 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       renderExpenseTrend(expenses.months);
     }
     const NET_IMPORTED_LABEL = "Income − expenses (imported accounts)";
+    // Credits are money received that is not income: reimbursements, a relative's transfer.
+    const NET_WITH_CREDITS_LABEL = "Income + money received − expenses";
     // Top-ups no imported account's outgoing transfer explains came from an account
     // that is not imported: the income that funded them never reaches this page.
     function unmatchedTopupNote(expenses) {
       const amount = Number(expenses.unmatchedTopups || 0);
       return amount >= 0.5 ? `${money(amount)} came in from accounts that are not imported, so the income that funded it is not counted.` : "";
+    }
+    // A sub-account in another currency (a Revolut CHF account) reconciles in that currency.
+    function accountMoney(value, currency) {
+      if (!currency || currency === "EUR" || value === null || value === undefined || Number.isNaN(Number(value))) return money(value);
+      try {
+        return new Intl.NumberFormat("en-IE", { style: "currency", currency }).format(Number(value));
+      } catch (_error) {
+        return `${Number(value).toFixed(2)} ${escapeHtml(currency)}`;
+      }
     }
     // Balances do not follow the selected window: every interval of every account is listed.
     function renderReconciliation(reconciliation) {
@@ -3048,7 +3073,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
           <tr>
             <td>${escapeHtml(row.account)}</td>
             <td class="ta-l">${escapeHtml(row.message || "")}</td>
-            <td>${row.latest_balance_eur === null || row.latest_balance_eur === undefined ? "-" : `${money(row.latest_balance_eur)} · ${escapeHtml(row.latest_balance_date || "")}`}</td>
+            <td>${row.latest_balance_eur === null || row.latest_balance_eur === undefined ? "-" : `${accountMoney(row.latest_balance_eur, row.currency)} · ${escapeHtml(row.latest_balance_date || "")}`}</td>
             <td>${actions}</td>
           </tr>`;
         }).join("");
@@ -3058,10 +3083,10 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
           <tr>
             <td>${escapeHtml(row.account)}</td>
             <td>${escapeHtml(row.start)} → ${escapeHtml(row.end)}</td>
-            <td>${money(row.opening_eur)}</td>
-            <td>${money(row.closing_eur)}</td>
-            <td>${money(row.recorded_eur)}${row.movements ? "" : " · none imported"}</td>
-            <td class="${row.calculated ? signedClass(row.gap_eur) : ""}">${money(row.gap_eur)}</td>
+            <td>${accountMoney(row.opening_eur, row.currency)}</td>
+            <td>${accountMoney(row.closing_eur, row.currency)}</td>
+            <td>${accountMoney(row.recorded_eur, row.currency)}${row.movements ? "" : " · none imported"}</td>
+            <td class="${row.calculated ? signedClass(row.gap_eur) : ""}">${accountMoney(row.gap_eur, row.currency)}</td>
             <td>${reconciliationResult(row)}</td>
           </tr>
         `).join("");
@@ -3081,8 +3106,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       document.getElementById("expense-rows").innerHTML = !rows.length
         ? `<tr><td colspan="7" class="empty-state">No matching transactions</td></tr>`
         : rows.slice(0, expenseRowLimit).map(row => {
-          const kind = expenseKind(row);
-          const signedAmount = row.cash_id ? Number(row.native_amount || 0) : kind === "income" ? Number(row.amount_eur || 0) : (kind === "credits" ? Number(row.amount_eur || 0) : -Number(row.amount_eur || 0));
+          const signedAmount = expenseSignedAmount(row);
           return `
             <tr>
               <td>${escapeHtml(row.date)}</td>
@@ -3195,8 +3219,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       };
 
       const subcatRowsHtml = rows.map(row => {
-        const kind = expenseKind(row);
-        const signedAmount = kind === "income" ? Number(row.amount_eur || 0) : (kind === "credits" ? Number(row.amount_eur || 0) : -Number(row.amount_eur || 0));
+        const signedAmount = expenseSignedAmount({ ...row, cash_id: null });
         const amountClass = signedAmount > 0 ? "positive" : (signedAmount < 0 ? "negative" : "");
         return `
           <tr style="border-bottom: 1px solid var(--tint-subtle);">
@@ -3259,10 +3282,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
           return multiplier * String(a.description || "").localeCompare(String(b.description || ""));
         }
         if (columnName === "amount") {
-          const getVal = row => {
-            const kind = expenseKind(row);
-            return kind === "income" ? Number(row.amount_eur || 0) : (kind === "credits" ? Number(row.amount_eur || 0) : -Number(row.amount_eur || 0));
-          };
+          const getVal = row => expenseSignedAmount({ ...row, cash_id: null });
           return multiplier * (getVal(a) - getVal(b));
         }
         return 0;
@@ -3952,7 +3972,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       const expenses = periodExpenses(data);
       const cash = data.expenses?.cash_ledger || {};
       const loading = Boolean(data.expenses?.loading);
-      target.innerHTML = [["Income",expenses.income,"positive"],["Expenses",expenses.spend,"negative"],["Money in from your other accounts",expenses.topupsAll,""],[NET_IMPORTED_LABEL,expenses.balance,signedClass(expenses.balance)],["Refunds & credits",expenses.credits,""],["Transfers (gross movements)",expenses.transfers,""],["Manual cash · all dates",cash.balance, signedClass(cash.balance)]].map(([label,value,klass])=>`<div class="metric"><span>${escapeHtml(label)}</span><strong class="${loading ? "" : klass}">${loading ? "…" : moneyWhole(value)}</strong></div>`).join("");
+      target.innerHTML = [["Income",expenses.income,"positive"],["Expenses",expenses.spend,"negative"],["Money in from your other accounts",expenses.topupsAll,""],[NET_IMPORTED_LABEL,expenses.balance,signedClass(expenses.balance)],[NET_WITH_CREDITS_LABEL,expenses.balanceWithCredits,signedClass(expenses.balanceWithCredits)],["Refunds & credits",expenses.credits,""],["Transfers (gross movements)",expenses.transfers,""],["Manual cash · all dates",cash.balance, signedClass(cash.balance)]].map(([label,value,klass])=>`<div class="metric"><span>${escapeHtml(label)}</span><strong class="${loading ? "" : klass}">${loading ? "…" : moneyWhole(value)}</strong></div>`).join("");
       document.getElementById("money-window").textContent = loading ? `${selectedWindowLabel()} · loading transactions…` : `${selectedWindowLabel()} · ${expenses.rows.length} classified transactions`;
       const coverage = data.expenses?.coverage || [];
       document.getElementById("money-coverage").textContent = coverage.length ? coverage.map(row=>`${row.source}: ${row.first_date} → ${row.last_date}`).join(" · ") : "Coverage is limited to imported statements; receipts are not necessarily salary.";

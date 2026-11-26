@@ -355,7 +355,8 @@ class ExpenseSummaryTest(unittest.TestCase):
                 self.event(date(2026, 1, 1), "spend", "100", "Shopping"),
                 self.event(date(2026, 1, 2), "income", "20", "Income"),
                 self.event(date(2026, 1, 3), "personal_transfer", "30", "Personal Transfers"),
-                self.event(date(2026, 1, 4), "investment", "40", "Investments"),
+                # Money paid into an investment: an outflow, so its native amount is negative.
+                {**self.event(date(2026, 1, 4), "investment", "40", "Investments"), "native_amount": Decimal("-40")},
                 self.event(date(2026, 1, 5), "credit", "60", "Credits"),
             ]
         )

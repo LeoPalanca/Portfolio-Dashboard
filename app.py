@@ -47,7 +47,7 @@ from src.portfolio_dashboard.ibkr_monitor import create_ibkr_blueprint
 from src.portfolio_dashboard.web_delivery import SlimResponseCache, distribution_details, install_asset_delivery
 from src.portfolio_dashboard.web_security import install_web_security, restrict_pdf_resource_access
 from src.portfolio_dashboard.cache import HistoryStore
-from src.portfolio_dashboard.config import get_settings
+from src.portfolio_dashboard.config import PortfolioProfile, get_settings
 from src.portfolio_dashboard.domain import (
     ZERO,
     Dividend,
@@ -70,7 +70,8 @@ from src.portfolio_dashboard.imports import (
 from src.portfolio_dashboard.ingest import BrokerAdapter, FunctionBrokerAdapter
 from src.portfolio_dashboard.imports.fineco import read_fineco_security_rows
 from src.portfolio_dashboard.imports.intesa_pdf import IntesaStatement, parse_intesa_statement_text, statement_row_fields
-from src.portfolio_dashboard.imports.revolut import read_revolut_rows
+from src.portfolio_dashboard.imports.intesa_pdf import INVESTMENT_OPERATION, detail_beneficiary, statement_row_beneficiary
+from src.portfolio_dashboard.imports.revolut import JOINT, JOINT_TRANSFER, INTERNAL_TRANSFER, read_revolut_rows, statement_period
 from src.portfolio_dashboard.movements import MovementStore
 from src.portfolio_dashboard.movements.ledger_csv import (
     BALANCE_COLUMNS,
@@ -209,7 +210,12 @@ DASHBOARD_CACHE_FORMAT_VERSION = 8
 # ledger-6: Intesa own-account transfers are kept (as transfers and top-ups) instead of
 # dropped, so the account's movements add up to its statement balances and top-ups
 # elsewhere can be matched to the transfer that funded them.
-IMPORT_PARSER_VERSION = "ledger-6"
+# ledger-7: consolidated Revolut rows carry their sub-account (pocket, vault, deposit,
+# Pro, joint account) and its running balance, foreign-currency tables are read in
+# their own currency, the joint account goes to the profile with the
+# "revolut_joint_account" feature, and Intesa fund redemptions and subscriptions are
+# investment flows instead of refunds.
+IMPORT_PARSER_VERSION = "ledger-7"
 _DASHBOARD_CACHE_LOCK = threading.Lock()
 _DASHBOARD_BUILD_LOCKS: dict[Path, threading.Lock] = {}
 _DASHBOARD_REFRESH_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dashboard-refresh")
@@ -1353,7 +1359,55 @@ def read_cash_interests_from_raw_files(person: str = PRIMARY_PORTFOLIO_ID) -> li
     return sorted(interests, key=lambda x: x["date"], reverse=True)
 
 
+REVOLUT_JOINT_ACCOUNT_FEATURE = "revolut_joint_account"
+
+
+def portfolio_profile(portfolio_id: str) -> PortfolioProfile | None:
+    """The configured profile of ``portfolio_id``, whatever the case of its config key."""
+
+    key = (portfolio_id or "").strip().lower()
+    return next((profile for name, profile in SETTINGS.portfolios.items() if name.lower() == key), None)
+
+
+def keeps_revolut_joint_account(portfolio_id: str) -> bool:
+    """Whether a profile holds the Revolut joint account instead of the holder's own sub-accounts."""
+
+    profile = portfolio_profile(portfolio_id)
+    return profile is not None and REVOLUT_JOINT_ACCOUNT_FEATURE in profile.features
+
+
+def revolut_profile_rows(path: Path, joint: bool = False) -> list[dict[str, str]]:
+    """A statement's rows for one side: the joint account's (``joint``) or everything else.
+
+    Only the consolidated statement names sub-accounts; a regular statement's rows
+    belong to whichever account it was exported from, so both sides keep them.
+    """
+
+    return [row for row in read_revolut_rows(path) if not row.get("Tipo conto") or (row["Tipo conto"] == JOINT) == joint]
+
+
+def revolut_account_metadata(row: dict[str, str]) -> dict[str, str]:
+    """The sub-account a consolidated-statement row belongs to; nothing for a regular statement."""
+
+    if not row.get("Conto"):
+        return {}
+    return {
+        "account_label": row["Conto"],
+        "sub_account": row.get("Sottoconto", ""),
+        "sub_account_kind": row.get("Tipo conto", ""),
+        "sub_account_currency": normalize_currency_code(row.get("Valuta") or "EUR"),
+    }
+
+
 def is_revolut_internal_movement(row: dict[str, str]) -> bool:
+    # The consolidated statement says which rows move money between the holder's own
+    # sub-accounts (pockets, vaults, deposit, Pro, other currencies), and which
+    # cross to or from the joint account: those are transfers of each profile.
+    transfer = row.get("Trasferimento")
+    if transfer == INTERNAL_TRANSFER:
+        return True
+    if transfer == JOINT_TRANSFER:
+        return False
     description = (row.get("Descrizione") or "").strip().lower()
     movement_type = (row.get("Tipo") or "").strip().lower()
     if not description and not movement_type:
@@ -1375,13 +1429,26 @@ def is_revolut_internal_movement(row: dict[str, str]) -> bool:
     return False
 
 
-def read_revolut_cash_events(paths: list[Path] | None = None) -> list[dict[str, Any]]:
+def revolut_joint_transfer_merchant(row: dict[str, str]) -> str:
+    """Who a transfer to or from the joint account was with, as the expense list names it."""
+
+    if row.get("Tipo conto") != JOINT:
+        return "Joint account"
+    match = re.match(
+        r"^(?:Pagamento (?:a favore di|da parte di|da)|Bonifico(?: SWIFT)? (?:a favore di|da)|To|From) (.+)$",
+        " ".join((row.get("Descrizione") or "").split()),
+        re.IGNORECASE,
+    )
+    return match.group(1) if match else "Joint account member"
+
+
+def read_revolut_cash_events(paths: list[Path] | None = None, joint: bool = False) -> list[dict[str, Any]]:
     source_paths = paths if paths is not None else revolut_statement_files()
     events: list[dict[str, Any]] = []
 
     for path in source_paths:
         try:
-            rows = read_revolut_rows(path)
+            rows = revolut_profile_rows(path, joint)
         except OSError:
             continue
         for row in rows:
@@ -1397,6 +1464,9 @@ def read_revolut_cash_events(paths: list[Path] | None = None) -> list[dict[str, 
                 continue
             currency = normalize_currency_code(row.get("Valuta") or "EUR")
             contrib_change_native = ZERO if is_revolut_internal_movement(row) else cash_change_native
+            metadata = revolut_account_metadata(row)
+            if row.get("Trasferimento") == JOINT_TRANSFER:
+                metadata["merchant"] = revolut_joint_transfer_merchant(row)
             events.append(
                 {
                     "datetime": event_time,
@@ -1404,25 +1474,30 @@ def read_revolut_cash_events(paths: list[Path] | None = None) -> list[dict[str, 
                     "cash_change": cash_change_native,
                     "contrib_change": contrib_change_native,
                     "currency": currency,
+                    "description": " ".join((row.get("Descrizione") or "").split()) or "Cash movement",
+                    "account_metadata": metadata,
                 }
             )
 
     return sorted(events, key=lambda item: item["datetime"])
 
 
-def read_revolut_balance_checkpoints(path: Path) -> list[dict[str, Any]]:
-    """Opening and closing EUR balance of a regular Revolut statement, from its "Saldo" column.
+def read_revolut_balance_checkpoints(path: Path, joint: bool = False) -> list[dict[str, Any]]:
+    """Opening and closing balances of a Revolut statement, from its running "Saldo" column.
 
-    Each product (current account, savings) keeps its own running balance, and the
-    account's balance is their sum. A product's balance before its first row is that
-    row's balance less the row's own amount and fee. The consolidated statement has
-    no such running balance per row, so it adds none.
+    A regular statement gives the EUR account's: each product (current account,
+    savings) keeps its own running balance, and the account's balance is their sum.
+    The consolidated statement gives each sub-account's own, in its own currency
+    (see :func:`consolidated_revolut_checkpoints`). A product's balance before its
+    first row is that row's balance less the row's own amount and fee.
     """
 
     try:
-        rows = read_revolut_rows(path)
+        rows = revolut_profile_rows(path, joint)
     except OSError:
         return []
+    if any(row.get("Conto") for row in rows):
+        return consolidated_revolut_checkpoints(rows, statement_period(path))
     first: dict[str, tuple[datetime, Decimal]] = {}
     last: dict[str, tuple[datetime, Decimal]] = {}
     for row in rows:
@@ -1449,6 +1524,52 @@ def read_revolut_balance_checkpoints(path: Path) -> list[dict[str, Any]]:
         normalize_checkpoint_movement("Revolut", opening_day, sum((value for _, value in first.values()), ZERO), f"Opening balance ({period})"),
         normalize_checkpoint_movement("Revolut", closing_day, sum((value for _, value in last.values()), ZERO), f"Closing balance ({period})"),
     ]
+
+
+def consolidated_revolut_checkpoints(
+    rows: list[dict[str, str]], period: tuple[date, date] | None = None
+) -> list[dict[str, Any]]:
+    """Each sub-account's balance before its first row and after its last one.
+
+    Rows keep the statement's order, in which each sub-account's running balance
+    accumulates; the balance before the first row is that row's balance less its
+    amount. A statement that states its period has those balances at the period's
+    start and end, so they are dated there; otherwise at the first and last row.
+    Balances are in the sub-account's currency, with their EUR equivalent kept for
+    converting a foreign sub-account's unexplained balance change.
+    """
+
+    by_account: dict[str, list[tuple[dict[str, str], date]]] = {}
+    for row in rows:
+        moment = parse_revolut_datetime(row.get("Data di completamento"))
+        if row.get("Conto") and str(row.get("Saldo") or "").strip() and row.get("State") == "COMPLETATO" and moment:
+            by_account.setdefault(row["Conto"], []).append((row, moment.date()))
+    checkpoints: list[dict[str, Any]] = []
+    for label, entries in by_account.items():
+        items, days = [row for row, _ in entries], [day for _, day in entries]
+        first, last = items[0], items[-1]
+        opening_day, closing_day = days[0] - timedelta(days=1), days[-1]
+        if period and period[0] <= min(days) and max(days) <= period[1]:
+            opening_day, closing_day = period[0] - timedelta(days=1), period[1]
+        currency = normalize_currency_code(first.get("Valuta") or "EUR")
+        opening = parse_decimal(first.get("Saldo")) - parse_decimal(first.get("Importo"))
+        opening_eur = (
+            parse_decimal(first.get("Saldo EUR")) - parse_decimal(first.get("Importo EUR"))
+            if first.get("Saldo EUR") and first.get("Importo EUR") else None
+        )
+        closing_eur = parse_decimal(last.get("Saldo EUR")) if last.get("Saldo EUR") else None
+        description = f"statement to {closing_day.isoformat()}"
+        for day, balance, balance_eur, name in (
+            (opening_day, opening, opening_eur, "Opening"),
+            (closing_day, parse_decimal(last.get("Saldo")), closing_eur, "Closing"),
+        ):
+            metadata: dict[str, Any] = {"account_label": label}
+            if balance_eur is not None:
+                metadata["balance_eur"] = balance_eur
+            checkpoints.append(
+                normalize_checkpoint_movement(label, day, balance, f"{name} balance ({description})", currency=currency, metadata=metadata)
+            )
+    return checkpoints
 
 
 def add_revolut_fx_histories(
@@ -1558,6 +1679,7 @@ EXPENSE_CATEGORIES = {
     "Investments",
     "Credits",
     "Income",
+    "Money received",
     "Refunds",
     "Uncategorized",
 }
@@ -1810,6 +1932,9 @@ def revolut_expense_flow_kind(row: dict[str, str], cash_change_native: Decimal) 
     description = (row.get("Descrizione") or "").strip().lower()
     if is_revolut_internal_movement(row):
         return ""
+    if row.get("Trasferimento") == JOINT_TRANSFER:
+        # The cash row stands for it: a transfer out or a top-up on each side.
+        return ""
     if "al conto di investimento" in description:
         return "investment"
     if movement_type == "pagamento con carta":
@@ -1849,6 +1974,7 @@ def read_revolut_expense_events(
     rules: list[ExpenseRule] | None = None,
     fx_histories: dict[str, dict[str, Any]] | None = None,
     refresh: bool = False,
+    joint: bool = False,
 ) -> list[dict[str, Any]]:
     source_paths = paths if paths is not None else revolut_statement_files()
     active_rules = rules if rules is not None else read_expense_category_rules()
@@ -1856,7 +1982,7 @@ def read_revolut_expense_events(
 
     for path in source_paths:
         try:
-            rows = read_revolut_rows(path)
+            rows = revolut_profile_rows(path, joint)
         except OSError:
             continue
         for row in rows:
@@ -1887,6 +2013,9 @@ def read_revolut_expense_events(
                     "flow_kind": flow_kind,
                     "currency": normalize_currency_code(row.get("Valuta") or "EUR"),
                     "native_amount": cash_change_native,
+                    # The consolidated statement prices a foreign row in EUR itself.
+                    "statement_eur": abs(parse_decimal(row["Importo EUR"])) if row.get("Importo EUR") else None,
+                    "account_label": row.get("Conto") or None,
                 }
             )
 
@@ -1894,17 +2023,21 @@ def read_revolut_expense_events(
         return []
 
     histories = fx_histories if fx_histories is not None else {}
-    event_dates = [event["date"] for event in raw_events]
-    add_revolut_fx_histories(raw_events, min(event_dates), max(event_dates), histories, refresh=refresh)
+    unpriced = [event for event in raw_events if event["statement_eur"] is None]
+    if unpriced:
+        event_dates = [event["date"] for event in unpriced]
+        add_revolut_fx_histories(unpriced, min(event_dates), max(event_dates), histories, refresh=refresh)
 
     events: list[dict[str, Any]] = []
     for raw_event in raw_events:
-        amount_eur = expense_amount_to_eur(
-            Decimal(str(raw_event["native_amount"])),
-            raw_event["currency"],
-            raw_event["date"],
-            histories,
-        )
+        amount_eur = raw_event["statement_eur"]
+        if amount_eur is None:
+            amount_eur = expense_amount_to_eur(
+                Decimal(str(raw_event["native_amount"])),
+                raw_event["currency"],
+                raw_event["date"],
+                histories,
+            )
         if amount_eur is None:
             report_import_issue(MISSING_FX_RATE, f"{raw_event['currency']} on {raw_event['date']}")
             continue
@@ -1919,6 +2052,7 @@ def read_revolut_expense_events(
                 currency=raw_event["currency"],
                 native_amount=raw_event["native_amount"],
                 rules=active_rules,
+                extra={"account_label": raw_event["account_label"]} if raw_event["account_label"] else None,
             )
         )
     return sorted(events, key=lambda item: (item["date"], item["source"], item["merchant"]))
@@ -2000,6 +2134,10 @@ def intesa_expense_flow_kind(source_category: str, merchant: str, description: s
     combined = f"{merchant} {description}".lower()
     if "giroconto" in category or "giroconto" in combined:
         return "personal_transfer"
+    # A fund or securities subscription, purchase, sale or redemption ("Rimborso
+    # titoli/quote/fondi") moves money into or out of an investment, like Fineco's.
+    if category.startswith("investimenti titoli") or INVESTMENT_OPERATION.search(f"{category} {combined}"):
+        return "investment"
     if amount > ZERO and ("rimbors" in category or "storni" in category):
         return "credit"
     if amount > ZERO:
@@ -2022,15 +2160,26 @@ def intesa_raw_event(
     amount: Decimal,
     own_transfers: bool,
     value_date: date | None = None,
+    beneficiary: str | None = None,
 ) -> dict[str, Any] | None:
     """Classify one Intesa movement the same way for the XLSX export and the PDF statement.
 
     A transfer to or from the account owner's own name moves money between their own
     accounts. It is never income or an expense; ``own_transfers`` keeps it as a
     transfer out or a top-up so the account still adds up, otherwise it is dropped.
+
+    A redemption or sale paid in is the owner's investment coming back only when its
+    beneficiary (``beneficiary``, else the details' "BENEF.:" label) is empty or one
+    of the owner's own names. A fund held by someone else whose proceeds reach this
+    account is money received from them: a credit, neither income nor investment.
     """
 
     flow_kind = intesa_expense_flow_kind(source_category, merchant, description, amount)
+    category = None
+    if flow_kind == "investment" and amount > ZERO:
+        holder = beneficiary if beneficiary is not None else detail_beneficiary(description)
+        if holder and not is_own_name(holder):
+            flow_kind, category, merchant = "credit", "Money received", holder
     # Intesa details include the recipient's name even for payroll and
     # third-party receipts. Only the operation/counterparty identifies an
     # own-account transfer; matching the full narrative drops real income.
@@ -2048,7 +2197,19 @@ def intesa_raw_event(
         "native_amount": amount,
         "source_category": source_category,
         "value_date": value_date,
+        **({"category": category} if category else {}),
     }
+
+
+def is_own_name(name: str) -> bool:
+    """Whether ``name`` is one of the account owner's configured names (``self_transfer_names``), in any word order."""
+
+    words = set(re.findall(r"\w+", name.casefold()))
+    for own in SELF_TRANSFER_NAMES:
+        own_words = set(re.findall(r"\w+", str(own).casefold()))
+        if own_words and (own_words <= words or (len(words) >= 2 and words <= own_words)):
+            return True
+    return False
 
 
 def intesa_expense_events(
@@ -2078,6 +2239,8 @@ def intesa_expense_events(
         extra: dict[str, Any] = {"source_category": raw_event["source_category"]}
         if raw_event.get("value_date"):
             extra["value_date"] = raw_event["value_date"]
+        if raw_event.get("category"):
+            extra["category"] = raw_event["category"]
         event = make_expense_event(
             event_date=raw_event["date"],
             source=raw_event["source"],
@@ -2186,7 +2349,8 @@ def intesa_pdf_movements(path: Path, rules: list[ExpenseRule] | None = None) -> 
     for row in statement.rows:
         source_category, merchant, description = statement_row_fields(row)
         raw_event = intesa_raw_event(
-            row.operation_date, merchant, description, source_category, "EUR", row.amount or ZERO, True, row.value_date
+            row.operation_date, merchant, description, source_category, "EUR", row.amount or ZERO, True, row.value_date,
+            beneficiary=statement_row_beneficiary(row),
         )
         if raw_event is not None:
             raw_events.append(raw_event)
@@ -2403,6 +2567,8 @@ def expense_event_payload(event: dict[str, Any]) -> dict[str, Any]:
         "confidence": round(float(event.get("confidence") or 0), 2),
         "internal": bool(event.get("internal")),
         "calculated": bool(event.get("calculated")),
+        # The sub-account of a consolidated Revolut statement, e.g. "Revolut · Vacanze (EUR)".
+        **({"account": event["account"]} if event.get("account") else {}),
     }
 
 
@@ -2430,6 +2596,10 @@ def summarize_expense_events(events: list[dict[str, Any]]) -> dict[str, Any]:
             # Refunds are negative spending: they reduce expenses, category
             # totals and net outflow without appearing as income.
             kind = "spend"
+            amount = -amount
+        if kind == "investments" and Decimal(str(row.get("native_amount") or 0)) > ZERO:
+            # Money back from an investment (a redemption or a sale) lowers the net
+            # investment outflow; it is never income, spending or a refund.
             amount = -amount
         if kind == "income":
             income += amount
@@ -2537,6 +2707,9 @@ def summarize_expense_events(events: list[dict[str, Any]]) -> dict[str, Any]:
             "calculated_expenses_eur": money(calculated_expenses),
             "calculated_income_eur": money(calculated_income),
             "net_outflow_eur": money(net_outflow),
+            # "Income − expenses (imported accounts)", and the same with money received (credits).
+            "balance_eur": money(income - spend),
+            "balance_with_credits_eur": money(income + credits - spend),
             "rows_count": len(rows),
         },
         "by_category": sorted(category_rows, key=lambda item: float(item.get("amount_eur") or 0), reverse=True),
@@ -2565,6 +2738,8 @@ def empty_expenses(message: str = "No expense data available for this selection.
             "calculated_expenses_eur": 0.0,
             "calculated_income_eur": 0.0,
             "net_outflow_eur": 0.0,
+            "balance_eur": 0.0,
+            "balance_with_credits_eur": 0.0,
             "rows_count": 0,
         },
         "by_category": [],
@@ -7979,7 +8154,15 @@ def _build_dashboard_payload(
     proxy_mode = normalize_proxy_mode(proxy_mode)
     broker = (broker or "all").strip().lower()
     ensure_legacy_statements_imported(person)
-    if person != PRIMARY_PORTFOLIO_ID and not get_movement_store().movements(person, ("trade",)):
+    profile = portfolio_profile(person)
+    # A profile without trades is shown from its holdings snapshot, when it has one;
+    # one with only bank data (a joint account) has empty investment sections.
+    if (
+        person != PRIMARY_PORTFOLIO_ID
+        and profile is not None
+        and profile.snapshot_pattern
+        and not get_movement_store().movements(person, ("trade",))
+    ):
         return family_dashboard_payload(person, refresh=refresh, berkshire_mode=berkshire_mode, proxy_mode=proxy_mode, broker=broker, live_only=live_only)
 
     trades, source = read_ledger_trades(person)
@@ -8138,7 +8321,7 @@ def _build_dashboard_payload(
     payload = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "person": person,
-        "person_name": PRIMARY_PORTFOLIO_NAME if person == PRIMARY_PORTFOLIO_ID else SETTINGS.portfolios[person].display_name,
+        "person_name": PRIMARY_PORTFOLIO_NAME if person == PRIMARY_PORTFOLIO_ID or profile is None else profile.display_name,
         "berkshire_mode": berkshire_mode,
         "proxy_mode": proxy_mode,
         "trade_file": source["relative_path"],
@@ -9138,21 +9321,33 @@ def normalize_expense_movement(event: dict[str, Any]) -> dict[str, Any]:
             "value_date": event.get("value_date"),
             "source_state": event.get("source_state"),
             "transaction_id": event.get("transaction_id"),
+            # Only rows that know their sub-account carry it, so other rows keep their identity.
+            **({"account_label": event["account_label"]} if event.get("account_label") else {}),
         },
     }
 
 
-def normalize_checkpoint_movement(account: str, day: date, balance: Decimal, description: str) -> dict[str, Any]:
+def normalize_checkpoint_movement(
+    account: str,
+    day: date,
+    balance: Decimal,
+    description: str,
+    currency: str = "EUR",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """An account's balance at the end of ``day``: a reconciliation anchor, never a cash flow."""
 
-    return {
+    checkpoint: dict[str, Any] = {
         "occurred_on": day,
         "event_type": "balance_checkpoint",
         "account": account,
         "description": description,
-        "currency": "EUR",
+        "currency": currency,
         "amount": balance,
     }
+    if metadata:
+        checkpoint["metadata"] = metadata
+    return checkpoint
 
 
 def normalize_interest_movement(event: dict[str, Any]) -> dict[str, Any]:
@@ -9176,7 +9371,11 @@ def normalize_cash_flow_movement(event: dict[str, Any], account: str) -> dict[st
         "description": event.get("description") or "Cash movement",
         "currency": event.get("currency") or "EUR",
         "amount": event.get("cash_change"),
-        "metadata": {"contribution_change": event.get("contrib_change") or ZERO, "transaction_id": event.get("transaction_id")},
+        "metadata": {
+            "contribution_change": event.get("contrib_change") or ZERO,
+            "transaction_id": event.get("transaction_id"),
+            **(event.get("account_metadata") or {}),
+        },
     }
 
 
@@ -9319,7 +9518,14 @@ def read_bbva_cash_flows(path: Path) -> list[dict[str, Any]]:
     return events
 
 
-def parse_statement_movements(source: str, path: Path) -> list[dict[str, Any]]:
+def parse_statement_movements(source: str, path: Path, owner: str = PRIMARY_PORTFOLIO_ID) -> list[dict[str, Any]]:
+    """Every ledger row of one statement file, as ``owner``'s profile reads it.
+
+    Only Revolut depends on the profile: a profile with the ``revolut_joint_account``
+    feature keeps the consolidated statement's joint account, every other profile
+    keeps the rest.
+    """
+
     trades: list[Trade] = []
     dividends: list[Dividend] = []
     frictions: list[FrictionEvent] = []
@@ -9361,9 +9567,10 @@ def parse_statement_movements(source: str, path: Path) -> list[dict[str, Any]]:
         dividends = read_etoro_dividends(path)
         frictions = read_etoro_friction_events(path)
     elif source == "revolut":
-        expenses = read_revolut_expense_events([path])
-        cash_flows = [normalize_cash_flow_movement(item, "Revolut") for item in read_revolut_cash_events([path])]
-        normalized = read_revolut_balance_checkpoints(path)
+        joint = keeps_revolut_joint_account(owner)
+        expenses = read_revolut_expense_events([path], joint=joint)
+        cash_flows = [normalize_cash_flow_movement(item, "Revolut") for item in read_revolut_cash_events([path], joint=joint)]
+        normalized = read_revolut_balance_checkpoints(path, joint=joint)
     elif source == "intesa":
         if path.suffix.casefold() == ".pdf":
             normalized = intesa_pdf_movements(path)
@@ -9424,14 +9631,15 @@ def import_statement_path(
 
     safe_original_name = secure_filename(original_name or path.name) or f"statement{path.suffix.casefold()}"
     with collect_import_issues() as issues:
-        movements = parse_statement_movements(source, path)
+        movements = parse_statement_movements(source, path, owner)
     if issues.blocking:
         raise ValueError(issues.blocking_message())
     warnings = issues.warnings()
+    if not movements and source == "revolut" and keeps_revolut_joint_account(owner):
+        raise ValueError("This Revolut statement lists no joint account (Conto cointestato) to import into this profile")
     if not movements:
         raise ValueError(f"No supported movements were found in this {SOURCE_LABELS[source]} statement")
-    coverage = import_coverage_ranges(source, path, movements)
-    movements, cross_format_duplicates = drop_cross_format_duplicates(
+    movements, cross_format_duplicates, coverage = deduplicated_statement_movements(
         source, path, movements, owner, existing.id if existing is not None else None
     )
     if existing is not None:
@@ -9491,6 +9699,39 @@ def import_statement_path(
         "stored_path": record.stored_path,
         "warnings": warnings,
     }
+
+
+def deduplicated_statement_movements(
+    source: str, path: Path, movements: list[dict[str, Any]], owner: str, import_id: int | None
+) -> tuple[list[dict[str, Any]], int, list[tuple[str, date, date]]]:
+    """A file's rows less those another statement format already stored, its row count
+    skipped that way, and the days it covers per account.
+
+    Coverage comes from the file's full reading (see :func:`import_coverage_ranges`).
+    A Revolut account that lost rows to the other format has its movements split
+    between two account labels (the regular statement's "Revolut" and a consolidated
+    sub-account), so this file's balances and coverage for it are left out: they
+    would turn the rows stored under the other label into unexplained gaps.
+    """
+
+    coverage = import_coverage_ranges(source, path, movements)
+    kept, skipped = drop_cross_format_duplicates(source, path, movements, owner, import_id)
+    if source != "revolut" or not skipped:
+        return kept, skipped, coverage
+
+    def flows(rows: list[dict[str, Any]]) -> Counter[str]:
+        return Counter(
+            reconciliation_account({**row, "source_kind": source}) or ""
+            for row in rows
+            if row.get("event_type") == "cash_flow"
+        )
+
+    superseded = {account for account, count in (flows(movements) - flows(kept)).items() if count}
+    kept = [
+        row for row in kept
+        if not (row.get("event_type") == "balance_checkpoint" and reconciliation_account({**row, "source_kind": source}) in superseded)
+    ]
+    return kept, skipped, [item for item in coverage if item[0] not in superseded]
 
 
 def drop_cross_format_duplicates(
@@ -9667,14 +9908,13 @@ def delete_statement_import(import_id: int, portfolio_id: str = PRIMARY_PORTFOLI
             not_rechecked.append(sibling.original_name)
             continue
         with collect_import_issues() as issues:
-            movements = parse_statement_movements(sibling.source_kind, path)
+            movements = parse_statement_movements(sibling.source_kind, path, owner)
         if issues.blocking or not movements:
             # Try again at the next start, when market data may be reachable.
             store.mark_for_reread(sibling)
             not_rechecked.append(sibling.original_name)
             continue
-        coverage = import_coverage_ranges(sibling.source_kind, path, movements)
-        movements, _skipped = drop_cross_format_duplicates(sibling.source_kind, path, movements, owner, sibling.id)
+        movements, _skipped, coverage = deduplicated_statement_movements(sibling.source_kind, path, movements, owner, sibling.id)
         inserted, _matched, _removed = store.enrich_import(sibling, parser_version=IMPORT_PARSER_VERSION, movements=movements)
         store.set_coverage(sibling.id, coverage)
         restored += inserted
@@ -9914,6 +10154,11 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
     # ledger too; match those on account, day and signed amount instead, one cash
     # row per statement row, so a deposit never hides an equal payment.
     statement_keys = unmatched_statement_keys(statement_rows, movements, card_ids)
+    personal = PersonalLedger(MOVEMENT_DATABASE)
+    cash_entries = personal.cash_events(owner)
+    keeps_cash_ledger = bool(cash_entries) or personal.cash_balance(owner).get("opening_balance") is not None or any(
+        entry["account"] == CASH_ACCOUNT for entry in personal.account_balances(owner)
+    )
     for row in movements:
         if row.get("event_type") in excluded:
             continue
@@ -9942,25 +10187,31 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
                 category = "Credits"
         if flow_kind == "spend" and row.get("source_kind") == "bbva" and "preliev" in str(metadata.get("source_category") or "").casefold():
             flow_kind = "cash_withdrawal"
-        events.append(
-            {
-                "movement_id": row["id"],
-                "date": movement_date(row),
-                "source": str(row.get("account") or row.get("source_kind") or ""),
-                "merchant": str(metadata.get("merchant") or row.get("description") or "Unknown"),
-                "description": str(row.get("description") or ""),
-                "flow_kind": flow_kind,
-                "category": category,
-                "subcategory": str(metadata.get("subcategory") or ""),
-                "amount_eur": Decimal(str(metadata.get("amount_eur") or abs(movement_decimal(row, "amount")))),
-                "currency": str(row.get("currency") or "EUR"),
-                "native_amount": movement_decimal(row, "amount"),
-                "confidence": metadata.get("confidence"),
-                "source_category": metadata.get("source_category"),
-            }
-        )
-    personal = PersonalLedger(MOVEMENT_DATABASE)
-    events = personal.classify(owner, events) + personal.cash_events(owner)
+        event = {
+            "movement_id": row["id"],
+            "date": movement_date(row),
+            "source": str(row.get("account") or row.get("source_kind") or ""),
+            "merchant": str(metadata.get("merchant") or row.get("description") or "Unknown"),
+            "description": str(row.get("description") or ""),
+            "flow_kind": flow_kind,
+            "category": category,
+            "subcategory": str(metadata.get("subcategory") or ""),
+            "amount_eur": Decimal(str(metadata.get("amount_eur") or abs(movement_decimal(row, "amount")))),
+            "currency": str(row.get("currency") or "EUR"),
+            "native_amount": movement_decimal(row, "amount"),
+            "confidence": metadata.get("confidence"),
+            "source_category": metadata.get("source_category"),
+        }
+        if metadata.get("account_label"):
+            event["account"] = str(metadata["account_label"])
+        if keeps_cash_ledger and flow_kind in {"income", "credit"} and is_cash_deposit(event):
+            # Cash paid in at the bank came from the cash ledger the user keeps: a
+            # transfer from Cash (see cash_ledger_bank_movements), never income.
+            event.update(flow_kind="top_up", internal=True, cash_deposit=True)
+            if category in {"Income", "Credits", "Uncategorized"}:
+                event["category"] = "Top-ups"
+        events.append(event)
+    events = personal.classify(owner, events) + cash_entries
     mark_internal_transfers(events)
     return sorted(events, key=lambda item: (item["date"], item["source"], item["merchant"]))
 
@@ -9983,7 +10234,7 @@ def account_transfer_event(
         "movement_id": row["id"],
         "date": movement_date(row),
         "source": str(row.get("account") or row.get("source_kind") or ""),
-        "merchant": "Top-up" if incoming else "Withdrawal",
+        "merchant": str(metadata.get("merchant") or ("Top-up" if incoming else "Withdrawal")),
         "description": str(row.get("description") or ""),
         "flow_kind": "top_up" if incoming else "transfer_out",
         "category": "Top-ups" if incoming else "Transfers out",
@@ -10018,29 +10269,67 @@ def statement_match_key(row: dict[str, Any]) -> str:
 INTERNAL_TRANSFER_DAYS = 4
 
 
+# What a transfer's text says about the other account: its bank's name, or the
+# bank code (ABI) inside an Italian IBAN (IT, two check digits, CIN, ABI, …).
+TRANSFER_PEERS = (
+    ("revolut", re.compile(r"\brevolut\b|\bIT\d{2}[A-Z]03669\d", re.IGNORECASE)),
+    ("traderepublic", re.compile(r"\btrade\s*republic\b", re.IGNORECASE)),
+    ("intesa", re.compile(r"\bintesa\b|\bIT\d{2}[A-Z]03069\d", re.IGNORECASE)),
+    ("fineco", re.compile(r"\bfineco\b|\bIT\d{2}[A-Z]03015\d", re.IGNORECASE)),
+    ("bbva", re.compile(r"\bbbva\b", re.IGNORECASE)),
+)
+INFLOW_PREFERENCE = {"top_up": 0, "credit": 1, "income": 2}
+
+
+def transfer_peers(event: dict[str, Any]) -> set[str]:
+    """Banks a transfer's merchant or description names as the other side, its own bank aside."""
+
+    own = account_key(event.get("source"))
+    text = f"{event.get('merchant') or ''} {event.get('description') or ''}"
+    return {peer for peer, pattern in TRANSFER_PEERS if pattern.search(text) and not own.startswith(peer)}
+
+
 def mark_internal_transfers(events: list[dict[str, Any]]) -> None:
     """Flag giroconti: an outflow from one own account matched by an equal inflow
     into another within a few days. Both legs stay in the ledger; the dashboard
-    hides them in the consolidated view and shows them per account on request."""
+    hides them in the consolidated view and shows them per account on request.
+
+    Each outflow takes the closest such inflow, a top-up before a credit or income.
+    When either side's text names the other bank (Trade Republic's "Inviato da
+    Revolut", a sender IBAN with Revolut's bank code), only that bank's rows match,
+    and such a confirmed pair comes before a closer unconfirmed one. Rows already
+    flagged (cash paid in from the cash ledger) are left alone."""
     def event_day(event: dict[str, Any]) -> date:
         return date.fromisoformat(str(event["date"])[:10])
 
-    outflows = [e for e in events if e.get("flow_kind") in {"personal_transfer", "transfer_out"}]
-    inflows = [e for e in events if e.get("flow_kind") in {"top_up", "income", "credit"}]
+    def is_peer(event: dict[str, Any], peers: set[str]) -> bool:
+        return not peers or any(account_key(event.get("source")).startswith(peer) for peer in peers)
+
+    outflows = [e for e in events if e.get("flow_kind") in {"personal_transfer", "transfer_out"} and not e.get("internal")]
+    inflows = [e for e in events if e.get("flow_kind") in INFLOW_PREFERENCE and not e.get("internal")]
+    peers = {id(event): transfer_peers(event) for event in [*outflows, *inflows]}
     used: set[int] = set()
     for out in sorted(outflows, key=event_day):
         amount = Decimal(str(out.get("amount_eur") or 0))
+        best: tuple[tuple[int, int, int], dict[str, Any]] | None = None
         for candidate in inflows:
             # Statement rows name the source by id, cash rows by label: same account.
             if id(candidate) in used or account_key(candidate.get("source")) == account_key(out.get("source")):
                 continue
             if abs(Decimal(str(candidate.get("amount_eur") or 0)) - amount) > Decimal("0.01"):
                 continue
-            if abs((event_day(candidate) - event_day(out)).days) > INTERNAL_TRANSFER_DAYS:
+            distance = abs((event_day(candidate) - event_day(out)).days)
+            if distance > INTERNAL_TRANSFER_DAYS:
                 continue
-            out["internal"] = candidate["internal"] = True
-            used.add(id(candidate))
-            break
+            if not is_peer(out, peers[id(candidate)]) or not is_peer(candidate, peers[id(out)]):
+                continue
+            named = bool(peers[id(candidate)] or peers[id(out)])
+            score = (0 if named else 1, distance, INFLOW_PREFERENCE[str(candidate["flow_kind"])])
+            if best is None or score < best[0]:
+                best = (score, candidate)
+        if best is not None:
+            out["internal"] = best[1]["internal"] = True
+            used.add(id(best[1]))
 
 
 # Sources whose cash_flow rows are the account's complete ledger, and sources whose
@@ -10055,6 +10344,9 @@ def reconciliation_account(row: dict[str, Any]) -> str | None:
 
     source = str(row.get("source_kind") or "")
     event_type = str(row.get("event_type") or "")
+    sub_account = str((row.get("metadata") or {}).get("account_label") or "")
+    if source == "revolut" and sub_account and event_type in {"balance_checkpoint", "cash_flow"}:
+        return sub_account  # one consolidated-statement sub-account, e.g. "Revolut · Vacanze (EUR)"
     if event_type == "balance_checkpoint":
         return expense_source_label(str(row.get("account") or source))
     if event_type == "cash_flow":
@@ -10107,13 +10399,21 @@ def import_coverage_ranges(source: str, path: Path, movements: list[dict[str, An
 
 def reconciliation_inputs(
     owner: str,
+    expense_events: list[dict[str, Any]] | None = None,
 ) -> tuple[list[AccountMovement], list[BalanceCheckpoint], dict[str, list[tuple[date, date]]]]:
     """Every EUR movement of each cash account, the statement balances known for it,
     and the days its imported files cover.
 
+    A sub-account in another currency (a consolidated Revolut statement's CHF
+    account) reconciles in its own currency: its movements and balances are native.
+
     The manual cash ledger is an account too: its entries are its movements, its
     opening balance holds the day before its first entry, and as a ledger the user
-    keeps it covers every day from its first entry or balance through today.
+    keeps it covers every day from its first entry or balance through today. When
+    the ledger is in use, bank movements of physical cash move it as well: a cash
+    withdrawal puts money into it, cash paid in at a bank takes money out (see
+    :func:`cash_ledger_bank_movements`). ``expense_events`` are the classified
+    ledger rows when the caller already has them.
     """
 
     ensure_legacy_statements_imported(owner)
@@ -10132,11 +10432,14 @@ def reconciliation_inputs(
             points.append(movement_date(row))
             continue
         days.append(movement_date(row))
-        if normalize_currency_code(row.get("currency") or "EUR") != "EUR":
-            if row.get("event_type") == "cash_flow":
+        currency = normalize_currency_code(row.get("currency") or "EUR")
+        if currency != "EUR":
+            native_account = normalize_currency_code((row.get("metadata") or {}).get("sub_account_currency") or "EUR") == currency
+            if row.get("event_type") == "cash_flow" and not native_account:
                 continue  # a foreign-currency pocket is a balance of its own
-            amount_eur = abs(Decimal(str((row.get("metadata") or {}).get("amount_eur") or 0)))
-            amount = amount_eur if amount > ZERO else -amount_eur
+            if not native_account:
+                amount_eur = abs(Decimal(str((row.get("metadata") or {}).get("amount_eur") or 0)))
+                amount = amount_eur if amount > ZERO else -amount_eur
         movements.append(AccountMovement(account, movement_date(row), amount))
     coverage: dict[str, list[tuple[date, date]]] = {}
     recorded = store.coverage(owner)
@@ -10163,7 +10466,65 @@ def reconciliation_inputs(
     starts = [event["date"] for event in cash] + [day + timedelta(days=1) for day in cash_balances]
     if starts:
         coverage.setdefault(CASH_ACCOUNT, []).append((min(starts), date.today()))  # noqa: DTZ011
+    if cash or opening is not None or cash_balances:
+        events = expense_events if expense_events is not None else read_ledger_expenses(owner)
+        movements += cash_ledger_bank_movements(events, cash)
     return movements, checkpoints, coverage
+
+
+CASH_DEPOSIT = re.compile(r"versament\w*\W+(?:\w+\W+){0,3}contant|contant\w*\W+(?:\w+\W+){0,3}versat|\bcash deposit", re.IGNORECASE)
+
+
+def is_cash_deposit(event: dict[str, Any]) -> bool:
+    """Money in at a bank that was physical cash paid in, e.g. Intesa's "Versamento Contanti"."""
+
+    if event.get("calculated") or event.get("source") == "cash" or Decimal(str(event.get("native_amount") or 0)) <= ZERO:
+        return False
+    text = f"{event.get('source_category') or ''} {event.get('merchant') or ''} {event.get('description') or ''}"
+    return CASH_DEPOSIT.search(text) is not None
+
+
+def cash_ledger_bank_movements(events: list[dict[str, Any]], cash_entries: list[dict[str, Any]]) -> list[AccountMovement]:
+    """Bank movements of physical cash, as movements of the manual cash ledger.
+
+    A bank's cash withdrawal (``cash_withdrawal``) puts its EUR amount into the cash
+    ledger; cash paid in at a bank (a cash deposit, see :func:`is_cash_deposit`)
+    takes it out. A transfer the user already entered in the cash ledger for the
+    same money (a cash transfer in for a withdrawal, out for a deposit, of the same
+    amount within a few days) stands for it, so it is not counted twice.
+    """
+
+    recorded = [
+        {"direction": entry.get("cash_direction"), "day": entry["date"], "amount": Decimal(str(entry["amount_eur"])), "used": False}
+        for entry in cash_entries
+        if entry.get("cash_direction") in {"transfer_in", "transfer_out"}
+    ]
+    result: list[AccountMovement] = []
+    for event in sorted(events, key=lambda item: str(item.get("date"))):
+        if event.get("calculated") or event.get("source") == "cash":
+            continue
+        if event.get("flow_kind") == "cash_withdrawal":
+            direction, sign = "transfer_in", Decimal(1)
+        elif is_cash_deposit(event):
+            direction, sign = "transfer_out", Decimal(-1)
+        else:
+            continue
+        day = date.fromisoformat(str(event["date"])[:10])
+        amount = abs(Decimal(str(event.get("amount_eur") or 0)))
+        entered = next(
+            (
+                entry for entry in recorded
+                if not entry["used"] and entry["direction"] == direction
+                and abs(entry["amount"] - amount) <= Decimal("0.01")
+                and abs((entry["day"] - day).days) <= INTERNAL_TRANSFER_DAYS
+            ),
+            None,
+        )
+        if entered is not None:
+            entered["used"] = True
+            continue
+        result.append(AccountMovement(CASH_ACCOUNT, day, sign * amount))
+    return result
 
 
 def reconciliation_account_names(owner: str) -> set[str]:
@@ -10248,13 +10609,66 @@ def import_cash_csv(owner: str, text: str, categories: list[str]) -> dict[str, A
     return {"kind": "cash", **counts, "skipped": skipped}
 
 
-def balance_reconciliation(owner: str) -> dict[str, Any]:
-    """Statement and manual balances against each account's recorded movements (see reconcile_balances)."""
+def foreign_account_currencies(owner: str) -> dict[str, tuple[str, dict[date, Decimal]]]:
+    """Accounts reconciled in a currency other than EUR: ``account_key → (currency, {day: EUR per unit})``.
 
-    movements, checkpoints, coverage = reconciliation_inputs(owner)
+    The rates are those the statement's own EUR column implies at each balance.
+    """
+
+    result: dict[str, tuple[str, dict[date, Decimal]]] = {}
+    for row in get_movement_store().movements(owner, ("balance_checkpoint",)):
+        currency = normalize_currency_code(row.get("currency") or "EUR")
+        account = reconciliation_account(row)
+        if currency == "EUR" or not account:
+            continue
+        _currency, rates = result.setdefault(account_key(account), (currency, {}))
+        balance = movement_decimal(row, "amount")
+        balance_eur = (row.get("metadata") or {}).get("balance_eur")
+        if balance != ZERO and balance_eur not in {None, ""}:
+            rates[movement_date(row)] = Decimal(str(balance_eur)) / balance
+    return result
+
+
+def foreign_calculated_rows(
+    rows: list[dict[str, Any]], foreign: dict[str, tuple[str, dict[date, Decimal]]]
+) -> list[dict[str, Any]]:
+    """Calculated rows of foreign-currency accounts, in their currency and converted to EUR.
+
+    A gap is converted at the rate of the balance nearest its date; without any
+    rate it cannot be counted in EUR and stays only in the interval it belongs to.
+    """
+
+    result = []
+    for row in rows:
+        entry = foreign.get(account_key(row["source"]))
+        if entry is None:
+            result.append(row)
+            continue
+        currency, rates = entry
+        if not rates:
+            continue
+        nearest = min(rates, key=lambda day: abs((day - row["date"]).days))
+        gap = Decimal(str(row["native_amount"]))
+        result.append({**row, "currency": currency, "amount_eur": abs(gap * rates[nearest]).quantize(Decimal("0.01"))})
+    return result
+
+
+def balance_reconciliation(owner: str, expense_events: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Statement and manual balances against each account's recorded movements (see reconcile_balances).
+
+    Amounts of an account in another currency are in that currency (``currency``).
+    """
+
+    movements, checkpoints, coverage = reconciliation_inputs(owner, expense_events)
     manual = PersonalLedger(MOVEMENT_DATABASE).account_balances(owner)
     checkpoints += [BalanceCheckpoint(entry["account"], entry["date"], entry["balance"], "manual", entry["id"]) for entry in manual]
     result = reconcile_balances(movements, checkpoints, coverage=coverage)
+    foreign = foreign_account_currencies(owner)
+    if foreign:
+        result["rows"] = foreign_calculated_rows(result["rows"], foreign)
+
+    def currency_of(account: str) -> str:
+        return foreign.get(account_key(account), ("EUR", {}))[0]
     entries: dict[str, list[dict[str, Any]]] = {}
     for entry in manual:
         entries.setdefault(account_key(entry["account"]), []).append(
@@ -10269,6 +10683,7 @@ def balance_reconciliation(owner: str) -> dict[str, Any]:
         "accounts": [
             {
                 "account": item["account"],
+                "currency": currency_of(item["account"]),
                 "status": item["status"],
                 "message": item["message"],
                 "reconciled_to": day(item["reconciled_to"]),
@@ -10287,6 +10702,7 @@ def balance_reconciliation(owner: str) -> dict[str, Any]:
         "intervals": [
             {
                 "account": item["account"],
+                "currency": currency_of(item["account"]),
                 "start": item["start"].isoformat(),
                 "end": item["end"].isoformat(),
                 "opening_eur": money(item["opening"]),
@@ -10305,8 +10721,9 @@ def balance_reconciliation(owner: str) -> dict[str, Any]:
 
 
 def personal_expenses_payload(owner: str) -> dict[str, Any]:
-    reconciliation = balance_reconciliation(owner)
-    payload = summarize_expense_events(read_ledger_expenses(owner) + reconciliation.pop("rows"))
+    events = read_ledger_expenses(owner)
+    reconciliation = balance_reconciliation(owner, events)
+    payload = summarize_expense_events(events + reconciliation.pop("rows"))
     payload["reconciliation"] = reconciliation
     payload["categories"] = PersonalLedger(MOVEMENT_DATABASE).categories(owner, EXPENSE_CATEGORIES)
     payload["rules"] = PersonalLedger(MOVEMENT_DATABASE).rules(owner)
@@ -10915,6 +11332,7 @@ def api_rankings():
     broker = request.args.get("broker", "all")
     live_only = request.args.get("live_only", "off")
     try:
+        # Profiles with a holdings snapshot: one with only bank data has nothing to rank.
         users = [PRIMARY_PORTFOLIO_ID] + list(FAMILY_PORTFOLIOS.keys())
         user_series = {}
         reconstructed = {}

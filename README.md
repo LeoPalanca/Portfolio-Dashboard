@@ -151,6 +151,11 @@ be dated, or imported in bulk from a CSV (`account,date,balance[,currency]`); ca
 spending can be imported from a CSV (`date,amount,description,category[,subcategory]`)
 into the manual cash ledger, which is reconciled like any other account. Re-importing
 either file adds nothing twice, and unknown accounts or categories are reported.
+Once the cash ledger is in use (it has entries, an opening balance or a balance),
+bank movements of physical cash move it too: a cash withdrawal puts money into it,
+cash paid in at a bank (Intesa's "Versamento Contanti") takes money out, and that
+deposit is a transfer from Cash instead of income. A cash transfer you entered
+yourself for the same money is not counted twice.
 
 ### Personal trade template
 
@@ -211,6 +216,39 @@ The Custom performance window has an editable start date in Dashboard Settings.
 Both the chosen window and date persist in the browser. A private installation can
 provide its initial date with `default_custom_period_start = "YYYY-MM-DD"`; public
 installations have no account-specific default.
+
+#### A household profile for a Revolut joint account
+
+A profile does not need investments. One with only bank data loads with empty
+investment sections, is listed in the person selector and has its own Income &
+expenses and reconciliation; the family rankings skip it. To keep a Revolut joint
+account (*Conto cointestato*) apart from your own accounts, give a profile the
+`revolut_joint_account` feature:
+
+```toml
+[portfolios.household]
+display_name = "Household"
+features = ["revolut_joint_account"]
+```
+
+Then import the same consolidated Revolut statement (the CSV whose first line is
+"Conti correnti Riepiloghi") twice: once with your own profile selected and once
+with the household profile selected, in the import dialog or with
+`python run.py --import statement.csv --portfolio household`. Each profile keeps
+its share of the file: the household profile only the joint account, every other
+profile everything else (personal account in each currency, Pro, pockets and vaults,
+the savings deposit). A regular per-account statement names no sub-account, so it is
+imported whole into the profile you choose.
+
+Each row is tagged with its sub-account, e.g. "Revolut · Vacanze (EUR)", and each
+sub-account is reconciled on its own, from its running balance, in its own currency.
+Money moved between your own sub-accounts (pockets, vaults, the deposit, Pro, a
+currency exchange) is internal on both sides; deposit interest is income. A transfer
+between your personal account and the joint account is a transfer out on your side
+and a top-up (a member's contribution) on the household side, never income or
+spending. When regular Revolut statements are imported as well, rows both formats
+list are still stored once; a sub-account that lost rows that way gets no balances
+from the consolidated file, because its movements then sit under two account labels.
 
 If a private cash-account export begins after the account was funded, record the
 missing opening balance as a dated `cash_flow` in that edition's private movement
@@ -307,7 +345,12 @@ and customize it.
 
 Refunds and cashback are income. Transfers, investments, credits, withdrawals,
 fees, and spending remain separate flows so net outflow is not treated as pure
-consumption.
+consumption. Fund and securities subscriptions, purchases, sales and redemptions
+(Intesa's "Rimborso titoli/quote/fondi") are investment flows: money back from an
+investment lowers the net investment outflow. A redemption whose beneficiary is
+someone else (not one of your `self_transfer_names`) is money received, a credit.
+Next to "Income − expenses", Income & expenses shows "Income + money received −
+expenses", which adds those credits.
 
 ## Assumptions and limitations
 
