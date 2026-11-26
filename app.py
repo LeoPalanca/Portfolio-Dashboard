@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import unicodedata
 import urllib.parse
 import urllib.request
 import warnings
@@ -215,7 +216,11 @@ DASHBOARD_CACHE_FORMAT_VERSION = 9
 # their own currency, the joint account goes to the profile with the
 # "revolut_joint_account" feature, and Intesa fund redemptions and subscriptions are
 # investment flows instead of refunds.
-IMPORT_PARSER_VERSION = "ledger-7"
+# ledger-8: Revolut money in is classified by its payer (income from organisations,
+# money received from people and payment processors, top-ups from the user's own
+# accounts), merchant refunds lower spending, cashback and rewards are credits, and
+# transfers between the holder and the joint account are "Family account" spending.
+IMPORT_PARSER_VERSION = "ledger-8"
 _DASHBOARD_CACHE_LOCK = threading.Lock()
 _DASHBOARD_BUILD_LOCKS: dict[Path, threading.Lock] = {}
 _DASHBOARD_REFRESH_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dashboard-refresh")
@@ -1673,6 +1678,8 @@ EXPENSE_CATEGORIES = {
     "Health & Personal Care",
     "Entertainment",
     "Education",
+    # Money the holder puts into the Revolut joint (family) account, less what it pays back.
+    "Family account",
     "Cash Withdrawals",
     "Fees",
     "Personal Transfers",
@@ -1683,6 +1690,8 @@ EXPENSE_CATEGORIES = {
     "Refunds",
     "Uncategorized",
 }
+# Categories that decide whether money in is income or a credit (see classify_expense_event).
+INFLOW_CATEGORY_KINDS = {"Income": "income", "Money received": "credit"}
 TR_EXPENSE_TYPES = {"CARD_TRANSACTION", "CARD_TRANSACTION_INTERNATIONAL", "CARD_ORDERING_FEE"}
 SELF_TRANSFER_NAMES = SETTINGS.self_transfer_names
 
@@ -1823,6 +1832,10 @@ def classify_expense_event(event: dict[str, Any], rules: list[ExpenseRule]) -> d
         break
     if classified["category"] == "Credits":
         classified["flow_kind"] = "credit"
+    elif classified["flow_kind"] in {"income", "credit"} and classified["category"] in INFLOW_CATEGORY_KINDS:
+        # Money in that a rule files under Income is income, under Money received a
+        # credit: how a rule overrides the payer-based guess (e.g. a person paying for lessons).
+        classified["flow_kind"] = INFLOW_CATEGORY_KINDS[classified["category"]]
     return classified
 
 
@@ -1927,31 +1940,111 @@ def read_fineco_bank_expense_events(
     return sorted(events, key=lambda item: (item["date"], item["source"], item["merchant"], item["native_amount"]))
 
 
-def revolut_expense_flow_kind(row: dict[str, str], cash_change_native: Decimal) -> str:
+FAMILY_ACCOUNT = "Family account"
+# Who an incoming Revolut payment comes from: "Pagamento da X" (a bank transfer, which
+# Revolut files under top-ups), "Pagamento da parte di X" (another Revolut user).
+REVOLUT_PAYER = re.compile(r"^(?:Pagamento da(?: parte di)?|Bonifico(?: SWIFT)? da|From) (?P<who>.+)$", re.IGNORECASE)
+# A reward or cashback Revolut itself pays ("Ricompensa per la campagna …").
+REVOLUT_REWARD = re.compile(r"\b(?:ricompens\w*|reward\w*|cashback|campagna|bonus)\b", re.IGNORECASE)
+# Payment processors and cashback sites. What they pay in is usually the user's own
+# money coming back (a wallet balance, a refund, cashback), so it is money received.
+PAYMENT_PROCESSORS = re.compile(r"\b(?:paypal|satispay|mangopay|orangebuddies)\b", re.IGNORECASE)
+# What marks a payer as an organisation: a legal form (dots dropped, "S.p.A." → "spa")
+# or a word naming an employer, school or public body. Any other payer is a person.
+ORGANISATION_FORMS = frozenset({
+    "spa", "srl", "srls", "sas", "snc", "sapa", "scarl", "scrl", "onlus", "aps", "sa", "sarl", "bv", "nv", "gmbh",
+    "ag", "kg", "ltd", "limited", "llc", "llp", "inc", "plc", "corp", "sca", "cie",
+})
+ORGANISATION_WORDS = re.compile(
+    r"\b(?:universit\w*|scuol\w*|school|college|istitut\w*|institut\w*|accadem\w*|academy|politecnic\w*|"
+    r"conservatori\w*|liceo|comune|regione|provincia|ministero|agenzia|inps|inail|fondazion\w*|foundation|"
+    r"associazion\w*|association|cooperativ\w*|consorzio|societa|company|banca|bank|ospedale|hospital|azienda)\b",
+    re.IGNORECASE,
+)
+
+
+def is_organisation(name: str) -> bool:
+    """Whether a payer's name reads as an organisation rather than a person (see ORGANISATION_FORMS)."""
+
+    folded = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().casefold().replace(".", "")
+    return bool(ORGANISATION_FORMS & set(re.findall(r"[a-z0-9]+", folded))) or ORGANISATION_WORDS.search(folded) is not None
+
+
+def revolut_payer_classification(payer: str) -> tuple[str, dict[str, str]]:
+    """``(flow_kind, fields)`` of money a Revolut account received from ``payer``.
+
+    In this order: a payment processor or cashback site pays back money received (a
+    credit), even when it names the user ("SATISPAY <you>"); the user (one of the
+    ``self_transfer_names``, in any word order) or a bank whose statements this
+    dashboard imports is an own-account top-up (``""``: the cash row stands for it,
+    and transfer pairing can match it); an organisation (an employer, a university, a
+    public body) pays income; any other payer is a private person, whose transfer is
+    money received. Expense category rules can still recategorise any of them.
+    """
+
+    if PAYMENT_PROCESSORS.search(payer):
+        return "credit", {"category": "Money received"}
+    if is_own_name(payer) or any(pattern.search(payer) for _peer, pattern in TRANSFER_PEERS):
+        return "", {}
+    if is_organisation(payer):
+        return "income", {}
+    return "credit", {"category": "Money received"}
+
+
+def revolut_expense_classification(row: dict[str, str], cash_change_native: Decimal) -> tuple[str, dict[str, str]]:
+    """``(flow_kind, fields)`` of one Revolut row in the expense ledger.
+
+    An empty flow kind leaves the row to its cash row: an own-account top-up or
+    transfer out. ``fields`` hold the category and merchant to start from; expense
+    category rules and the user's corrections still apply afterwards.
+
+    Money in: a card or Apple Pay top-up ("Ricarica …") and a "Deposito" stay top-ups;
+    "Deposito" names no payer and Revolut files it under top-ups, so it is money from
+    the user's own source, not income. A payment from someone ("Pagamento da …") is
+    classified by its payer (see :func:`revolut_payer_classification`). A merchant's
+    refund ("Rimborso") lowers spending; cashback and campaign rewards are credits.
+
+    The joint account: on the holder's side, money put into it is spending in the
+    "Family account" category, and money it pays back refunds that spending; on the
+    household side the cash row stays a member's contribution or a transfer out.
+    """
+
     movement_type = (row.get("Tipo") or "").strip().lower()
-    description = (row.get("Descrizione") or "").strip().lower()
+    description = " ".join((row.get("Descrizione") or "").split())
+    incoming = cash_change_native > ZERO
     if is_revolut_internal_movement(row):
-        return ""
+        return "", {}
     if row.get("Trasferimento") == JOINT_TRANSFER:
-        # The cash row stands for it: a transfer out or a top-up on each side.
-        return ""
-    if "al conto di investimento" in description:
-        return "investment"
+        if row.get("Tipo conto") == JOINT:
+            return "", {}
+        return ("refund" if incoming else "spend"), {"category": FAMILY_ACCOUNT, "merchant": FAMILY_ACCOUNT}
+    if "al conto di investimento" in description.lower():
+        return "investment", {}
     if movement_type == "pagamento con carta":
-        return "income" if cash_change_native > ZERO else "spend"
-    if movement_type in {"rimborso su carta", "cashback"}:
-        return "income"
-    if movement_type == "prelievo" and cash_change_native < ZERO:
-        return "cash_withdrawal"
-    if movement_type == "commissione" and cash_change_native < ZERO:
-        return "fee"
+        return ("income" if incoming else "spend"), {}
+    if movement_type in {"rimborso", "rimborso su carta"} and incoming:
+        return "refund", {}
+    if movement_type == "cashback" and incoming:
+        return "credit", {}
+    if movement_type == "prelievo" and not incoming:
+        return "cash_withdrawal", {}
+    if movement_type == "commissione" and not incoming:
+        return "fee", {}
     if movement_type == "interessi":
-        return "income"
-    if movement_type == "accredito consolidato" and cash_change_native > ZERO:
-        return "income"
-    if movement_type == "pagamento" and cash_change_native < ZERO:
-        return "personal_transfer"
-    return ""
+        return "income", {}
+    if movement_type == "interessi o rendimenti" and incoming:
+        return ("credit" if REVOLUT_REWARD.search(description) else "income"), {}
+    if incoming:
+        payer = REVOLUT_PAYER.fullmatch(description)
+        if payer:
+            return revolut_payer_classification(payer["who"])
+        if REVOLUT_REWARD.search(description):
+            return "credit", {}
+        # "Ricarica di Apple Pay con *1234", "Deposito" and other top-ups: the cash row.
+        return ("income" if movement_type == "accredito consolidato" else ""), {}
+    if movement_type == "pagamento":
+        return "personal_transfer", {}
+    return "", {}
 
 
 def expense_amount_to_eur(
@@ -1996,11 +2089,11 @@ def read_revolut_expense_events(
             cash_change_native = amount - fee
             if cash_change_native == ZERO:
                 continue
-            flow_kind = revolut_expense_flow_kind(row, cash_change_native)
+            flow_kind, fields = revolut_expense_classification(row, cash_change_native)
             if not flow_kind:
                 continue
-            merchant = (row.get("Descrizione") or "").strip() or (row.get("Tipo") or "Revolut").strip()
             description = (row.get("Descrizione") or row.get("Tipo") or "").strip()
+            merchant = fields.get("merchant") or (row.get("Descrizione") or "").strip() or (row.get("Tipo") or "Revolut").strip()
             if is_self_giroconto_expense("", merchant, description, flow_kind):
                 continue
             raw_events.append(
@@ -2016,6 +2109,7 @@ def read_revolut_expense_events(
                     # The consolidated statement prices a foreign row in EUR itself.
                     "statement_eur": abs(parse_decimal(row["Importo EUR"])) if row.get("Importo EUR") else None,
                     "account_label": row.get("Conto") or None,
+                    "category": fields.get("category"),
                 }
             )
 
@@ -2052,7 +2146,10 @@ def read_revolut_expense_events(
                 currency=raw_event["currency"],
                 native_amount=raw_event["native_amount"],
                 rules=active_rules,
-                extra={"account_label": raw_event["account_label"]} if raw_event["account_label"] else None,
+                # A category the classification starts from goes in before the rules run, so they can change it.
+                extra={
+                    key: raw_event[key] for key in ("account_label", "category") if raw_event[key]
+                } or None,
             )
         )
     return sorted(events, key=lambda item: (item["date"], item["source"], item["merchant"]))
@@ -10156,9 +10253,7 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
     statement_keys = unmatched_statement_keys(statement_rows, movements, card_ids)
     personal = PersonalLedger(MOVEMENT_DATABASE)
     cash_entries = personal.cash_events(owner)
-    keeps_cash_ledger = bool(cash_entries) or personal.cash_balance(owner).get("opening_balance") is not None or any(
-        entry["account"] == CASH_ACCOUNT for entry in personal.account_balances(owner)
-    )
+    cash_span = cash_ledger_span(personal, owner, cash_entries)
     for row in movements:
         if row.get("event_type") in excluded:
             continue
@@ -10204,14 +10299,23 @@ def read_ledger_expenses(portfolio_id: str = PRIMARY_PORTFOLIO_ID) -> list[dict[
         }
         if metadata.get("account_label"):
             event["account"] = str(metadata["account_label"])
-        if keeps_cash_ledger and flow_kind in {"income", "credit"} and is_cash_deposit(event):
-            # Cash paid in at the bank came from the cash ledger the user keeps: a
-            # transfer from Cash (see cash_ledger_bank_movements), never income.
+        if flow_kind in {"income", "credit"} and is_cash_deposit(event) and cash_ledger_covers(cash_span, event["date"]):
+            # Cash paid in at the bank on a day the cash ledger's balances bracket: the
+            # ledger accounts for where that cash came from (an unrecorded inflow shows
+            # as its Calculated income), so the deposit is a transfer from Cash (see
+            # cash_ledger_bank_movements). Otherwise it stays income: the ledger records
+            # spending, not the cash that came in.
             event.update(flow_kind="top_up", internal=True, cash_deposit=True)
             if category in {"Income", "Credits", "Uncategorized"}:
                 event["category"] = "Top-ups"
         events.append(event)
-    events = personal.classify(owner, events) + cash_entries
+    events = personal.classify(owner, events)
+    for event in events:
+        if event.get("cash_deposit") and event["flow_kind"] != "top_up":
+            # The user's own transaction type wins: no longer a transfer from Cash.
+            event.pop("cash_deposit")
+            event.pop("internal", None)
+    events += cash_entries
     mark_internal_transfers(events)
     return sorted(events, key=lambda item: (item["date"], item["source"], item["merchant"]))
 
@@ -10328,8 +10432,25 @@ def mark_internal_transfers(events: list[dict[str, Any]]) -> None:
             if best is None or score < best[0]:
                 best = (score, candidate)
         if best is not None:
-            out["internal"] = best[1]["internal"] = True
-            used.add(id(best[1]))
+            inflow = best[1]
+            out["internal"] = inflow["internal"] = True
+            used.add(id(inflow))
+            if is_revolut_payer_inflow(inflow):
+                # Another imported account sent it: the user's own money, whatever the payer looked like.
+                inflow["flow_kind"] = "top_up"
+                if inflow.get("category") in {"Income", "Credits", "Money received", "Uncategorized"}:
+                    inflow["category"] = "Top-ups"
+
+
+def is_revolut_payer_inflow(event: dict[str, Any]) -> bool:
+    """A Revolut payment in that its payer made income or a credit, and the user did not set its type."""
+
+    return (
+        account_key(event.get("source")).startswith("revolut")
+        and event.get("flow_kind") in {"income", "credit"}
+        and not event.get("flow_kind_chosen")
+        and REVOLUT_PAYER.fullmatch(" ".join(str(event.get("description") or "").split())) is not None
+    )
 
 
 # Sources whose cash_flow rows are the account's complete ledger, and sources whose
@@ -10411,9 +10532,9 @@ def reconciliation_inputs(
     opening balance holds the day before its first entry, and as a ledger the user
     keeps it covers every day from its first entry or balance through today. When
     the ledger is in use, bank movements of physical cash move it as well: a cash
-    withdrawal puts money into it, cash paid in at a bank takes money out (see
-    :func:`cash_ledger_bank_movements`). ``expense_events`` are the classified
-    ledger rows when the caller already has them.
+    withdrawal puts money into it, cash paid in at a bank that is not counted as
+    income takes money out (see :func:`cash_ledger_bank_movements`).
+    ``expense_events`` are the classified ledger rows when the caller already has them.
     """
 
     ensure_legacy_statements_imported(owner)
@@ -10459,9 +10580,9 @@ def reconciliation_inputs(
     cash = ledger.cash_events(owner)
     movements += [AccountMovement(CASH_ACCOUNT, event["date"], Decimal(event["native_amount"])) for event in cash]
     opening = ledger.cash_balance(owner).get("opening_balance")
-    if cash and opening is not None:
-        before_first = cash[0]["date"] - timedelta(days=1)
-        checkpoints.append(BalanceCheckpoint(CASH_ACCOUNT, before_first, Decimal(str(opening)), "manual", "cash-opening"))
+    opening_checkpoint = cash_opening_checkpoint(ledger, owner, cash)
+    if opening_checkpoint is not None:
+        checkpoints.append(opening_checkpoint)
     cash_balances = [entry["date"] for entry in ledger.account_balances(owner) if entry["account"] == CASH_ACCOUNT]
     starts = [event["date"] for event in cash] + [day + timedelta(days=1) for day in cash_balances]
     if starts:
@@ -10484,14 +10605,50 @@ def is_cash_deposit(event: dict[str, Any]) -> bool:
     return CASH_DEPOSIT.search(text) is not None
 
 
+def cash_opening_checkpoint(ledger: PersonalLedger, owner: str, cash: list[dict[str, Any]]) -> BalanceCheckpoint | None:
+    """The cash ledger's opening balance, held on the day before its first entry; None without entries."""
+
+    opening = ledger.cash_balance(owner).get("opening_balance")
+    if not cash or opening is None:
+        return None
+    return BalanceCheckpoint(CASH_ACCOUNT, cash[0]["date"] - timedelta(days=1), Decimal(str(opening)), "manual", "cash-opening")
+
+
+def cash_ledger_span(ledger: PersonalLedger, owner: str, cash: list[dict[str, Any]]) -> tuple[date, date] | None:
+    """``(first, last)`` days of the cash ledger's balance checkpoints, or None with fewer than two.
+
+    The checkpoints are the balances entered for Cash and the opening balance, which
+    therefore counts only together with a later balance. Every day after ``first``
+    through ``last`` lies in a reconciled Cash interval, which the ledger, as a ledger
+    the user keeps, covers in full: cash that came in on such a day without an entry
+    shows up as Calculated income of Cash.
+    """
+
+    days = {entry["date"] for entry in ledger.account_balances(owner) if account_key(entry["account"]) == account_key(CASH_ACCOUNT)}
+    opening = cash_opening_checkpoint(ledger, owner, cash)
+    if opening is not None:
+        days.add(opening.day)
+    return (min(days), max(days)) if len(days) >= 2 else None
+
+
+def cash_ledger_covers(span: tuple[date, date] | None, day: date) -> bool:
+    """Whether ``day`` falls in a reconciled interval of the cash ledger (see :func:`cash_ledger_span`)."""
+
+    return span is not None and span[0] < day <= span[1]
+
+
 def cash_ledger_bank_movements(events: list[dict[str, Any]], cash_entries: list[dict[str, Any]]) -> list[AccountMovement]:
     """Bank movements of physical cash, as movements of the manual cash ledger.
 
     A bank's cash withdrawal (``cash_withdrawal``) puts its EUR amount into the cash
     ledger; cash paid in at a bank (a cash deposit, see :func:`is_cash_deposit`)
-    takes it out. A transfer the user already entered in the cash ledger for the
-    same money (a cash transfer in for a withdrawal, out for a deposit, of the same
-    amount within a few days) stands for it, so it is not counted twice.
+    takes it out unless the deposit is counted as income (or a credit): then the
+    cash came from outside the ledger and never was in it, so taking it out too would
+    count the same money twice, once as income and once as Calculated income of Cash.
+    A withdrawal is never income or spending, so it moves Cash either way. A transfer
+    the user already entered in the cash ledger for the same money (a cash transfer in
+    for a withdrawal, out for a deposit, of the same amount within a few days) stands
+    for it, so it is not counted twice.
     """
 
     recorded = [
@@ -10505,7 +10662,7 @@ def cash_ledger_bank_movements(events: list[dict[str, Any]], cash_entries: list[
             continue
         if event.get("flow_kind") == "cash_withdrawal":
             direction, sign = "transfer_in", Decimal(1)
-        elif is_cash_deposit(event):
+        elif is_cash_deposit(event) and event.get("flow_kind") not in {"income", "credit"}:
             direction, sign = "transfer_out", Decimal(-1)
         else:
             continue
@@ -10771,7 +10928,7 @@ def api_personal_expenses():
                 if event is None:
                     raise ValueError("Imported transaction not found")
                 corrected_kind = str(body.get("flow_kind") or event["flow_kind"])
-                if corrected_kind not in {"income", "spend", "credit", "personal_transfer", "investment", "cash_withdrawal", "fee", "top_up"}:
+                if corrected_kind not in PersonalLedger.SUPPORTED_KINDS:
                     raise ValueError("Choose a supported transaction type")
                 changed_direction = corrected_kind != event["flow_kind"]
                 personal.set_category(owner, event, category, subcategory,

@@ -121,7 +121,7 @@
     if (!row) return;
     dialog("Set transaction category", `<p>${escape(row.merchant)} · ${escape(row.source_label)} · ${escape(row.date)}</p>
       <form id="category-entry-form" class="personal-ledger-form">
-      <label class="personal-ledger-wide">Transaction type (explicit correction)<select name="flow_kind">${[["spend","Expense"],["income","Income"],["credit","Refund / credit"],["personal_transfer","Own-account transfer"],["top_up","Money in from own account"],["investment","Investment"],["cash_withdrawal","Cash withdrawal"],["fee","Bank fee"]].map(([kind,label])=>`<option value="${kind}" ${row.flow_kind===kind?"selected":""}>${label}</option>`).join("")}</select></label>
+      <label class="personal-ledger-wide">Transaction type (explicit correction)<select name="flow_kind">${[["spend","Expense"],["income","Income"],["credit","Refund / credit"],["refund","Refund of an expense"],["personal_transfer","Own-account transfer"],["top_up","Money in from own account"],["investment","Investment"],["cash_withdrawal","Cash withdrawal"],["fee","Bank fee"]].map(([kind,label])=>`<option value="${kind}" ${row.flow_kind===kind?"selected":""}>${label}</option>`).join("")}</select></label>
       <label>Category<select name="category">${options(row.category)}</select></label>
       <label>Subcategory<input name="subcategory" maxlength="500" value="${escape(row.subcategory)}"></label>
       <label class="personal-ledger-wide personal-ledger-check"><input name="learn" type="checkbox" checked>Use for the same merchant, source and direction</label>

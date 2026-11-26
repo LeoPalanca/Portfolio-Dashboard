@@ -166,8 +166,9 @@ class RevolutExpenseExtractionTest(unittest.TestCase):
         self.assertNotIn("To Account Owner", by_merchant)
         self.assertEqual(by_merchant["To Michele Rossi"]["category"], "Personal Transfers")
         self.assertEqual(by_merchant["Al conto di investimento"]["category"], "Investments")
-        self.assertEqual(by_merchant["Amazon"]["category"], "Income")
-        self.assertEqual(by_merchant["Cashback"]["category"], "Income")
+        # A merchant's card refund lowers spending and cashback is a credit (no longer income).
+        self.assertEqual((by_merchant["Amazon"]["flow_kind"], by_merchant["Amazon"]["category"]), ("refund", "Refunds"))
+        self.assertEqual((by_merchant["Cashback"]["flow_kind"], by_merchant["Cashback"]["category"]), ("credit", "Credits"))
 
     def test_revolut_chf_expense_uses_historical_fx(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
