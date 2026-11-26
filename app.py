@@ -207,7 +207,7 @@ NEWS_CACHE = SETTINGS.cache_path("news.json")
 # One entry is kept per portfolio/filter combination; stale ones are dropped on save.
 NEWS_CACHE_KEEP_SECONDS = 7 * 24 * 3600
 DASHBOARD_CACHE_DIR = SETTINGS.cache_dir / "dashboard-payloads"
-DASHBOARD_CACHE_FORMAT_VERSION = 9
+DASHBOARD_CACHE_FORMAT_VERSION = 10
 # ledger-6: Intesa own-account transfers are kept (as transfers and top-ups) instead of
 # dropped, so the account's movements add up to its statement balances and top-ups
 # elsewhere can be matched to the transfer that funded them.
