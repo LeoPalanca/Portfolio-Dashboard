@@ -72,6 +72,13 @@ from src.portfolio_dashboard.imports.fineco import read_fineco_security_rows
 from src.portfolio_dashboard.imports.intesa_pdf import IntesaStatement, parse_intesa_statement_text, statement_row_fields
 from src.portfolio_dashboard.imports.revolut import read_revolut_rows
 from src.portfolio_dashboard.movements import MovementStore
+from src.portfolio_dashboard.movements.ledger_csv import (
+    BALANCE_COLUMNS,
+    CASH_COLUMNS,
+    parse_ledger_amount,
+    parse_ledger_date,
+    read_ledger_csv,
+)
 from src.portfolio_dashboard.movements.personal import PersonalLedger
 from src.portfolio_dashboard.movements.reconcile import AccountMovement, BalanceCheckpoint, account_key, reconcile_balances
 
@@ -2139,6 +2146,32 @@ def read_intesa_expense_events(
         if raw_event is not None:
             raw_events.append(raw_event)
     return intesa_expense_events(raw_events, rules=rules, fx_histories=fx_histories, refresh=refresh)
+
+
+def read_intesa_export_period(path: Path) -> tuple[date, date] | None:
+    """The period an Intesa XLSX export states above its table ("Data inizio/fine periodo")."""
+
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="Print area cannot be set*", category=UserWarning)
+            workbook = load_workbook(path, data_only=True, read_only=True)
+    except Exception:
+        return None
+    try:
+        sheet = workbook["Lista Operazione"] if "Lista Operazione" in workbook.sheetnames else workbook[workbook.sheetnames[0]]
+        found: dict[str, date] = {}
+        for row in sheet.iter_rows(max_row=40, values_only=True):
+            cells = [intesa_cell_text(value) for value in row]
+            for index, cell in enumerate(cells):
+                label = cell.casefold().rstrip(": ")
+                if label in {"data inizio periodo", "data fine periodo"}:
+                    value = next((parse_intesa_expense_date(other) for other in row[index + 1 :] if intesa_cell_text(other)), None)
+                    if value:
+                        found[label] = value
+    finally:
+        workbook.close()
+    first, last = found.get("data inizio periodo"), found.get("data fine periodo")
+    return (first, last) if first and last and first <= last else None
 
 
 def read_intesa_pdf_statement(path: Path) -> IntesaStatement:
@@ -9397,11 +9430,13 @@ def import_statement_path(
     warnings = issues.warnings()
     if not movements:
         raise ValueError(f"No supported movements were found in this {SOURCE_LABELS[source]} statement")
+    coverage = import_coverage_ranges(source, path, movements)
     movements, cross_format_duplicates = drop_cross_format_duplicates(
         source, path, movements, owner, existing.id if existing is not None else None
     )
     if existing is not None:
         inserted, matched, removed = store.enrich_import(existing, parser_version=IMPORT_PARSER_VERSION, movements=movements)
+        store.set_coverage(existing.id, coverage)
         return {
             "status": "upgraded",
             "duplicate": False,
@@ -9442,6 +9477,7 @@ def import_statement_path(
         if copied:
             destination.unlink(missing_ok=True)
         raise
+    store.set_coverage(record.id, coverage)
     if not skip_removed:
         store.forget_removed(digest, owner)
     return {
@@ -9637,8 +9673,10 @@ def delete_statement_import(import_id: int, portfolio_id: str = PRIMARY_PORTFOLI
             store.mark_for_reread(sibling)
             not_rechecked.append(sibling.original_name)
             continue
+        coverage = import_coverage_ranges(sibling.source_kind, path, movements)
         movements, _skipped = drop_cross_format_duplicates(sibling.source_kind, path, movements, owner, sibling.id)
         inserted, _matched, _removed = store.enrich_import(sibling, parser_version=IMPORT_PARSER_VERSION, movements=movements)
+        store.set_coverage(sibling.id, coverage)
         restored += inserted
     return {
         "deleted": record.original_name,
@@ -10026,36 +10064,197 @@ def reconciliation_account(row: dict[str, Any]) -> str | None:
     return None
 
 
-def reconciliation_inputs(owner: str) -> tuple[list[AccountMovement], list[BalanceCheckpoint]]:
-    """Every EUR movement of each cash account, and the statement balances known for it."""
+CASH_ACCOUNT = "Cash"
+CASH_ACCOUNT_ALIASES = {"cash", "contanti", "portafoglio", "wallet", "cashledger"}
+
+
+def coverage_span(days: list[date], checkpoints: list[date], stated: tuple[date, date] | None = None) -> tuple[date, date] | None:
+    """The inclusive days one file covers for one account.
+
+    A statement with an opening and a closing balance covers the days after the
+    opening one through the closing one; a file that states its period covers that
+    period; any other file covers its first through its last movement.
+    """
+
+    if len(checkpoints) >= 2:
+        return min(checkpoints) + timedelta(days=1), max(checkpoints)
+    if stated:
+        return stated
+    if days:
+        return min(days), max(days)
+    return None
+
+
+def import_coverage_ranges(source: str, path: Path, movements: list[dict[str, Any]]) -> list[tuple[str, date, date]]:
+    """``(account, first_day, last_day)`` per reconciled account, from a file's full reading."""
+
+    stated = read_intesa_export_period(path) if source == "intesa" and path.suffix.casefold() != ".pdf" else None
+    buckets: dict[str, tuple[list[date], list[date]]] = {}
+    for movement in movements:
+        account = reconciliation_account({**movement, "source_kind": source, "account": movement.get("account") or movement.get("broker")})
+        if not account:
+            continue
+        days, checkpoints = buckets.setdefault(account, ([], []))
+        day = date.fromisoformat(movement_text(movement.get("occurred_on"))[:10])
+        (checkpoints if movement.get("event_type") == "balance_checkpoint" else days).append(day)
+    ranges = []
+    for account, (days, checkpoints) in buckets.items():
+        span = coverage_span(days, checkpoints, stated)
+        if span:
+            ranges.append((account, *span))
+    return ranges
+
+
+def reconciliation_inputs(
+    owner: str,
+) -> tuple[list[AccountMovement], list[BalanceCheckpoint], dict[str, list[tuple[date, date]]]]:
+    """Every EUR movement of each cash account, the statement balances known for it,
+    and the days its imported files cover.
+
+    The manual cash ledger is an account too: its entries are its movements, its
+    opening balance holds the day before its first entry, and as a ledger the user
+    keeps it covers every day from its first entry or balance through today.
+    """
 
     ensure_legacy_statements_imported(owner)
+    store = get_movement_store()
     movements: list[AccountMovement] = []
     checkpoints: list[BalanceCheckpoint] = []
-    for row in get_movement_store().movements(owner):
+    stored: dict[int, dict[str, tuple[list[date], list[date]]]] = {}
+    for row in store.movements(owner):
         account = reconciliation_account(row)
         if not account:
             continue
         amount = movement_decimal(row, "amount")
+        days, points = stored.setdefault(int(row.get("import_id") or 0), {}).setdefault(account, ([], []))
         if row.get("event_type") == "balance_checkpoint":
             checkpoints.append(BalanceCheckpoint(account, movement_date(row), amount, "statement", str(row.get("description") or "")))
+            points.append(movement_date(row))
             continue
+        days.append(movement_date(row))
         if normalize_currency_code(row.get("currency") or "EUR") != "EUR":
             if row.get("event_type") == "cash_flow":
                 continue  # a foreign-currency pocket is a balance of its own
             amount_eur = abs(Decimal(str((row.get("metadata") or {}).get("amount_eur") or 0)))
             amount = amount_eur if amount > ZERO else -amount_eur
         movements.append(AccountMovement(account, movement_date(row), amount))
-    return movements, checkpoints
+    coverage: dict[str, list[tuple[date, date]]] = {}
+    recorded = store.coverage(owner)
+    for _import_id, account, first, last in recorded:
+        coverage.setdefault(account, []).append((first, last))
+    # Imports read before coverage was recorded: what their stored rows span.
+    described = {import_id for import_id, *_ in recorded}
+    for import_id, accounts in stored.items():
+        if import_id in described:
+            continue
+        for account, (days, points) in accounts.items():
+            span = coverage_span(days, points)
+            if span:
+                coverage.setdefault(account, []).append(span)
+
+    ledger = PersonalLedger(MOVEMENT_DATABASE)
+    cash = ledger.cash_events(owner)
+    movements += [AccountMovement(CASH_ACCOUNT, event["date"], Decimal(event["native_amount"])) for event in cash]
+    opening = ledger.cash_balance(owner).get("opening_balance")
+    if cash and opening is not None:
+        before_first = cash[0]["date"] - timedelta(days=1)
+        checkpoints.append(BalanceCheckpoint(CASH_ACCOUNT, before_first, Decimal(str(opening)), "manual", "cash-opening"))
+    cash_balances = [entry["date"] for entry in ledger.account_balances(owner) if entry["account"] == CASH_ACCOUNT]
+    starts = [event["date"] for event in cash] + [day + timedelta(days=1) for day in cash_balances]
+    if starts:
+        coverage.setdefault(CASH_ACCOUNT, []).append((min(starts), date.today()))  # noqa: DTZ011
+    return movements, checkpoints, coverage
+
+
+def reconciliation_account_names(owner: str) -> set[str]:
+    """Accounts a balance can be entered for: every reconciled account, and the cash ledger."""
+
+    movements, checkpoints, _coverage = reconciliation_inputs(owner)
+    return {item.account for item in [*movements, *checkpoints]} | {CASH_ACCOUNT}
+
+
+def resolve_account_label(label: str, accounts: set[str]) -> str | None:
+    """The ledger account a user-written label names, ignoring case and spaces; None when unknown."""
+
+    key = account_key(label)
+    if key in CASH_ACCOUNT_ALIASES:
+        return CASH_ACCOUNT if CASH_ACCOUNT in accounts else None
+    names = {account_key(name): name for name in accounts}
+    for source, source_label in SOURCE_LABELS.items():
+        target = names.get(account_key(expense_source_label(source))) or names.get(account_key(source_label))
+        if target:
+            names.setdefault(account_key(source), target)
+            names.setdefault(account_key(source_label), target)
+    return names.get(key)
+
+
+def import_balance_csv(owner: str, text: str) -> dict[str, Any]:
+    """Bulk balances from ``account,date,balance[,currency]``; unknown accounts are reported, not guessed."""
+
+    rows, skipped = read_ledger_csv(text, BALANCE_COLUMNS, {"account", "date", "balance"})
+    accounts = reconciliation_account_names(owner)
+    entries: list[tuple[str, date, Decimal]] = []
+    for line, row in rows:
+        account = resolve_account_label(row["account"], accounts)
+        day = parse_ledger_date(row["date"])
+        balance = parse_ledger_amount(row["balance"])
+        currency = normalize_currency_code(row.get("currency") or "EUR")
+        reason = (
+            f"unknown account {row['account']!r}" if account is None
+            else "unreadable date" if day is None
+            else "the date is in the future" if day > date.today()  # noqa: DTZ011
+            else "unreadable balance" if balance is None
+            else f"only EUR balances are supported, not {currency}" if currency != "EUR"
+            else ""
+        )
+        if reason or account is None or day is None or balance is None:
+            skipped.append({"line": line, "reason": reason})
+            continue
+        entries.append((account, day, balance))
+    counts = PersonalLedger(MOVEMENT_DATABASE).import_account_balances(owner, entries)
+    return {"kind": "balances", **counts, "skipped": skipped}
+
+
+def import_cash_csv(owner: str, text: str, categories: list[str]) -> dict[str, Any]:
+    """Bulk cash spending from ``date,amount,description,category[,subcategory]``; re-importing adds nothing twice."""
+
+    rows, skipped = read_ledger_csv(text, CASH_COLUMNS, {"date", "amount", "description", "category"})
+    by_key = {" ".join(name.split()).casefold(): name for name in categories}
+    payloads = []
+    for line, row in rows:
+        day = parse_ledger_date(row["date"])
+        amount = parse_ledger_amount(row["amount"])
+        category = by_key.get(" ".join(row["category"].split()).casefold()) if row["category"] else "Uncategorized"
+        description = " ".join(row["description"].split())
+        reason = (
+            "unreadable date" if day is None
+            else "the date is in the future" if day > date.today()  # noqa: DTZ011
+            else "unreadable amount" if amount is None or amount == ZERO
+            else "a description is required" if not description
+            else "descriptions are at most 500 characters" if len(description) > 500
+            else f"unknown category {row['category']!r} (create it first)" if category is None
+            else ""
+        )
+        if reason or day is None or amount is None or category is None:
+            skipped.append({"line": line, "reason": reason})
+            continue
+        payloads.append({
+            # Spending is the only kind this file holds; a sign in the amount is ignored.
+            "date": day.isoformat(), "amount": str(abs(amount).quantize(Decimal("0.01"))), "flow_kind": "spend",
+            "merchant": description, "description": description, "category": category,
+            "subcategory": " ".join(row.get("subcategory", "").split()),
+        })
+    counts = PersonalLedger(MOVEMENT_DATABASE).import_cash_entries(owner, payloads, categories)
+    return {"kind": "cash", **counts, "skipped": skipped}
 
 
 def balance_reconciliation(owner: str) -> dict[str, Any]:
     """Statement and manual balances against each account's recorded movements (see reconcile_balances)."""
 
-    movements, checkpoints = reconciliation_inputs(owner)
+    movements, checkpoints, coverage = reconciliation_inputs(owner)
     manual = PersonalLedger(MOVEMENT_DATABASE).account_balances(owner)
     checkpoints += [BalanceCheckpoint(entry["account"], entry["date"], entry["balance"], "manual", entry["id"]) for entry in manual]
-    result = reconcile_balances(movements, checkpoints)
+    result = reconcile_balances(movements, checkpoints, coverage=coverage)
     entries: dict[str, list[dict[str, Any]]] = {}
     for entry in manual:
         entries.setdefault(account_key(entry["account"]), []).append(
@@ -10078,6 +10277,7 @@ def balance_reconciliation(owner: str) -> dict[str, Any]:
                 "last_movement": day(item["last_movement"]),
                 "latest_balance_eur": money(item["latest_balance"]) if item["latest_balance"] is not None else None,
                 "latest_balance_date": day(item["latest_balance_date"]),
+                "missing_periods": item["missing_periods"],
                 "calculated_expenses_eur": money(item["calculated_expenses"]),
                 "calculated_income_eur": money(item["calculated_income"]),
                 "manual_balances": entries.get(account_key(item["account"]), []),
@@ -10095,6 +10295,8 @@ def balance_reconciliation(owner: str) -> dict[str, Any]:
                 "movements": item["movements"],
                 "gap_eur": money(item["gap"]),
                 "calculated": item["calculated"],
+                "status": item["status"],
+                "missing": [{"from": first.isoformat(), "to": last.isoformat()} for first, last in item["missing"]],
                 "origin": item["origin"],
             }
             for item in result["intervals"]
@@ -10132,6 +10334,7 @@ def api_personal_expenses():
         if not isinstance(body, dict):
             raise ValueError("Expected a JSON object")
         owner = configured_portfolio_id(body.get("portfolio_id") or request.args.get("person", PRIMARY_PORTFOLIO_ID))
+        imported: dict[str, Any] | None = None
         if request.method == "POST":
             # JSON-only writes and same-origin checks prevent cross-site form submissions.
             if not request.is_json or (request.headers.get("Origin") and request.headers["Origin"] != request.host_url.rstrip("/")):
@@ -10165,15 +10368,21 @@ def api_personal_expenses():
             elif action == "delete_cash":
                 personal.delete_cash(owner, str(body.get("id") or ""))
             elif action == "save_balance":
-                movements, checkpoints = reconciliation_inputs(owner)
-                personal.save_account_balance(owner, body, {item.account for item in [*movements, *checkpoints]})
+                personal.save_account_balance(owner, body, reconciliation_account_names(owner))
             elif action == "delete_balance":
                 personal.delete_account_balance(owner, str(body.get("id") or ""))
+            elif action == "import_balances":
+                imported = import_balance_csv(owner, str(body.get("csv") or ""))
+            elif action == "import_cash":
+                imported = import_cash_csv(owner, str(body.get("csv") or ""), categories)
             elif action == "delete_rule":
                 personal.delete_rule(owner, str(body.get("source") or ""), str(body.get("merchant") or ""), str(body.get("flow_kind") or ""))
             else:
                 raise ValueError("Unknown ledger action")
-        return jsonify(personal_expenses_payload(owner))
+        payload = personal_expenses_payload(owner)
+        if imported is not None:
+            payload["import_result"] = imported
+        return jsonify(payload)
     except (ValueError, TypeError) as exc:
         return jsonify({"error": str(exc)}), 400
 

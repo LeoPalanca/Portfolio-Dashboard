@@ -3966,3 +3966,5 @@ h3 {
 }
 .topup-note[hidden] { display: none; }
 #reconciliation-accounts button { margin: var(--space-1) 0; }
+.ledger-import { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ledger-import input[type="file"] { font-size: var(--text-xs); }

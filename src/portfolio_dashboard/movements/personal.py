@@ -1,5 +1,6 @@
 """User annotations and manual cash entries, separate from immutable bank imports."""
 
+import hashlib
 import json
 import re
 import sqlite3
@@ -163,7 +164,10 @@ class PersonalLedger:
                 (owner, source, merchant, flow_kind),
             )
 
-    def save_cash(self, owner: str, payload: dict, categories: Collection[str]) -> str:
+    @staticmethod
+    def _cash_values(payload: dict, categories: Collection[str]) -> tuple[str, str, str, str, str, str, str]:
+        """``(occurred_on, flow_kind, amount, merchant, description, category, subcategory)`` of a valid entry."""
+
         try:
             occurred_on = date.fromisoformat(str(payload.get("date", "")))
             amount = Decimal(str(payload.get("amount", "")))
@@ -189,40 +193,46 @@ class PersonalLedger:
         subcategory = str(payload.get("subcategory", "")).strip()
         if not merchant or any(len(value) > 500 for value in (merchant, description, subcategory)):
             raise ValueError("Enter a merchant/payee; text fields must be at most 500 characters")
+        return occurred_on.isoformat(), kind, str(amount), merchant, description, category, subcategory
+
+    def import_cash_entries(self, owner: str, payloads: list[dict], categories: Collection[str]) -> dict[str, int]:
+        """Add cash entries in bulk, each with an id derived from its content.
+
+        The n-th identical row of a file always gets the same id, so importing the
+        same file (or an overlapping one) again adds nothing twice, while two equal
+        purchases on one day in one file stay two entries.
+        """
+
+        rows = [self._cash_values(payload, categories) for payload in payloads]
+        seen: dict[tuple[str, ...], int] = {}
+        counts = {"added": 0, "unchanged": 0}
+        with closing(self.connect()) as connection, connection:
+            for values in rows:
+                seen[values] = seen.get(values, 0) + 1
+                digest = hashlib.sha256(json.dumps([owner, *values, seen[values]]).encode("utf-8")).hexdigest()
+                inserted = connection.execute(
+                    "INSERT OR IGNORE INTO manual_cash_entries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (f"csv-{digest[:32]}", owner, *values),
+                ).rowcount
+                counts["added" if inserted else "unchanged"] += 1
+        return counts
+
+    def save_cash(self, owner: str, payload: dict, categories: Collection[str]) -> str:
+        occurred_on, kind, amount, merchant, description, category, subcategory = self._cash_values(payload, categories)
         identifier = str(payload.get("id") or uuid.uuid4())
         with closing(self.connect()) as connection, connection:
             if payload.get("id"):
                 changed = connection.execute(
                     "UPDATE manual_cash_entries SET occurred_on=?, flow_kind=?, amount=?, merchant=?, description=?, category=?, subcategory=? "
                     "WHERE id=? AND portfolio_id=?",
-                    (
-                        occurred_on.isoformat(),
-                        kind,
-                        str(amount),
-                        merchant,
-                        description,
-                        category,
-                        subcategory,
-                        identifier,
-                        owner,
-                    ),
+                    (occurred_on, kind, amount, merchant, description, category, subcategory, identifier, owner),
                 ).rowcount
                 if not changed:
                     raise ValueError("Cash entry not found")
             else:
                 connection.execute(
                     "INSERT INTO manual_cash_entries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        identifier,
-                        owner,
-                        occurred_on.isoformat(),
-                        kind,
-                        str(amount),
-                        merchant,
-                        description,
-                        category,
-                        subcategory,
-                    ),
+                    (identifier, owner, occurred_on, kind, amount, merchant, description, category, subcategory),
                 )
         return identifier
 
@@ -298,7 +308,11 @@ class PersonalLedger:
         ]
 
     def save_account_balance(self, owner: str, payload: dict, accounts: Collection[str]) -> str:
-        """Record an account's balance as of today; editing keeps the day it was first saved."""
+        """Record an account's end-of-day balance, today unless ``payload["date"]`` says otherwise.
+
+        One balance is kept per account and day: saving another for the same day
+        replaces it. Editing an entry (``payload["id"]``) may move it to another day.
+        """
 
         account = str(payload.get("account") or "").strip()
         if account not in accounts:
@@ -309,25 +323,54 @@ class PersonalLedger:
             raise ValueError("Enter a valid EUR balance") from None
         if not balance.is_finite() or abs(balance) > Decimal(1000000000) or balance != balance.quantize(Decimal("0.01")):
             raise ValueError("The balance must be EUR with at most two decimal places")
+        try:
+            day = date.fromisoformat(str(payload["date"])) if payload.get("date") else date.today()  # noqa: DTZ011
+        except ValueError:
+            raise ValueError("Enter the balance date as YYYY-MM-DD") from None
+        if day > date.today():  # noqa: DTZ011 - balances use the server's local calendar
+            raise ValueError("A balance cannot be dated in the future")
         identifier = str(payload.get("id") or "")
         with closing(self.connect()) as connection, connection:
             if identifier:
+                clash = connection.execute(
+                    "SELECT 1 FROM account_balances WHERE portfolio_id=? AND account=? AND occurred_on=? AND id<>?",
+                    (owner, account, day.isoformat(), identifier),
+                ).fetchone()
+                if clash:
+                    raise ValueError("This account already has a balance for that day")
                 if not connection.execute(
-                    "UPDATE account_balances SET balance=? WHERE id=? AND portfolio_id=? AND account=?",
-                    (str(balance), identifier, owner, account),
+                    "UPDATE account_balances SET balance=?, occurred_on=? WHERE id=? AND portfolio_id=? AND account=?",
+                    (str(balance), day.isoformat(), identifier, owner, account),
                 ).rowcount:
                     raise ValueError("Balance entry not found")
                 return identifier
-            today = date.today().isoformat()  # noqa: DTZ011 - balances use the server's local calendar
-            existing = connection.execute(
-                "SELECT id FROM account_balances WHERE portfolio_id=? AND account=? AND occurred_on=?", (owner, account, today)
-            ).fetchone()
-            identifier = existing[0] if existing else str(uuid.uuid4())
-            connection.execute(
-                "INSERT INTO account_balances VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET balance=excluded.balance",
-                (identifier, owner, account, today, str(balance)),
-            )
-        return identifier
+            return self._upsert_balance(connection, owner, account, day, balance)[0]
+
+    @staticmethod
+    def _upsert_balance(connection, owner: str, account: str, day: date, balance: Decimal) -> tuple[str, str]:
+        """``(id, "added" | "updated" | "unchanged")`` for one account's balance on one day."""
+
+        existing = connection.execute(
+            "SELECT id, balance FROM account_balances WHERE portfolio_id=? AND account=? AND occurred_on=?",
+            (owner, account, day.isoformat()),
+        ).fetchone()
+        if existing and Decimal(existing[1]) == balance:
+            return existing[0], "unchanged"
+        identifier = existing[0] if existing else str(uuid.uuid4())
+        connection.execute(
+            "INSERT INTO account_balances VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET balance=excluded.balance",
+            (identifier, owner, account, day.isoformat(), str(balance)),
+        )
+        return identifier, "updated" if existing else "added"
+
+    def import_account_balances(self, owner: str, entries: list[tuple[str, date, Decimal]]) -> dict[str, int]:
+        """Add balances in bulk; a row already saved for that account and day is updated, never repeated."""
+
+        counts = {"added": 0, "updated": 0, "unchanged": 0}
+        with closing(self.connect()) as connection, connection:
+            for account, day, balance in entries:
+                counts[self._upsert_balance(connection, owner, account, day, balance)[1]] += 1
+        return counts
 
     def delete_account_balance(self, owner: str, identifier: str) -> None:
         with closing(self.connect()) as connection, connection:

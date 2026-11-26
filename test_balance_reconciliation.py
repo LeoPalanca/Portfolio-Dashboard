@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
+import io
 import tempfile
 import unittest
 from contextlib import ExitStack
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
+from openpyxl import Workbook
+
 import app
 from src.portfolio_dashboard.imports import intesa_pdf
 from src.portfolio_dashboard.movements.personal import PersonalLedger
-from src.portfolio_dashboard.movements.reconcile import AccountMovement, BalanceCheckpoint, reconcile_balances
-from test_intesa_pdf import statement_text, xlsx_export
+from src.portfolio_dashboard.movements.reconcile import AccountMovement, BalanceCheckpoint, reconcile_balances, uncovered_days
+from test_intesa_pdf import statement_text
 
 
 def point(day: date, balance: str, account: str = "Bank", origin: str = "statement") -> BalanceCheckpoint:
@@ -74,6 +77,42 @@ class ReconcileBalancesTest(unittest.TestCase):
         self.assertEqual((result["rows"], result["intervals"]), ([], []))
 
 
+class CoverageTest(unittest.TestCase):
+    """A gap is unrecorded money only where imported statements cover every day of it."""
+
+    checkpoints = [point(date(2023, 1, 31), "100"), point(date(2023, 3, 31), "40")]
+    movements = [moved(date(2023, 2, 10), "-30")]
+
+    def reconcile(self, *ranges: tuple[date, date]) -> dict:
+        return reconcile_balances(self.movements, self.checkpoints, coverage={"bank": list(ranges)})
+
+    def test_an_uncovered_interval_gives_no_row(self) -> None:
+        result = self.reconcile()
+        (interval,) = result["intervals"]
+        self.assertEqual(result["rows"], [])
+        self.assertEqual((interval["status"], interval["missing"]), ("missing_statements", [(date(2023, 2, 1), date(2023, 3, 31))]))
+        self.assertEqual(interval["gap"], Decimal(-30))
+        self.assertIn("statements missing for 1 period", result["accounts"][0]["message"])
+
+    def test_a_fully_covered_interval_gives_a_row(self) -> None:
+        # Two files that together cover February and March, overlapping by a few days.
+        result = self.reconcile((date(2023, 2, 1), date(2023, 3, 3)), (date(2023, 3, 1), date(2023, 4, 30)))
+        self.assertEqual([(row["flow_kind"], row["amount_eur"]) for row in result["rows"]], [("calculated_expense", Decimal(30))])
+        self.assertEqual(result["intervals"][0]["missing"], [])
+
+    def test_a_partly_covered_interval_gives_no_row_and_lists_the_gap(self) -> None:
+        result = self.reconcile((date(2023, 2, 1), date(2023, 2, 28)), (date(2023, 3, 20), date(2023, 3, 25)))
+        self.assertEqual(result["rows"], [])
+        self.assertEqual(
+            result["intervals"][0]["missing"],
+            [(date(2023, 3, 1), date(2023, 3, 19)), (date(2023, 3, 26), date(2023, 3, 31))],
+        )
+
+    def test_uncovered_days(self) -> None:
+        self.assertEqual(uncovered_days(date(2023, 1, 1), date(2023, 1, 1), []), [])
+        self.assertEqual(uncovered_days(date(2023, 1, 1), date(2023, 1, 3), [(date(2022, 1, 1), date(2023, 1, 2))]), [(date(2023, 1, 3), date(2023, 1, 3))])
+
+
 class RevolutBalanceTest(unittest.TestCase):
     def test_the_regular_statement_gives_opening_and_closing_balances_that_reconcile(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -123,6 +162,52 @@ class ManualBalanceTest(unittest.TestCase):
         self.assertEqual(remaining, [])
 
 
+class OverlappingExportCoverageTest(unittest.TestCase):
+    def test_a_later_export_covers_what_it_lists_even_where_an_earlier_one_stored_the_rows(self) -> None:
+        january = [(date(2023, 1, day), "Example market", "Generi alimentari e supermercato", -10) for day in (2, 20)]
+        february = [*january, (date(2023, 2, 20), "Example market", "Generi alimentari e supermercato", -10)]
+        with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
+            root = Path(temporary)
+            for name, value in (
+                ("ROOT_DIR", root / "sources"),
+                ("MOVEMENT_DATABASE", root / "private" / "movements.sqlite3"),
+                ("_movement_store", None),
+                ("_legacy_imported_portfolios", {app.PRIMARY_PORTFOLIO_ID}),
+                ("read_expense_category_rules", lambda *args: []),
+            ):
+                stack.enter_context(patch.object(app, name, value))
+            for name, rows in (("january.xlsx", january), ("february.xlsx", february)):
+                (root / name).write_bytes(stated_export(rows, None))
+                app.import_statement_path(root / name, original_name=name, requested_source="intesa")
+            ledger = PersonalLedger(app.MOVEMENT_DATABASE)
+            for day, balance in ((date(2023, 1, 1), "100"), (date(2023, 2, 20), "50")):
+                ledger.save_account_balance(app.PRIMARY_PORTFOLIO_ID, {"account": "Intesa", "amount": balance, "date": day.isoformat()}, {"Intesa"})
+            stored = [row["occurred_on"] for row in app.get_movement_store().movements() if row["import_id"] == 2]
+            (interval,) = app.balance_reconciliation(app.PRIMARY_PORTFOLIO_ID)["intervals"]
+
+        # The second export stored only its new row, yet it covers 2 January to 20 February.
+        self.assertEqual(stored, ["2023-02-20"])
+        self.assertEqual((interval["missing"], interval["calculated"], interval["gap_eur"]), ([], "expense", -20.0))
+
+
+def stated_export(rows: list[tuple], period: tuple[str, str] | None) -> bytes:
+    """An Intesa XLSX export; above the table it states the period it lists."""
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Lista Operazione"
+    if period:
+        sheet.append((None, "Data inizio periodo:", period[0]))
+        sheet.append((None, "Data fine periodo:", period[1]))
+    sheet.append(("Data", "Operazione", "Dettagli", "Conto o carta", "Contabilizzazione", "Categoria ", "Valuta", "Importo"))
+    for day, merchant, category, amount in rows:
+        sheet.append((day, merchant, f"Payment to {merchant}", "Conto", "SI", category, "EUR", amount))
+    output = io.BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
+
+
 class ReconciliationPayloadTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -142,7 +227,7 @@ class ReconciliationPayloadTest(unittest.TestCase):
         self.client = self.stack.enter_context(app.app.test_client())
         for name, content in (
             ("q1.pdf", b"%PDF q1"),
-            ("export.xlsx", xlsx_export([(date(2023, 4, 2), "Example streaming", "Addebito EXAMPLE STREAMING", "Tempo libero varie", -9.99)])),
+            ("export.xlsx", stated_export([(date(2023, 4, 2), "Example streaming", "Tempo libero varie", -9.99)], ("01/04/2023", "30/04/2023"))),
         ):
             path = self.root / name
             path.write_bytes(content)
@@ -166,28 +251,44 @@ class ReconciliationPayloadTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_json())
         return response.get_json()
 
-    def test_a_current_balance_turns_the_unexplained_change_into_calculated_expenses(self) -> None:
+    def test_a_dated_balance_inside_imported_coverage_turns_the_gap_into_calculated_expenses(self) -> None:
         before = self.client.get("/api/expenses").get_json()
-        after = self.post(action="save_balance", account="Intesa", amount="3000.00")
+        after = self.post(action="save_balance", account="Intesa", amount="3000.00", date="2023-04-30")
         intesa = next(item for item in after["reconciliation"]["accounts"] if item["account"] == "Intesa")
         calculated = [row for row in after["rows"] if row["calculated"]]
         statuses = {item["account"]: item["status"] for item in before["reconciliation"]["accounts"]}
+        coverage = sorted((account, first.isoformat(), last.isoformat()) for _id, account, first, last in app.get_movement_store().coverage())
 
         self.assertEqual(statuses, {"Intesa": "reconciled", "Trade Republic": "no_balance"})
         self.assertEqual([item["calculated"] for item in before["reconciliation"]["intervals"]], [None])
-        self.assertEqual(intesa["reconciled_to"], date.today().isoformat())
-        # 3 209.50 at the statement's end, -9.99 recorded since, 3 000.00 today.
+        # The statement covers its quarter; the export the period it states, not just its
+        # one row. (The Trade Republic row was stored without a file: its row is its span.)
+        self.assertEqual(coverage, [("Intesa", "2023-01-01", "2023-03-31"), ("Intesa", "2023-04-01", "2023-04-30")])
+        self.assertEqual(intesa["reconciled_to"], "2023-04-30")
+        # 3 209.50 at the statement's end, -9.99 recorded since, 3 000.00 on 30 April.
         self.assertEqual(
             [(row["date"], row["source"], row["flow_kind"], row["category"], row["amount_eur"], row["movement_id"]) for row in calculated],
-            [(date.today().isoformat(), "Intesa", "calculated_expense", "Calculated expenses", 199.51, None)],
+            [("2023-04-30", "Intesa", "calculated_expense", "Calculated expenses", 199.51, None)],
         )
         self.assertEqual(round(after["summary"]["spend_eur"] - before["summary"]["spend_eur"], 2), 199.51)
         self.assertEqual(after["summary"]["calculated_expenses_eur"], 199.51)
         self.assertIn("Calculated expenses", {row["category"] for row in after["by_category"]})
-        self.assertNotIn(date.today().isoformat(), {row["last_date"] for row in after["coverage"]})
+
+        # Today's balance: nothing imported covers May onwards, so that period is a data gap.
+        today = self.post(action="save_balance", account="Intesa", amount="2500.00")
+        latest = today["reconciliation"]["intervals"][-1]
+        self.assertEqual((latest["status"], latest["calculated"]), ("missing_statements", None))
+        self.assertEqual(latest["missing"], [{"from": "2023-05-01", "to": date.today().isoformat()}])
+        self.assertEqual(len([row for row in today["rows"] if row["calculated"]]), 1)
 
         removed = self.post(action="delete_balance", id=intesa["manual_balances"][0]["id"])
         self.assertEqual([row for row in removed["rows"] if row["calculated"]], [])
+
+    def test_balances_are_not_dated_in_the_future(self) -> None:
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        response = self.client.post("/api/expenses", json={"action": "save_balance", "account": "Intesa", "amount": "1", "date": tomorrow})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("future", response.get_json()["error"])
 
     def test_unknown_accounts_are_refused(self) -> None:
         response = self.client.post("/api/expenses", json={"action": "save_balance", "account": "Elsewhere", "amount": "1"})

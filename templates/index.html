@@ -839,7 +839,11 @@
           </div>
           <div class="table-wrap">
             <h3>Balance reconciliation <span class="subtle">(all dates)</span></h3>
-            <p class="subtle">Statement balances and the current balances you enter anchor each account. Between two balances, whatever the recorded movements do not explain becomes Calculated expenses or Calculated income (gaps under €1 are ignored), so the account ends at its real balance.</p>
+            <p class="subtle">Statement balances and the balances you enter anchor each account. Between two balances, whatever the recorded movements do not explain becomes Calculated expenses or Calculated income (gaps under €1 are ignored), so the account ends at its real balance. A period imported statements do not fully cover shows its missing statements instead and is not calculated.</p>
+            <div class="personal-ledger-toolbar">
+              <label class="ledger-import">Import balances <span class="subtle">CSV: account, date, balance[, currency]</span><input type="file" accept=".csv,text/csv" data-ledger-import="import_balances" data-ledger-status="balance-import-status"></label>
+              <span id="balance-import-status" class="subtle" role="status"></span>
+            </div>
             <table>
               <thead><tr><th>Account</th><th>Status</th><th>Latest balance</th><th>Current balance</th></tr></thead>
               <tbody id="reconciliation-accounts"></tbody>
@@ -851,7 +855,10 @@
           </div>
           <div class="table-wrap">
             <h3>Manual cash ledger <span class="subtle">(all dates)</span></h3>
-            <div class="personal-ledger-toolbar"><strong id="cash-ledger-balance"></strong><button type="button" onclick="openCashOpeningBalance()">Set opening balance</button></div>
+            <div class="personal-ledger-toolbar"><strong id="cash-ledger-balance"></strong><button type="button" onclick="openCashOpeningBalance()">Set opening balance</button>
+              <label class="ledger-import">Import cash expenses <span class="subtle">CSV: date, amount, description, category[, subcategory]</span><input type="file" accept=".csv,text/csv" data-ledger-import="import_cash" data-ledger-status="cash-import-status"></label>
+              <span id="cash-import-status" class="subtle" role="status"></span>
+            </div>
             <p class="subtle">Opening balance is cash held before the first entry. Current cash includes all recorded cash entries, regardless of the dashboard period, and is not part of investment market value.</p>
             <table><thead><tr><th>Date</th><th>Merchant / payee</th><th>Category</th><th>Amount EUR</th><th>Actions</th></tr></thead><tbody id="cash-ledger-rows"></tbody></table>
           </div>

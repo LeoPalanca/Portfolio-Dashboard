@@ -143,7 +143,14 @@ balance) and the current balances entered under Income & expenses are reconcilia
 checkpoints, never cash flows. Between two checkpoints of an account, a change its
 recorded movements do not explain (beyond €1) is shown as Calculated expenses or
 Calculated income, so the account ends at its real balance; accounts without two
-balances are listed as not reconciled and get nothing calculated.
+balances are listed as not reconciled and get nothing calculated. A gap is only
+calculated where imported files cover every day between the two balances (a PDF
+statement its own period, an export the period it states or else its first to last
+movement); otherwise the period shows its missing statements instead. Balances can
+be dated, or imported in bulk from a CSV (`account,date,balance[,currency]`); cash
+spending can be imported from a CSV (`date,amount,description,category[,subcategory]`)
+into the manual cash ledger, which is reconciled like any other account. Re-importing
+either file adds nothing twice, and unknown accounts or categories are reported.
 
 ### Personal trade template
 

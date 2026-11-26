@@ -3042,8 +3042,8 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
           const entries = row.manual_balances || [];
           const latest = entries[entries.length - 1];
           const actions = latest
-            ? `<button type="button" data-balance-edit="${escapeHtml(latest.id)}" data-balance-account="${escapeHtml(row.account)}" data-balance-amount="${Number(latest.balance_eur)}">Edit ${escapeHtml(latest.date)}</button> <button type="button" data-balance-delete="${escapeHtml(latest.id)}">Remove</button> <button type="button" data-balance-account="${escapeHtml(row.account)}">Enter current balance</button>`
-            : `<button type="button" data-balance-account="${escapeHtml(row.account)}">Enter current balance</button>`;
+            ? `<button type="button" data-balance-edit="${escapeHtml(latest.id)}" data-balance-account="${escapeHtml(row.account)}" data-balance-amount="${Number(latest.balance_eur)}" data-balance-date="${escapeHtml(latest.date)}">Edit ${escapeHtml(latest.date)}</button> <button type="button" data-balance-delete="${escapeHtml(latest.id)}">Remove</button> <button type="button" data-balance-account="${escapeHtml(row.account)}">Enter a balance</button>`
+            : `<button type="button" data-balance-account="${escapeHtml(row.account)}">Enter a balance</button>`;
           return `
           <tr>
             <td>${escapeHtml(row.account)}</td>
@@ -3062,9 +3062,17 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
             <td>${money(row.closing_eur)}</td>
             <td>${money(row.recorded_eur)}${row.movements ? "" : " · none imported"}</td>
             <td class="${row.calculated ? signedClass(row.gap_eur) : ""}">${money(row.gap_eur)}</td>
-            <td>${row.calculated === "expense" ? "Calculated expenses" : row.calculated === "income" ? "Calculated income" : "Reconciled"}</td>
+            <td>${reconciliationResult(row)}</td>
           </tr>
         `).join("");
+    }
+    // A period no imported statement fully covers is a data gap: its balance change is
+    // shown, but nothing is calculated for it.
+    function reconciliationResult(row) {
+      if ((row.missing || []).length) {
+        return `Missing statements: ${row.missing.map(range => range.from === range.to ? escapeHtml(range.from) : `${escapeHtml(range.from)} → ${escapeHtml(range.to)}`).join(", ")}`;
+      }
+      return row.calculated === "expense" ? "Calculated expenses" : row.calculated === "income" ? "Calculated income" : "Reconciled";
     }
     let expenseRowLimit = 30;
     function renderExpenseTransactions() {

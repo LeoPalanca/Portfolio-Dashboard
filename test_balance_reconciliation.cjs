@@ -62,7 +62,9 @@ context.renderExpenses({ expenses: { status: 'available', rows, reconciliation: 
     { account: 'Card', message: 'No balance yet — enter the current balance to reconcile', latest_balance_eur: null, manual_balances: [] },
   ],
   intervals: [
-    { account: 'Bank', start: '2026-01-31', end: '2026-02-28', opening_eur: 100, closing_eur: 900, recorded_eur: 840, movements: 0, gap_eur: -40, calculated: 'expense' },
+    { account: 'Bank', start: '2026-01-31', end: '2026-02-28', opening_eur: 100, closing_eur: 900, recorded_eur: 840, movements: 0, gap_eur: -40, calculated: 'expense', missing: [] },
+    { account: 'Bank', start: '2026-02-28', end: '2026-06-30', opening_eur: 900, closing_eur: 950, recorded_eur: 0, movements: 0, gap_eur: 50, calculated: null,
+      missing: [{ from: '2026-03-01', to: '2026-05-31' }, { from: '2026-06-30', to: '2026-06-30' }] },
   ],
 } } });
 const metrics = nodes.get('expense-metrics').innerHTML;
@@ -75,6 +77,10 @@ assert(accounts.includes('data-balance-edit="m1"') && accounts.includes('data-ba
 assert(accounts.includes('No balance yet'));
 const intervals = nodes.get('reconciliation-intervals').innerHTML;
 assert(intervals.includes('Calculated expenses') && intervals.includes('none imported') && intervals.includes('-40.00'));
+// A period imported statements do not cover lists its gaps instead of a calculated row.
+assert(intervals.includes('Missing statements: 2026-03-01 → 2026-05-31, 2026-06-30'));
+assert(!intervals.includes('Calculated income'));
+assert(accounts.includes('data-balance-date="2026-02-28"'));
 
 context.renderExpenses({ expenses: { status: 'available', rows: [row('income', 10)] } });
 assert.equal(nodes.get('expense-topup-note').hidden, true);

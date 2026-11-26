@@ -38,12 +38,14 @@ def read_revolut_rows(path: Path) -> list[dict[str, str]]:
         return [
             dict(zip(rows[0], row)) for row in rows[1:] if any(row)
         ]
-    if rows[0][0].strip() != "Conti correnti Riepiloghi":
+    # Blank lines may precede the consolidated statement's first section title.
+    start = next((index for index, row in enumerate(rows) if any(cell.strip() for cell in row)), 0)
+    if not rows[start] or rows[start][0].strip() != "Conti correnti Riepiloghi":
         return []
     currency = ""
     headers: list[str] = []
     result: list[dict[str, str]] = []
-    for row in rows[1:]:
+    for row in rows[start + 1 :]:
         if not row or not any(row):
             headers = []
             continue
