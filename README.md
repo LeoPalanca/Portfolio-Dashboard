@@ -152,10 +152,16 @@ spending can be imported from a CSV (`date,amount,description,category[,subcateg
 into the manual cash ledger, which is reconciled like any other account. Re-importing
 either file adds nothing twice, and unknown accounts or categories are reported.
 Once the cash ledger is in use (it has entries, an opening balance or a balance),
-bank movements of physical cash move it too: a cash withdrawal puts money into it,
-cash paid in at a bank (Intesa's "Versamento Contanti") takes money out, and that
-deposit is a transfer from Cash instead of income. A cash transfer you entered
-yourself for the same money is not counted twice.
+a bank's cash withdrawal puts money into it. Cash paid in at a bank (Intesa's
+"Versamento Contanti") stays income, because the cash ledger records spending, not
+the cash that came in, unless the ledger's balances bracket the deposit: at least two
+Cash balances, the first before the deposit day and the last on or after it (the
+opening balance counts only together with a later balance). Then the deposit is a
+transfer from Cash and takes money out of it, and cash that came in without an entry
+shows up as Calculated income of Cash instead. A deposit counted as income, or one
+you set to income yourself, never leaves Cash, so the same money is not counted
+twice. A cash transfer you entered yourself for the same money is not counted twice
+either.
 
 ### Personal trade template
 
@@ -243,11 +249,14 @@ imported whole into the profile you choose.
 Each row is tagged with its sub-account, e.g. "Revolut · Vacanze (EUR)", and each
 sub-account is reconciled on its own, from its running balance, in its own currency.
 Money moved between your own sub-accounts (pockets, vaults, the deposit, Pro, a
-currency exchange) is internal on both sides; deposit interest is income. A transfer
-between your personal account and the joint account is a transfer out on your side
-and a top-up (a member's contribution) on the household side, never income or
-spending. When regular Revolut statements are imported as well, rows both formats
-list are still stored once; a sub-account that lost rows that way gets no balances
+currency exchange) is internal on both sides; deposit interest is income. Money you
+move from your personal account into the joint account is spending on your side, in
+the "Family account" category, and money the joint account pays back to you refunds
+that spending; on the household side the same transfers are a top-up (a member's
+contribution) and a transfer out. Your side is never paired with another account's
+transfer as an own-account transfer. A category rule or a correction can reclassify
+it. When regular Revolut statements are imported as well, rows both formats list are
+still stored once; a sub-account that lost rows that way gets no balances
 from the consolidated file, because its movements then sit under two account labels.
 
 If a private cash-account export begins after the account was funded, record the
@@ -343,9 +352,24 @@ priority,enabled,source,match_field,match_type,pattern,category,subcategory,merc
 `regex`. Copy `data/expense_category_rules.example.csv` into the external `data_dir`
 and customize it.
 
-Refunds and cashback are income. Transfers, investments, credits, withdrawals,
-fees, and spending remain separate flows so net outflow is not treated as pure
-consumption. Fund and securities subscriptions, purchases, sales and redemptions
+A merchant's refund lowers spending; cashback and rewards are credits (money
+received, not income). Transfers, investments, credits, withdrawals, fees, and
+spending remain separate flows so net outflow is not treated as pure consumption.
+
+Money coming into Revolut is classified by what the statement says about it. A card
+or Apple Pay top-up ("Ricarica di …") and a "Deposito" (no payer, filed by Revolut
+under top-ups) are top-ups from your own money. A payment from someone ("Pagamento
+da …", "Pagamento da parte di …") depends on the payer: a payment processor or
+cashback site (PayPal, Satispay, MANGOPAY, OrangeBuddies) is money received; you
+(one of your `self_transfer_names`, in any word order) or a bank this dashboard
+imports is a top-up; an organisation (a legal form such as S.r.l., GmbH or B.V., or
+a word such as università, school, comune) is income; anyone else is a private
+person, and their payment is money received. A top-up or payment another imported
+account sent is paired with that transfer and becomes an internal top-up. A rule
+whose category is Income makes money in income, and one whose category is Money
+received makes it a credit, e.g. to count a person's payment for lessons as income.
+
+Fund and securities subscriptions, purchases, sales and redemptions
 (Intesa's "Rimborso titoli/quote/fondi") are investment flows: money back from an
 investment lowers the net investment outflow. A redemption whose beneficiary is
 someone else (not one of your `self_transfer_names`) is money received, a credit.

@@ -248,13 +248,16 @@ class ProfileSplitTest(unittest.TestCase):
 
     def test_classification_of_each_side(self) -> None:
         own = Counter((row["event_type"], row["description"]) for row in self.parse(app.PRIMARY_PORTFOLIO_ID) if row["event_type"] not in {"cash_flow", "balance_checkpoint"})
+        # A private person's payment is money received, and money put into the joint
+        # account is spending of the holder ("Family account").
         self.assertEqual(own, Counter({
             ("spend", "Example Market"): 1, ("spend", "Example Cafe"): 1, ("spend", "Example Software"): 1, ("spend", "Example Shop"): 1,
-            ("income", "Pagamento da parte di Example Friend"): 1, ("income", "Interessi netti"): 1,
+            ("credit", "Pagamento da parte di Example Friend"): 1, ("income", "Interessi netti"): 1,
             ("cash_withdrawal", "Prelievo di contanti presso Example Bank"): 1,
+            ("spend", "Pagamento a favore di EXAMPLE OWNER & EXAMPLE PARTNER"): 1,
         }))
         household = Counter((row["event_type"], row["description"]) for row in self.parse(HOUSEHOLD) if row["event_type"] not in {"cash_flow", "balance_checkpoint"})
-        self.assertEqual(household, Counter({("spend", "Example Grocer"): 1, ("income", "Pagamento da parte di Example Relative"): 1}))
+        self.assertEqual(household, Counter({("spend", "Example Grocer"): 1, ("credit", "Pagamento da parte di Example Relative"): 1}))
 
     def test_foreign_rows_are_priced_by_the_statement_itself(self) -> None:
         cafe = next(row for row in self.parse(app.PRIMARY_PORTFOLIO_ID) if row["description"] == "Example Cafe" and row["event_type"] == "spend")
@@ -295,7 +298,7 @@ class ProfileSplitTest(unittest.TestCase):
 
 
 class JointProfileImportTest(unittest.TestCase):
-    def test_one_file_imports_into_both_profiles_and_transfers_are_neither_income_nor_spend(self) -> None:
+    def test_one_file_imports_into_both_profiles_and_the_holder_spends_into_the_family_account(self) -> None:
         text = statement_text()
         with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
             isolated_app(stack, Path(temporary))
@@ -310,15 +313,18 @@ class JointProfileImportTest(unittest.TestCase):
         self.assertEqual([response.get_json()["status"] for response in (own_first, household_first)], ["imported", "imported"])
         self.assertEqual([response.get_json()["status"] for response in (own_again, household_again)], ["duplicate", "duplicate"])
 
-        to_joint = [row for row in own["rows"] if row["merchant"] == "Joint account"]
-        self.assertEqual([(row["flow_kind"], row["amount_eur"]) for row in to_joint], [("transfer_out", 100.0)])
+        # The holder's side: money put into the joint account is spending, no longer a transfer out.
+        to_joint = [row for row in own["rows"] if row["merchant"] == "Family account"]
+        self.assertEqual([(row["flow_kind"], row["category"], row["amount_eur"], row["internal"]) for row in to_joint],
+                         [("spend", "Family account", 100.0, False)])
         contributions = sorted((row["merchant"], row["flow_kind"], row["amount_eur"]) for row in household["rows"] if row["flow_kind"] == "top_up")
         self.assertEqual(contributions, [("EXAMPLE OWNER", "top_up", 100.0), ("Example Partner", "top_up", 80.0)])
-        self.assertEqual(household["summary"]["income_eur"], 25.0)
+        # A relative's payment is money received, not income.
+        self.assertEqual((household["summary"]["income_eur"], household["summary"]["credits_eur"]), (0.0, 25.0))
         self.assertEqual(household["summary"]["spend_eur"], 45.0)
-        # Pockets, Pro and the exchange to CHF are neither income nor spending.
-        self.assertEqual(own["summary"]["income_eur"], 12.03)
-        self.assertAlmostEqual(own["summary"]["spend_eur"], 42.26)
+        # Pockets, Pro and the exchange to CHF are neither income nor spending; a friend's payment is money received.
+        self.assertEqual((own["summary"]["income_eur"], own["summary"]["credits_eur"]), (0.03, 12.0))
+        self.assertAlmostEqual(own["summary"]["spend_eur"], 142.26)
 
         accounts = {item["account"]: item for item in own["reconciliation"]["accounts"]}
         self.assertEqual(accounts["Revolut · Conto personale (CHF)"]["currency"], "CHF")

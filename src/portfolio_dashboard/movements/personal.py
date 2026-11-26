@@ -17,6 +17,11 @@ def match_key(value: str) -> str:
 
 
 class PersonalLedger:
+    # Transaction types a user correction may set; "refund" is money back that lowers spending.
+    SUPPORTED_KINDS = frozenset(
+        {"income", "spend", "credit", "refund", "personal_transfer", "investment", "cash_withdrawal", "fee", "top_up"}
+    )
+
     def __init__(self, path: Path):
         self.path = path
 
@@ -110,6 +115,8 @@ class PersonalLedger:
                 event.update(category=selected["category"], subcategory=selected["subcategory"])
                 if selected.get("flow_kind"):
                     event["flow_kind"] = selected["flow_kind"]
+                    # Only a correction of this row sets a type; a rule keeps the one it matched.
+                    event["flow_kind_chosen"] = selected is not rule
         return events
 
     def set_category(
@@ -149,7 +156,7 @@ class PersonalLedger:
             ]
 
     def set_direction(self, owner: str, movement_id: int, flow_kind: str) -> None:
-        if flow_kind not in {"income", "spend", "credit", "personal_transfer", "investment", "cash_withdrawal", "fee", "top_up"}:
+        if flow_kind not in self.SUPPORTED_KINDS:
             raise ValueError("Choose a supported transaction type")
         with closing(self.connect()) as connection, connection:
             connection.execute(

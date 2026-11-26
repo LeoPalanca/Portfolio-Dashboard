@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.20.1 — 2026-11-26
+
+- **Cash paid into a bank counts as income again.** 0.20.0 treated every cash deposit as a transfer out of the cash ledger, which dropped the income that cash came from (for example lessons paid in cash) whenever the ledger recorded only spending. A deposit is now a transfer from Cash only when two cash balances span it, so the reconciliation can show the cash that came in as calculated income; otherwise it stays income.
+- **Money coming into Revolut from others.** Payments from organisations (a university, an employer) are income; money from payment services such as PayPal or Satispay, cashback, rewards and payments from private persons are money received; refunds from shops reduce spending. Card and Apple Pay top-ups and transfers from your own accounts stay top-ups.
+- **Family account.** Money you move into the joint family account is spending in a new "Family account" category, and money it sends back is a refund. The household profile still sees it as your contribution.
+- **Corrections.** "Refund" is available as a transaction type when correcting a movement. Archived statements are re-read once (parser `ledger-8`).
+
 ## 0.20.0 — 2026-11-26
 
 - **Revolut sub-accounts.** A consolidated Revolut statement is read account by account: the personal account in each currency, Pro, pockets and vaults, the savings deposit and a joint account. Every movement carries its sub-account. Moving money between your own sub-accounts, including currency exchanges, is an internal transfer on both sides, never spending or income. Each sub-account is reconciled against its own running balance, in its own currency. Foreign-currency sub-accounts are now read from their own currency column, and the parser moves to `ledger-7`, so archived statements are re-read once.

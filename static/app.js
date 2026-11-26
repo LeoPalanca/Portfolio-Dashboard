@@ -2564,6 +2564,8 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       const kind = expenseKind(row);
       const amount = Number(row.amount_eur || 0);
       if (row.cash_id) return Number(row.native_amount || 0);
+      // A refund is money back that lowers spending: money in, like income and credits.
+      if (row.flow_kind === "refund") return amount;
       return kind === "income" || kind === "credits" || isInvestmentInflow(row) ? amount : -amount;
     }
     // Card statements spell one shop many ways (processor prefixes, store numbers,

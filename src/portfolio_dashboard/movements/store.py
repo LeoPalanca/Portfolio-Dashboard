@@ -17,13 +17,14 @@ from typing import Any
 SCHEMA_VERSION = 4
 
 
+BANK_EVENT_TYPES = frozenset({
+    "income", "spend", "credit", "refund", "personal_transfer", "investment",
+    "fee", "cash_withdrawal", "cash_movement", "top_up",
+})
+
+
 def _event_family(kind: str) -> str:
-    return (
-        "bank"
-        if kind
-        in {"income", "spend", "credit", "personal_transfer", "investment", "fee", "cash_withdrawal", "cash_movement", "top_up"}
-        else kind
-    )
+    return "bank" if kind in BANK_EVENT_TYPES else kind
 
 
 def _movement_fingerprint(canonical: Mapping[str, str]) -> str:
