@@ -217,6 +217,35 @@ def _take_text(row: IntesaStatementRow, line: str, start: int, columns: _Columns
         row.lines.append(text.strip())
 
 
+# Securities and fund operations: subscriptions, purchases, sales and redemptions.
+# They move money into or out of an investment, never a refund ("rimborso titoli").
+INVESTMENT_OPERATION = re.compile(
+    r"rimborso\s+(?:di\s+)?(?:titol|quot|fond)|\bredemption\b|disinvestiment"
+    r"|sottoscrizion\w*\s+(?:di\s+)?(?:titol|quot|fond|azion|obbligaz)"
+    r"|(?:compravendita|vendita|acquisto)\s+(?:di\s+)?(?:titol|quot|fond)",
+    re.IGNORECASE,
+)
+INVESTMENT_CATEGORY = "Investimenti titoli e fondi"
+BENEFICIARY = re.compile(r"\b(?i:BENEF(?:ICIARIO)?)\b\.?\s*:?\s*(?P<name>.*?)\s*(?=\b[A-Z][A-Z/]{1,}\.?\s*:|$)")
+
+
+def detail_beneficiary(text: str) -> str:
+    """The name after a "BENEF.:" label in a movement's details ("" when there is none)."""
+
+    match = BENEFICIARY.search(" ".join(str(text or "").split()))
+    name = match.group("name").strip(" -.:;") if match else ""
+    return "" if NOT_A_NAME.match(name or "-") else name
+
+
+def statement_row_beneficiary(row: IntesaStatementRow) -> str:
+    """The beneficiary a statement row's details name on their "BENEF.:" line."""
+
+    for line in row.lines[1:]:
+        if re.match(r"\s*BENEF", line, re.IGNORECASE):
+            return detail_beneficiary(line)
+    return ""
+
+
 SOURCE_CATEGORIES = (
     (r"giroconto", None),
     (r"bonifico.*(?:a vostro favore|ricevut)", "Bonifici ricevuti"),
@@ -243,13 +272,16 @@ def statement_row_fields(row: IntesaStatementRow) -> tuple[str, str, str]:
     folded = kind.casefold()
     amount = row.amount or Decimal(0)
     category = kind
-    for pattern, mapped in SOURCE_CATEGORIES:
-        if re.search(pattern, folded):
-            category = mapped or ("Giroconto in entrata" if amount > 0 else "Giroconto in uscita")
-            break
+    if "giroconto" not in folded and INVESTMENT_OPERATION.search(" ".join(row.lines)):
+        category = INVESTMENT_CATEGORY
     else:
-        if amount > 0 and "pagamento" in folded:
-            category = "Rimborsi spese e storni"
+        for pattern, mapped in SOURCE_CATEGORIES:
+            if re.search(pattern, folded):
+                category = mapped or ("Giroconto in entrata" if amount > 0 else "Giroconto in uscita")
+                break
+        else:
+            if amount > 0 and "pagamento" in folded:
+                category = "Rimborsi spese e storni"
     details = row.lines[1:]
     merchant = ""
     for line in details:
