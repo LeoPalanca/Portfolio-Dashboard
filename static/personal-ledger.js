@@ -25,7 +25,31 @@
     if (owner !== savedOwner) return;
     data = result; onChange(result); renderCash();
     node("personal-ledger-status").textContent = "Saved";
+    return result;
   }
+  // Bulk CSV imports (balances, cash spending) go through the same ledger write.
+  function importSummary(result) {
+    const report = result.import_result || {};
+    const counts = [["added", report.added], ["updated", report.updated], ["already there", report.unchanged]]
+      .filter(([, count]) => count !== undefined).map(([label, count]) => `${count} ${label}`).join(", ");
+    const skipped = (report.skipped || []).slice(0, 8).map(item => `line ${item.line}: ${item.reason}`).join("; ");
+    const more = (report.skipped || []).length > 8 ? ` (+${report.skipped.length - 8} more)` : "";
+    return `${report.kind === "cash" ? "Cash expenses" : "Balances"} imported: ${counts || "nothing"}${skipped ? ` · skipped ${skipped}${more}` : ""}`;
+  }
+  document.addEventListener("change", async event => {
+    const input = event.target.closest("input[data-ledger-import]");
+    if (!input || !input.files?.length) return;
+    const status = node(input.dataset.ledgerStatus) || node("personal-ledger-status");
+    try {
+      input.disabled = true;
+      const result = await write({action: input.dataset.ledgerImport, csv: await input.files[0].text()});
+      status.textContent = importSummary(result);
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      input.disabled = false; input.value = "";
+    }
+  });
   window.personalLedger = {
     async load(person, callback) {
       const request = ++sequence;
@@ -75,12 +99,29 @@
       finally {button.disabled = false;}
     };
   };
+  const localToday = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  };
+  // An account's end-of-day balance; it reconciles the account's movements since its previous balance.
+  function openAccountBalance(account, id = "", current = "", day = "") {
+    if (!data.categories) return;
+    const today = localToday();
+    dialog(id ? `Edit balance · ${account}` : `Balance · ${account}`, `<p class="subtle">The balance ${escape(account)} showed at the end of the day (EUR, negative when overdrawn). Money the imported movements do not explain since the previous balance becomes Calculated expenses or Calculated income, provided imported statements cover the whole period.</p><form id="account-balance-form" class="personal-ledger-form"><label>Date<input name="date" type="date" required max="${today}" value="${escape(day || today)}"></label><label>Balance EUR<input name="amount" type="number" min="-1000000000" max="1000000000" step="0.01" required value="${escape(current)}"></label><button type="submit">Save balance</button></form>`);
+    node("account-balance-form").onsubmit = async event => {
+      event.preventDefault(); const button = event.submitter || event.target.querySelector('[type="submit"]'); button.disabled = true;
+      const form = new FormData(event.target);
+      try {await write({action:"save_balance", account, id, amount:form.get("amount"), date:form.get("date")}); node("personal-ledger-dialog").close();}
+      catch (error) {node("personal-ledger-error").textContent = error.message;}
+      finally {button.disabled = false;}
+    };
+  }
   function openCategory(id) {
     const row = (data.rows || []).find(item => item.movement_id === id);
     if (!row) return;
     dialog("Set transaction category", `<p>${escape(row.merchant)} · ${escape(row.source_label)} · ${escape(row.date)}</p>
       <form id="category-entry-form" class="personal-ledger-form">
-      <label class="personal-ledger-wide">Transaction type (explicit correction)<select name="flow_kind">${[["spend","Expense"],["income","Income"],["credit","Refund / credit"],["personal_transfer","Own-account transfer"],["investment","Investment"],["cash_withdrawal","Cash withdrawal"],["fee","Bank fee"]].map(([kind,label])=>`<option value="${kind}" ${row.flow_kind===kind?"selected":""}>${label}</option>`).join("")}</select></label>
+      <label class="personal-ledger-wide">Transaction type (explicit correction)<select name="flow_kind">${[["spend","Expense"],["income","Income"],["credit","Refund / credit"],["personal_transfer","Own-account transfer"],["top_up","Money in from own account"],["investment","Investment"],["cash_withdrawal","Cash withdrawal"],["fee","Bank fee"]].map(([kind,label])=>`<option value="${kind}" ${row.flow_kind===kind?"selected":""}>${label}</option>`).join("")}</select></label>
       <label>Category<select name="category">${options(row.category)}</select></label>
       <label>Subcategory<input name="subcategory" maxlength="500" value="${escape(row.subcategory)}"></label>
       <label class="personal-ledger-wide personal-ledger-check"><input name="learn" type="checkbox" checked>Use for the same merchant, source and direction</label>
@@ -114,7 +155,11 @@
     if (!button) return;
     if (button.dataset.categoryEdit) return openCategory(Number(button.dataset.categoryEdit));
     if (button.dataset.cashEdit) return window.openCashEntry(button.dataset.cashEdit);
+    if (button.dataset.balanceAccount) return openAccountBalance(button.dataset.balanceAccount, button.dataset.balanceEdit || "", button.dataset.balanceAmount || "", button.dataset.balanceDate || "");
     try {
+      if (button.dataset.balanceDelete && confirm("Remove this balance?")) {
+        button.disabled = true; await write({action:"delete_balance", id:button.dataset.balanceDelete});
+      }
       if (button.dataset.cashDelete && confirm("Delete this manual cash entry?")) {
         button.disabled = true; await write({action:"delete_cash", id:button.dataset.cashDelete});
       }

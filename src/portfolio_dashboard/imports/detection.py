@@ -9,6 +9,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook  # type: ignore[import-untyped]
 
+from . import intesa_pdf
 from .fineco import has_fineco_bank_headers
 
 ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx", ".pdf"}
@@ -28,7 +29,7 @@ SOURCE_EXTENSIONS = {
     "interactive_brokers": (".pdf",),
     "etoro": (".xlsx",),
     "revolut": (".csv",),
-    "intesa": (".xlsx",),
+    "intesa": (".xlsx", ".pdf"),
     "bbva": (".xls",),
     "manual": (".csv", ".xlsx"),
 }
@@ -40,21 +41,41 @@ def source_format_label(source: str) -> str:
     return "/".join(extension.removeprefix(".").upper() for extension in SOURCE_EXTENSIONS[source])
 
 
-def _normalized_headers(path: Path) -> set[str]:
+REVOLUT_CONSOLIDATED_SECTIONS = {"conti correnti riepiloghi", "riepilogo delle transazioni"}
+REVOLUT_CONSOLIDATED_HEADERS = {"data", "descrizione", "categoria", "denaro in entrata/uscita", "saldo"}
+
+
+def _normalized_rows(path: Path, limit: int = 40) -> list[set[str]]:
     for encoding in ("utf-8-sig", "utf-8", "latin-1"):
         try:
             with path.open(newline="", encoding=encoding) as handle:
-                row = next(csv.reader(handle), [])
-            return {str(value).strip().casefold() for value in row if str(value).strip()}
-        except (OSError, UnicodeDecodeError):
+                reader = csv.reader(handle)
+                rows = [next(reader, None) for _ in range(limit)]
+            return [
+                {" ".join(str(value).split()).casefold() for value in row if str(value).strip()}
+                for row in rows
+                if row and any(str(value).strip() for value in row)
+            ]
+        except (OSError, UnicodeDecodeError, csv.Error):
             continue
-    return set()
+    return []
 
 
-def detect_statement_source(path: Path, requested_source: str = "auto") -> str:
+def _normalized_headers(path: Path) -> set[str]:
+    rows = _normalized_rows(path, 1)
+    return rows[0] if rows else set()
+
+
+def _is_revolut_consolidated(path: Path) -> bool:
+    """The consolidated statement opens with section titles before any table header."""
+
+    return any(row & REVOLUT_CONSOLIDATED_SECTIONS or REVOLUT_CONSOLIDATED_HEADERS <= row for row in _normalized_rows(path))
+
+
+def detect_statement_source(path: Path, requested_source: str | None = "auto") -> str:
     """Return the configured source id or raise a user-facing validation error."""
 
-    requested = requested_source.strip().casefold().replace("-", "_").replace(" ", "_")
+    requested = (requested_source or "auto").strip().casefold().replace("-", "_").replace(" ", "_")
     suffix = path.suffix.casefold()
     if suffix not in ALLOWED_EXTENSIONS:
         raise ValueError("Supported statement formats are CSV, XLS, XLSX, and PDF")
@@ -67,14 +88,15 @@ def detect_statement_source(path: Path, requested_source: str = "auto") -> str:
         return requested
 
     if suffix == ".pdf":
-        return "interactive_brokers"
+        # Without pdftotext the text cannot be read; IBKR stays the PDF default.
+        return "intesa" if intesa_pdf.looks_like_intesa_statement(path) else "interactive_brokers"
     if suffix == ".xls":
         return "bbva"
     if suffix == ".csv":
         headers = _normalized_headers(path)
         if {"type", "category", "shares", "amount"}.issubset(headers):
             return "trade_republic"
-        if "conti correnti riepiloghi" in headers or {"tipo", "data di completamento", "descrizione", "importo", "state"}.issubset(headers):
+        if {"tipo", "data di completamento", "descrizione", "importo", "state"}.issubset(headers) or _is_revolut_consolidated(path):
             return "revolut"
         if PERSONAL_TRADE_REQUIRED_HEADERS.issubset(headers) or len(headers) >= 17:
             return "manual"
@@ -116,7 +138,8 @@ def import_destination(source_dir: Path, source: str, digest: str, original_name
         filename = f"account-statement-{stamp}-{digest[:10]}{suffix}"
         return source_dir / "cash_exports" / source / filename
     if source == "intesa":
-        filename = f"account_operations-{stamp}-{digest[:10]}{suffix}"
+        stem = "intesa-statement" if suffix == ".pdf" else "account_operations"
+        filename = f"{stem}-{stamp}-{digest[:10]}{suffix}"
         return source_dir / "cash_exports" / source / filename
     if source == "bbva":
         filename = f"bbva-{stamp}-{digest[:10]}{suffix}"

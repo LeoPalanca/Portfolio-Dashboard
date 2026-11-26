@@ -21,7 +21,7 @@ def _event_family(kind: str) -> str:
     return (
         "bank"
         if kind
-        in {"income", "spend", "credit", "personal_transfer", "investment", "fee", "cash_withdrawal", "cash_movement"}
+        in {"income", "spend", "credit", "personal_transfer", "investment", "fee", "cash_withdrawal", "cash_movement", "top_up"}
         else kind
     )
 
@@ -250,6 +250,11 @@ class MovementStore:
                 original_name TEXT NOT NULL, removed_at TEXT NOT NULL,
                 PRIMARY KEY (portfolio_id, sha256)
             );
+            CREATE TABLE IF NOT EXISTS import_coverage (
+                import_id INTEGER NOT NULL REFERENCES imports(id) ON DELETE CASCADE,
+                account TEXT NOT NULL, first_day TEXT NOT NULL, last_day TEXT NOT NULL,
+                PRIMARY KEY (import_id, account, first_day, last_day)
+            );
             """
         )
 
@@ -452,6 +457,35 @@ class MovementStore:
             ).fetchall()
         return [ImportRecord(*row) for row in rows]
 
+    def set_coverage(self, import_id: int, ranges: Iterable[tuple[str, date, date]]) -> None:
+        """Record the days a file covers per account (inclusive), replacing what it recorded before.
+
+        Rows a file shares with an earlier file are stored under that file only, so the
+        stored rows understate what a later, overlapping file covers; the parser's full
+        reading does not.
+        """
+
+        self.initialize()
+        with closing(self._connect()) as connection, connection:
+            connection.execute("DELETE FROM import_coverage WHERE import_id = ?", (import_id,))
+            connection.executemany(
+                "INSERT OR IGNORE INTO import_coverage(import_id, account, first_day, last_day) VALUES (?, ?, ?, ?)",
+                [(import_id, account, first.isoformat(), last.isoformat()) for account, first, last in ranges],
+            )
+
+    def coverage(self, portfolio_id: str | None = None) -> list[tuple[int, str, date, date]]:
+        """``(import_id, account, first_day, last_day)`` for every import of one portfolio that recorded its coverage."""
+
+        self.initialize()
+        owner = self._portfolio_id(portfolio_id or self.default_portfolio_id)
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT c.import_id, c.account, c.first_day, c.last_day FROM import_coverage c "
+                "JOIN imports i ON i.id = c.import_id WHERE i.portfolio_id = ? ORDER BY c.first_day",
+                (owner,),
+            ).fetchall()
+        return [(int(row[0]), str(row[1]), date.fromisoformat(row[2]), date.fromisoformat(row[3])) for row in rows]
+
     def delete_import(self, record: ImportRecord) -> int:
         """Remove an import and the movements it stored; remember the file so it is not re-imported."""
 
@@ -462,6 +496,7 @@ class MovementStore:
             rows = self._import_rows(connection, record.id)
             for row in rows:
                 self._remove_row(connection, owner, row, f"deleted import {record.id}")
+            connection.execute("DELETE FROM import_coverage WHERE import_id = ?", (record.id,))
             connection.execute("DELETE FROM imports WHERE id = ? AND portfolio_id = ?", (record.id, owner))
             connection.execute(
                 "INSERT OR REPLACE INTO removed_imports(portfolio_id, sha256, source_kind, original_name, removed_at) "

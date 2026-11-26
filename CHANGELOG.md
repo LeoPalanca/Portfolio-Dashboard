@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.0 — 2026-11-26
+
+- **Intesa quarterly statements (PDF).** Intesa's quarterly PDF statements can be imported. Every movement is read across pages, with wrapped descriptions joined, and a statement is accepted only when its opening balance plus its movements equals its closing balance. The statement's opening and closing balances are kept as balance checkpoints. A movement that also appears in an Excel export is counted once.
+- **Own-account transfers at Intesa.** Transfers between your own accounts are kept as transfers out and top-ups instead of being dropped, so a top-up arriving at Trade Republic pairs with the Intesa transfer that sent it. Archived statements are re-read once with the new reader on the first start (parser `ledger-6`), including imports whose file the startup scan no longer finds by name.
+- **Balance reconciliation.** Each cash account is checked against its known balances: statement balances, balances you enter (with a date) or import from a CSV (`account,date,balance`). Between two balances, a change the recorded movements don't explain becomes a "Calculated expenses" or "Calculated income" row, dated at the end of the period and shown in its own category. A period not fully covered by imported statements is shown as missing statements and nothing is calculated for it. A table lists each account's periods, and each account says how far it is reconciled.
+- **Cash.** Cash expenses can be imported from a CSV (`date,amount,description,category`), and the cash ledger is reconciled like the other accounts.
+- **Money from your own accounts.** Income & expenses shows the money that came in from your other accounts, notes when some of it came from accounts that aren't imported (their income isn't counted), and labels the balance as covering the imported accounts.
+- **Revolut.** A consolidated Revolut statement is detected without choosing the source.
+
 ## 0.18.2 — 2026-11-25
 
 - **Cash flows priced on their own day.** In Total mode, deposits and withdrawals on the Trade Republic, BBVA and Revolut cash accounts, and crypto-wallet transactions, are now valued on the day they happen, as trades already were. Before, a deposit fell inside a month-long interval and counted for half of it, so a large one could distort the year-to-date, 1Y and all-time return (a 3% month with a big deposit late in it showed 1.2%).
