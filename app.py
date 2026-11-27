@@ -83,6 +83,7 @@ from src.portfolio_dashboard.movements.ledger_csv import (
     read_ledger_csv,
 )
 from src.portfolio_dashboard.movements.personal import PersonalLedger
+from src.portfolio_dashboard import venues as listing_venues
 from src.portfolio_dashboard.movements.reconcile import AccountMovement, BalanceCheckpoint, account_key, reconcile_balances
 
 class _LazyModule:
@@ -201,6 +202,7 @@ PROXY_MESSAGES = {
 }
 FULL_OFFICIAL_COMPOSITION_STATUSES = {"ok", "cached", "cash_equivalent", "official_sec_13f"}
 SYMBOL_CACHE = SETTINGS.cache_path("price-symbols.json")
+VENUE_CACHE = SETTINGS.cache_path("listing-venues.json")
 PRICE_CACHE = SETTINGS.cache_path("prices.json")
 HISTORY_CACHE = SETTINGS.cache_path("history.json")
 HISTORY_CACHE_DIR = SETTINGS.cache_dir / "history"
@@ -3992,6 +3994,25 @@ def read_mappings() -> dict[str, dict[str, str]]:
                     "benchmark_class": (row.get("benchmark_class") or "").strip().lower(),
                 }
     return mappings
+
+
+def broker_listing_mappings(trades: list[Trade], manual: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
+    """``manual`` plus, for funds it leaves open, the listing their broker sells them on (see ``venues``)."""
+
+    cache = load_json(VENUE_CACHE)
+    before = json.dumps(cache, sort_keys=True)
+
+    def has_prices(symbol: str) -> bool:
+        today = date.today()
+        return bool(fetch_history(symbol, today - timedelta(days=14), today).get("prices"))
+
+    try:
+        found = listing_venues.venue_mappings(trades, manual, cache, has_prices, int(time.time()))
+    except Exception:  # best effort: a lookup problem must never break the dashboard
+        return manual
+    if json.dumps(cache, sort_keys=True) != before:
+        save_json(VENUE_CACHE, cache)
+    return listing_venues.with_venue_mappings(manual, found)
 
 
 def read_crypto_wallet_positions(person: str = PRIMARY_PORTFOLIO_ID) -> list[dict[str, Any]]:
@@ -8294,7 +8315,8 @@ def _build_dashboard_payload(
         dividends = [d for d in dividends if d.broker.lower() == broker]
         wallet_positions = [p for p in wallet_positions if str(p.get("broker") or "").lower() == broker]
 
-    mappings = read_mappings()
+    manual_mappings = read_mappings()
+    mappings = broker_listing_mappings(ledger_trades, manual_mappings)
 
     # Filter by live_only
     if live_only == "on":
@@ -8393,7 +8415,7 @@ def _build_dashboard_payload(
         priced["positions"],
     )
     expenses = summarize_expense_events(read_ledger_expenses(person))
-    mapped_assets = set(mappings)
+    mapped_assets = set(manual_mappings)
     trade_assets = {trade.asset for trade in trades} | {str(position.get("asset") or "") for position in wallet_positions}
     assets_without_isin = {
         position["asset"]
@@ -8461,8 +8483,8 @@ def _build_dashboard_payload(
         "mapping_status": {
             "missing_in_mapping": sorted(assets_without_isin),
             "extra_in_mapping": sorted(mapped_assets - trade_assets),
-            "filled_isins": sum(1 for value in mappings.values() if value.get("isin")),
-            "total_rows": len(mappings),
+            "filled_isins": sum(1 for value in manual_mappings.values() if value.get("isin")),
+            "total_rows": len(manual_mappings),
         },
         "brokers": all_brokers,
         "stats": calculate_portfolio_statistics(

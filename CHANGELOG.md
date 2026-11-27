@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.22.0 — 2026-11-27
+
+- **Funds are priced where your broker would sell them.** Yahoo's ISIN search returns whichever listing it ranks first, often a USD line in London, so a fund held at Trade Republic or Fineco could be valued on a market and in a currency it is never sold on. A fund without a ticker in the mapping file is now priced on its broker's venue: Trade Republic (Lang & Schwarz, in EUR) on the fund's Xetra line, Fineco on Borsa Italiana, or Xetra when Milan does not list it. The listing is found with OpenFIGI, which maps an ISIN to its ticker on every exchange, and is used only when Yahoo has prices for it; otherwise the ISIN search stays. When a fund sits at more than one broker, the one holding most of it decides. Shares keep their home market, and a ticker in the mapping file always wins. Answers are cached for 90 days (a failed lookup is retried after a day); `PORTFOLIO_VENUE_LOOKUP=off` turns the lookups off.
+
 ## 0.21.0 — 2026-11-27
 
 - **Interactive Brokers activity statements (CSV).** The activity statement IBKR exports as CSV, in English or Italian, now imports alongside the trade-confirmation PDF: trades, dividends net of withholding tax, the withholding itself, ADR and other fees (as costs) and credit interest. Dividends, taxes and fees in a foreign currency are valued in EUR at the statement's own EUR totals, so they add up to what IBKR reports; each row keeps an identity from what IBKR booked, so a later statement covering the same days does not add it twice. A trade already imported from the PDF is not stored again from the CSV, and the other way round. Deposits, withdrawals and corporate actions in the file are not imported yet and are listed as skipped.
