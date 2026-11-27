@@ -21,3 +21,5 @@ os.environ["PORTFOLIO_SOURCE_DIR"] = str(_ROOT / "source")
 os.environ["PORTFOLIO_DATA_DIR"] = str(_ROOT / "data")
 os.environ["PORTFOLIO_CACHE_DIR"] = str(_ROOT / "cache")
 os.environ["PORTFOLIO_SCAN_DOWNLOADS"] = "false"
+# Listing lookups (OpenFIGI) reach the network; tests that need them enable them.
+os.environ["PORTFOLIO_VENUE_LOOKUP"] = "off"
