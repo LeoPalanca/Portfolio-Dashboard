@@ -904,16 +904,9 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       const x = time => ((time - start) / span) * width;
       const yValue = value => valueTop + (1 - (value - low) / amountRange) * (valueBottom - valueTop);
       const yReturn = value => returnTop + (1 - (value - returnLow) / returnRange) * (returnBottom - returnTop);
-      const path = (key, y) => {
-        let d = "";
-        let pen = "M";
-        rows.forEach(row => {
-          if (!Number.isFinite(row[key])) { pen = "M"; return; }
-          d += `${pen}${x(row.time).toFixed(1)},${y(row[key]).toFixed(1)}`;
-          pen = "L";
-        });
-        return d;
-      };
+      const path = (key, y, smooth = true) => linePath(
+        rows.map(row => (Number.isFinite(row[key]) ? { x: x(row.time), y: y(row[key]) } : null)), smooth
+      );
       const valueLine = path("value", yValue);
       const zero = yReturn(0).toFixed(1);
       let returnShapes = "";
@@ -933,7 +926,7 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
           <path class="lede-line return negative" clip-path="url(#lede-clip-loss)" d="${returnLine}"/>`;
       }
       svg.innerHTML = `<path class="lede-area value" d="${valueLine}L${width},${valueBottom}L0,${valueBottom}Z"/>`
-        + `<path class="lede-line invested" d="${path("invested", yValue)}"/>`
+        + `<path class="lede-line invested" d="${path("invested", yValue, false)}"/>`
         + `<path class="lede-line value" d="${valueLine}"/>`
         + returnShapes;
       const day = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
@@ -1211,17 +1204,91 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
       }
       return totals;
     }
-    function pointPath(points, key, xScale, yScale) {
-      let drawing = false;
-      return points.map(p => {
-        if (p[key] === null || p[key] === undefined || !Number.isFinite(Number(p[key]))) {
-          drawing = false;
-          return "";
+    /* chart-lines:start
+       A value line is drawn through at most one point every two pixels, chosen by
+       largest-triangle downsampling so each stretch keeps its peaks and troughs,
+       and joined with a monotone curve: it bends at the points without overshooting
+       them, so a smoothed line never shows a value the data does not reach.
+       Contribution lines stay straight (their jumps are real) and hover readings
+       always use every day. */
+    const SMOOTH_PIXELS_PER_POINT = 2;
+    function downsampleLargestTriangle(points, target) {
+      if (target >= points.length || target < 3) return points;
+      const sampled = [points[0]];
+      const every = (points.length - 2) / (target - 2);
+      let anchor = 0;
+      for (let bucket = 0; bucket < target - 2; bucket++) {
+        const nextStart = Math.floor((bucket + 1) * every) + 1;
+        const nextEnd = Math.min(Math.floor((bucket + 2) * every) + 1, points.length);
+        let avgX = 0, avgY = 0;
+        for (let i = nextStart; i < nextEnd; i++) { avgX += points[i].x; avgY += points[i].y; }
+        const count = Math.max(1, nextEnd - nextStart);
+        avgX /= count; avgY /= count;
+        const start = Math.floor(bucket * every) + 1;
+        const end = Math.min(Math.floor((bucket + 1) * every) + 1, points.length - 1);
+        let best = start, bestArea = -1;
+        for (let i = start; i < end; i++) {
+          const area = Math.abs((points[anchor].x - avgX) * (points[i].y - points[anchor].y)
+            - (points[anchor].x - points[i].x) * (avgY - points[anchor].y));
+          if (area > bestArea) { bestArea = area; best = i; }
         }
-        const command = drawing ? "L" : "M";
-        drawing = true;
-        return `${command}${xScale(p.date).toFixed(2)} ${yScale(Number(p[key])).toFixed(2)}`;
-      }).join(" ");
+        sampled.push(points[best]);
+        anchor = best;
+      }
+      sampled.push(points[points.length - 1]);
+      return sampled;
+    }
+    function monotoneCurve(points) {
+      const xy = point => `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+      if (points.length < 3) return points.map((point, i) => `${i ? "L" : "M"}${xy(point)}`).join("");
+      const n = points.length;
+      const slopes = [];
+      for (let i = 0; i < n - 1; i++) {
+        const dx = points[i + 1].x - points[i].x;
+        slopes.push(dx ? (points[i + 1].y - points[i].y) / dx : 0);
+      }
+      // Fritsch-Carlson tangents: flat at a turning point, never steeper than the
+      // neighbouring secants allow, so each piece stays between its two points.
+      const tangents = [slopes[0]];
+      for (let i = 1; i < n - 1; i++) {
+        const before = slopes[i - 1], after = slopes[i];
+        if (before * after <= 0) { tangents.push(0); continue; }
+        const h0 = points[i].x - points[i - 1].x, h1 = points[i + 1].x - points[i].x;
+        const blend = (before * h1 + after * h0) / (h0 + h1);
+        tangents.push(Math.sign(before) * Math.min(Math.abs(before), Math.abs(after), 0.5 * Math.abs(blend)) * 2);
+      }
+      tangents.push(slopes[n - 2]);
+      let d = `M${xy(points[0])}`;
+      for (let i = 0; i < n - 1; i++) {
+        const third = (points[i + 1].x - points[i].x) / 3;
+        const c1 = { x: points[i].x + third, y: points[i].y + tangents[i] * third };
+        const c2 = { x: points[i + 1].x - third, y: points[i + 1].y - tangents[i + 1] * third };
+        d += `C${xy(c1)} ${xy(c2)} ${xy(points[i + 1])}`;
+      }
+      return d;
+    }
+    function linePath(points, smooth) {
+      const segments = [];
+      let current = [];
+      points.forEach(point => {
+        if (point) { current.push(point); return; }
+        if (current.length) segments.push(current);
+        current = [];
+      });
+      if (current.length) segments.push(current);
+      return segments.map(segment => {
+        if (!smooth || segment.length < 3) return segment.map((point, i) => `${i ? "L" : "M"}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join("");
+        const span = segment[segment.length - 1].x - segment[0].x;
+        return monotoneCurve(downsampleLargestTriangle(segment, Math.max(3, Math.round(span / SMOOTH_PIXELS_PER_POINT))));
+      }).join("");
+    }
+    /* chart-lines:end */
+    function pointPath(points, key, xScale, yScale, smooth = false) {
+      return linePath(points.map(p => (
+        p[key] === null || p[key] === undefined || !Number.isFinite(Number(p[key]))
+          ? null
+          : { x: xScale(p.date), y: yScale(Number(p[key])) }
+      )), smooth);
     }
     function xTicks(series, count = 6) {
       if (series.length <= count) return series.map(p => p.date);
@@ -1440,7 +1507,8 @@ try { includeGiroconti = localStorage.getItem("includeGiroconti") === "1"; } cat
 
       /* Data lines */
       defs.forEach(([key, label, klass]) => {
-        svg.insertAdjacentHTML("beforeend", `<path class="series-line ${klass}" d="${pointPath(series, key, xScale, yScale)}"></path>`);
+        const smooth = !/contribution|invested/.test(`${key} ${klass}`);
+        svg.insertAdjacentHTML("beforeend", `<path class="series-line ${klass}" d="${pointPath(series, key, xScale, yScale, smooth)}"></path>`);
       });
       /* X-axis ticks */
       xTicks(series, Math.min(8, Math.floor(w / 110))).forEach(date => {
