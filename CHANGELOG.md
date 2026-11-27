@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.21.0 — 2026-11-27
+
+- **Interactive Brokers activity statements (CSV).** The activity statement IBKR exports as CSV, in English or Italian, now imports alongside the trade-confirmation PDF: trades, dividends net of withholding tax, the withholding itself, ADR and other fees (as costs) and credit interest. Dividends, taxes and fees in a foreign currency are valued in EUR at the statement's own EUR totals, so they add up to what IBKR reports; each row keeps an identity from what IBKR booked, so a later statement covering the same days does not add it twice. A trade already imported from the PDF is not stored again from the CSV, and the other way round. Deposits, withdrawals and corporate actions in the file are not imported yet and are listed as skipped.
+
 ## 0.20.1 — 2026-11-26
 
 - **Cash paid into a bank counts as income again.** 0.20.0 treated every cash deposit as a transfer out of the cash ledger, which dropped the income that cash came from (for example lessons paid in cash) whenever the ledger recorded only spending. A deposit is now a transfer from Cash only when two cash balances span it, so the reconciliation can show the cash that came in as calculated income; otherwise it stays income.

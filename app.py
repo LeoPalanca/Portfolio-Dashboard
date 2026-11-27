@@ -70,6 +70,7 @@ from src.portfolio_dashboard.imports import (
 )
 from src.portfolio_dashboard.ingest import BrokerAdapter, FunctionBrokerAdapter
 from src.portfolio_dashboard.imports.fineco import read_fineco_security_rows
+from src.portfolio_dashboard.imports.ibkr_csv import read_activity_statement as read_ibkr_activity_statement
 from src.portfolio_dashboard.imports.intesa_pdf import IntesaStatement, parse_intesa_statement_text, statement_row_fields
 from src.portfolio_dashboard.imports.intesa_pdf import INVESTMENT_OPERATION, detail_beneficiary, statement_row_beneficiary
 from src.portfolio_dashboard.imports.revolut import JOINT, JOINT_TRANSFER, INTERNAL_TRANSFER, read_revolut_rows, statement_period
@@ -1057,6 +1058,19 @@ def read_interactive_brokers_trades(path: Path) -> list[Trade]:
         )
 
     return sorted(trades, key=lambda item: (item.date, item.asset, item.action))
+
+
+def interactive_brokers_csv_movements(path: Path) -> list[dict[str, Any]]:
+    """Ledger rows of an IBKR activity statement CSV (see ``imports.ibkr_csv``)."""
+
+    def to_eur(amount: Decimal, currency: str, day: date) -> Decimal | None:
+        value, failed = convert_cash_to_eur(amount, currency, day)
+        if failed:
+            report_import_issue(MISSING_FX_RATE, f"{currency} on {day}")
+            return None
+        return value
+
+    return read_ibkr_activity_statement(path, to_eur)
 
 
 def read_etoro_trades(path: Path) -> list[Trade]:
@@ -9658,7 +9672,10 @@ def parse_statement_movements(source: str, path: Path, owner: str = PRIMARY_PORT
             dividends = read_fineco_dividends(path)
             frictions = read_fineco_friction_events(path)
     elif source == "interactive_brokers":
-        trades = read_interactive_brokers_trades(path)
+        if path.suffix.casefold() == ".csv":
+            normalized = interactive_brokers_csv_movements(path)
+        else:
+            trades = read_interactive_brokers_trades(path)
     elif source == "etoro":
         trades = read_etoro_trades(path)
         dividends = read_etoro_dividends(path)
@@ -9849,22 +9866,57 @@ def drop_cross_format_duplicates(
             if row.get("source_kind") == "revolut" and row.get("import_id") != import_id
         ]
         return drop_revolut_cross_format_duplicates(movements, others)
-    if source == "intesa":
+    if source in {"intesa", "interactive_brokers"}:
         mine = path.suffix.casefold()
         formats = {
             record.id: (Path(record.stored_path).suffix or Path(record.original_name).suffix).casefold()
             for record in store.imports(owner)
-            if record.source_kind == "intesa"
+            if record.source_kind == source
         }
         others = [
             row
             for row in store.movements(owner)
-            if row.get("source_kind") == "intesa"
+            if row.get("source_kind") == source
             and row.get("import_id") != import_id
             and formats.get(int(row.get("import_id") or 0), mine) != mine
         ]
-        return drop_intesa_cross_format_duplicates(movements, others) if others else (movements, 0)
+        if not others:
+            return movements, 0
+        if source == "intesa":
+            return drop_intesa_cross_format_duplicates(movements, others)
+        return drop_ibkr_cross_format_duplicates(movements, others)
     return movements, 0
+
+
+def drop_ibkr_cross_format_duplicates(
+    movements: list[dict[str, Any]], existing: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], int]:
+    """Skip trades already stored from the other IBKR format (trade-confirmation PDF vs activity CSV).
+
+    The two formats name an instrument differently, so a trade matches, one for one, a
+    stored trade of the other format on the same day with the same ISIN (or name when
+    there is none), the same quantity and the same cash amount to the cent. Only the
+    CSV carries dividends, taxes and fees, so those are never matched.
+    """
+
+    def key(row: dict[str, Any]) -> tuple[str, str, Decimal, Decimal]:
+        return (
+            movement_text(row.get("occurred_on"))[:10],
+            str(row.get("isin") or row.get("asset") or ""),
+            Decimal(str(row.get("quantity") or 0)),
+            Decimal(str(row.get("amount") or 0)).quantize(Decimal("0.01")),
+        )
+
+    stored = Counter(key(row) for row in existing if row.get("event_type") == "trade")
+    kept: list[dict[str, Any]] = []
+    skipped = 0
+    for row in movements:
+        if row.get("event_type") == "trade" and stored[key(row)] > 0:
+            stored[key(row)] -= 1
+            skipped += 1
+            continue
+        kept.append(row)
+    return kept, skipped
 
 
 INTESA_DESCRIPTION_STOPWORDS = {"del", "della", "dei", "con", "per", "presso", "effettuato", "alle", "ore", "carta", "mediante", "eur"}

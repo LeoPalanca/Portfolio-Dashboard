@@ -9,7 +9,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook  # type: ignore[import-untyped]
 
-from . import intesa_pdf
+from . import ibkr_csv, intesa_pdf
 from .fineco import has_fineco_bank_headers
 
 ALLOWED_EXTENSIONS = {".csv", ".xls", ".xlsx", ".pdf"}
@@ -26,7 +26,7 @@ SOURCE_LABELS = {
 SOURCE_EXTENSIONS = {
     "trade_republic": (".csv",),
     "fineco": (".xlsx",),
-    "interactive_brokers": (".pdf",),
+    "interactive_brokers": (".pdf", ".csv"),
     "etoro": (".xlsx",),
     "revolut": (".csv",),
     "intesa": (".xlsx", ".pdf"),
@@ -93,6 +93,8 @@ def detect_statement_source(path: Path, requested_source: str | None = "auto") -
     if suffix == ".xls":
         return "bbva"
     if suffix == ".csv":
+        if ibkr_csv.looks_like_activity_statement(path):
+            return "interactive_brokers"
         headers = _normalized_headers(path)
         if {"type", "category", "shares", "amount"}.issubset(headers):
             return "trade_republic"
@@ -100,7 +102,7 @@ def detect_statement_source(path: Path, requested_source: str | None = "auto") -
             return "revolut"
         if PERSONAL_TRADE_REQUIRED_HEADERS.issubset(headers) or len(headers) >= 17:
             return "manual"
-        raise ValueError("The CSV headers do not match a supported Trade Republic, Revolut, or manual export")
+        raise ValueError("The CSV headers do not match a supported Trade Republic, Revolut, Interactive Brokers, or manual export")
 
     try:
         workbook = load_workbook(path, read_only=True, data_only=True)
