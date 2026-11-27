@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.22.1 — 2026-11-27
+
+- **Smoother value and return lines.** Charts drew a straight segment through every day, so a long period looked jagged. Value, profit and return lines are now drawn through at most one point every two pixels, chosen so each stretch keeps its peaks and troughs, and joined with a monotone curve that never overshoots the data: a smoothed line never shows a value the portfolio did not reach. Contribution lines stay as steps, since their jumps are real, and hover readings still use every day.
+
 ## 0.22.0 — 2026-11-27
 
 - **Funds are priced where your broker would sell them.** Yahoo's ISIN search returns whichever listing it ranks first, often a USD line in London, so a fund held at Trade Republic or Fineco could be valued on a market and in a currency it is never sold on. A fund without a ticker in the mapping file is now priced on its broker's venue: Trade Republic (Lang & Schwarz, in EUR) on the fund's Xetra line, Fineco on Borsa Italiana, or Xetra when Milan does not list it. The listing is found with OpenFIGI, which maps an ISIN to its ticker on every exchange, and is used only when Yahoo has prices for it; otherwise the ISIN search stays. When a fund sits at more than one broker, the one holding most of it decides. Shares keep their home market, and a ticker in the mapping file always wins. Answers are cached for 90 days (a failed lookup is retried after a day); `PORTFOLIO_VENUE_LOOKUP=off` turns the lookups off.
